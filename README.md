@@ -29,6 +29,7 @@ Cada [release](https://github.com/emiliovos/sielay-skills/releases) trae un `.zi
 ## Seguridad
 
 - Este repo es la única fuente de las skills. `main` solo cambia por PR y los tags de release no se pueden mover.
+- El one-liner oficial siempre apunta a `emiliovos/sielay-skills`. Desconfía de cualquier otro dueño o nombre parecido.
 - El plugin no tiene hooks, servidores MCP, ejecutables ni dependencias. El CI (`tools/check-plugin.sh`) lo impide.
 - Una skill son instrucciones que Claude sigue con tus permisos. Antes de actualizar, puedes revisar qué cambió en el historial de `plugins/si/skills/`.
 
