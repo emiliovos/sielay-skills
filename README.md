@@ -1,5 +1,7 @@
 # sielay-skills
 
+[![validate](https://github.com/emiliovos/sielay-skills/actions/workflows/validate.yml/badge.svg)](https://github.com/emiliovos/sielay-skills/actions/workflows/validate.yml)
+
 Skills de uso diario de [sielay](https://sielay.cloud) para Claude Code. No necesitan npm ni login.
 
 ## Instalar (Claude Code)
