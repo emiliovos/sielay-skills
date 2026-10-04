@@ -1,0 +1,33 @@
+name: validate
+
+# Read-only CI: no pull_request_target, no caches, no secrets.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Safety gate
+        run: bash tools/check-plugin.sh plugins/si
+
+      - name: Install Claude Code (native installer, no npm)
+        run: |
+          curl -fsSL https://claude.ai/install.sh | bash
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      # --strict is not used: it demands a "version" field, and the plugin
+      # deliberately has none so its version is the commit and updates flow.
+      - name: Validate marketplace and plugin
+        run: |
+          claude plugin validate .
+          claude plugin validate plugins/si

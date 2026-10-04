@@ -1,0 +1,12 @@
+{
+  "name": "sielay",
+  "owner": { "name": "emiliovos" },
+  "description": "Skills públicas de sielay para Claude Code",
+  "plugins": [
+    {
+      "name": "si",
+      "source": "./plugins/si",
+      "description": "Skills de uso diario de sielay (se invocan como /si:<skill>)"
+    }
+  ]
+}

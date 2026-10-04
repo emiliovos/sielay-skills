@@ -1,0 +1,7 @@
+{
+  "name": "si",
+  "description": "Skills de uso diario de sielay (se invocan como /si:<skill>)",
+  "author": { "name": "emiliovos" },
+  "homepage": "https://github.com/emiliovos/sielay-skills",
+  "license": "MIT"
+}
