@@ -26,8 +26,20 @@ notes="$out/notes.md"
 
 for d in plugins/si/skills/*/; do
   slug="$(basename "$d")"
-  # Deterministic zip: fixed timestamps and sorted entries, folder at the root.
-  (cd plugins/si/skills && find "$slug" -type f | sort | TZ=UTC xargs touch -d '2026-01-01T00:00:00' && find "$slug" -type f | sort | zip -X -q "$out/$slug.zip" -@)
+  # Deterministic zip (sorted entries, fixed timestamps), skill folder at the root.
+  python3 - "$slug" "$out/$slug.zip" <<'PY'
+import os, sys, zipfile
+slug, dest = sys.argv[1], sys.argv[2]
+base = os.path.join("plugins", "si", "skills")
+files = sorted(os.path.join(r, f) for r, _, fs in os.walk(os.path.join(base, slug)) for f in fs)
+with zipfile.ZipFile(dest, "w", zipfile.ZIP_DEFLATED) as z:
+    for path in files:
+        info = zipfile.ZipInfo(os.path.relpath(path, base), (2026, 1, 1, 0, 0, 0))
+        info.external_attr = (0o755 if os.access(path, os.X_OK) else 0o644) << 16
+        info.compress_type = zipfile.ZIP_DEFLATED
+        with open(path, "rb") as fh:
+            z.writestr(info, fh.read())
+PY
   sum="$(sha256sum "$out/$slug.zip" | cut -d' ' -f1)"
   echo "| \`$slug.zip\` | \`$sum\` |" >> "$notes"
 done
