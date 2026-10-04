@@ -10,6 +10,8 @@ Skills de uso diario de [sielay](https://sielay.cloud) para Claude Code. No nece
 claude plugin marketplace add emiliovos/sielay-skills && claude plugin install si@sielay
 ```
 
+Hoy el plugin trae una sola skill: `/si:checkpoint`. Si se agregan otras, se anuncian en la tabla de abajo y en el release correspondiente. Solo te llegan cuando corres `claude plugin update si@sielay`, nunca solas.
+
 Las skills quedan como `/si:<skill>`, por ejemplo `/si:checkpoint`. Conviven con cualquier skill local del mismo nombre en `~/.claude/skills/`.
 
 Requisitos: Claude Code reciente y `git` en el PATH. En Windows sin llave SSH de GitHub, exporta `CLAUDE_CODE_PLUGIN_PREFER_HTTPS=1` antes de correr el comando.
