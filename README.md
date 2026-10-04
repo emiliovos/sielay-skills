@@ -24,6 +24,28 @@ Las actualizaciones no son automáticas. Para recibir cambios y skills nuevas:
 claude plugin update si@sielay
 ```
 
+## Repos con su propio cierre de sesión
+
+`/si:checkpoint` usa por defecto bitácora en `docs/journals/`, `codebase-summary.md`, rama + PR y `HANDOFF.md` en el plan activo. Si tu repo cierra distinto, copia esta sección en su `CLAUDE.md` y deja en cada línea una sola de las opciones:
+
+```
+## Cierre de sesión
+- Estado: <ruta del archivo de estado> | journals
+- Push: rama+PR | main directo | no pushear
+- Handoff: <ruta de archivo> | estado | pantalla
+```
+
+Ejemplo de un repo que cierra en un solo archivo, trabaja en `main` y entrega el handoff en pantalla:
+
+```
+## Cierre de sesión
+- Estado: docs/estado-y-siguiente-paso.md
+- Push: main directo
+- Handoff: pantalla
+```
+
+Cada valor que pongas reemplaza al de por defecto, nunca se suma: con `Estado` en una ruta no se crean bitácoras ni `codebase-summary.md`, y con `Handoff: estado` o `pantalla` no se crea `HANDOFF.md`. Lo que no pongas usa el valor por defecto. La skill nunca escribe rutas de solo lectura ni corre scripts de publicación o deploy. Si no hay sección, intenta deducir el cierre del texto libre del `CLAUDE.md`, pero la sección exacta es lo único que garantiza el resultado.
+
 ## Claude Desktop (chat)
 
 Cada [release](https://github.com/emiliovos/sielay-skills/releases) trae un `.zip` por skill, con su sha256 en las notas. Bájalo y súbelo en la configuración de skills de tu cuenta. Para actualizar, sube el `.zip` del release nuevo.
