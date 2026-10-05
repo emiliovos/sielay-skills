@@ -18,7 +18,9 @@ campo() { printf '%s' "$ENTRADA" | py campo "$1"; }
 bitacora() { printf '%s\t%s\t%s\t%s\n' "$(date -u +%FT%TZ)" "$1" "${SESION:-?}" "${2:-}" >> "$D/bitacora.log"; }
 
 # Archivos .meta: líneas clave=valor. Se reescriben con tmp + mv para no dejarlos a medias.
-leer_meta() { [ -f "$1" ] && sed -n "s/^$2=//p" "$1" | tail -1; }
+leer_meta() { [ -f "$1" ] && sed -n "s/^$2=//p" "$1" 2>/dev/null | tail -1; }
+# Solo dígitos (o 0): un .meta alterado no puede inyectar código en $(( )).
+leer_num() { local v; v="$(leer_meta "$1" "$2")"; [[ "$v" =~ ^[0-9]+$ ]] && echo "$v" || echo 0; }
 poner_meta() {
   { [ -f "$1" ] && grep -v "^$2=" "$1"; printf '%s=%s\n' "$2" "$3"; } > "$1.tmp.$$" && mv "$1.tmp.$$" "$1"
 }

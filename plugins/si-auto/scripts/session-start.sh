@@ -19,7 +19,7 @@ for _ in 1 2 3 4 5 6; do
   if [ "${comando##*/}" = claude ]; then pid=$p; break; fi
   p="$(ps -o ppid= -p "$p" 2>/dev/null | tr -d ' ')"
 done
-[ -n "$(leer_meta "$META" inicio)" ] || poner_meta "$META" inicio "$(ahora)"
+[ "$(leer_num "$META" inicio)" -gt 0 ] || poner_meta "$META" inicio "$(ahora)"
 poner_meta "$META" pid "$pid"
 # Una sesión reanudada vuelve a estar viva: su nota no se entrega a otras.
 borrar_meta "$META" terminada
@@ -41,8 +41,8 @@ while IFS= read -r m; do
   id="$(basename "$m" .meta)"
   [ "$id" != "$SESION" ] || continue
   termino="$(leer_meta "$m" terminada)"
-  otro="$(leer_meta "$m" pid)"; otro="${otro:-0}"
-  inicio="$(leer_meta "$m" inicio)"; inicio="${inicio:-0}"
+  otro="$(leer_num "$m" pid)"
+  inicio="$(leer_num "$m" inicio)"
   t="$(ahora)"
   if [ -z "$termino" ] && [ $(( t - inicio )) -lt 86400 ]; then
     [ "$otro" -gt 0 ] || continue

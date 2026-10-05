@@ -51,6 +51,16 @@ copia; siembra 'printf -v D "%s" "$HOME"';                            auto "rech
 copia; siembra 'awk '"'"'{ print > "/tmp/x" }'"'"' "$D/bitacora.log"'; auto "rechaza awk que escribe"
 copia; siembra 'echo x | tee "$HOME/x"';                              auto "rechaza tee"
 copia; siembra 'poner_meta "$raiz/CLAUDE.md" x y';                     auto "rechaza poner_meta fuera de \$D"
+copia; siembra 'f() { printf x > "$1.tmp.$$" && mv "$1.tmp.$$" "$1"; }'; auto "rechaza funciones nuevas"
+copia; siembra 'poner_meta() { :; }';                                  auto "rechaza redefinir una función fuera de comun.sh"
+copia; siembra 'poner_meta() { :; }' comun.sh;                         auto "rechaza definir dos veces la misma función"
+copia; siembra 'bitacora2() { :; }' comun.sh;                          auto "rechaza funciones no listadas en comun.sh"
+copia; siembra 'printf x > "$1.tmp.$$"';                               auto "rechaza escribir con \$1 fuera de poner_meta"
+copia; siembra 'PATH="/tmp" python3 "$AQUI/leer-json.py" "$@"';        auto "rechaza cambiar PATH"
+copia; siembra 'GIT_DIR="/tmp/x" git -C "$1" rev-parse --show-toplevel'; auto "rechaza cambiar GIT_DIR"
+copia; siembra 'local -n x=D';                                         auto "rechaza local -n"
+copia; siembra 'x = __builtins__' leer-json.py;                        auto "rechaza __builtins__"
+copia; siembra 'x = sys.modules' leer-json.py;                         auto "rechaza sys.modules"
 
 copia; python3 - "$TMP/repo/plugins/si-auto/hooks/hooks.json" <<'PY'
 import json, sys; p = sys.argv[1]; d = json.load(open(p))

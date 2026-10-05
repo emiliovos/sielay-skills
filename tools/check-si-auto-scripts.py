@@ -197,8 +197,13 @@ class Lexer:
 # --- Bash rules ---------------------------------------------------------------
 
 KEYWORDS = {"if", "then", "elif", "else", "fi", "while", "until", "do", "done", "!"}
-FUNCTIONS = {"py", "campo", "bitacora", "leer_meta", "poner_meta", "borrar_meta", "ahora",
+# The only functions, all defined once in comun.sh. Scripts cannot add their own.
+FUNCTIONS = {"py", "campo", "bitacora", "leer_meta", "leer_num", "poner_meta", "borrar_meta", "ahora",
              "umbral_del_contrato", "preparar_repo", "iniciar_gancho"}
+# Shapes that write through "$1" are only allowed inside these two helpers.
+DOLLAR1_FUNCS = {"poner_meta", "borrar_meta"}
+DOLLAR1_SHAPES = {'mv "$1.tmp.$$" "$1"'}
+DEFINED = set()
 SIMPLE = {"echo", "cat", "tail", "tr", "ls", "basename", "dirname", "date", "ps", "grep",
           "true", ":", "[", "[[", "cd", "pwd", "continue", "break", "exit", "return", "local"}
 # Exact shapes for commands that write, and for the few commands with fixed arguments.
@@ -231,17 +236,21 @@ PROTECTED = {
 }
 # The .meta files the write helpers may touch ($1 inside them is checked as a redirect target).
 META_FILES = {'"$META"', '"$m"', '"$D/entregadas/$id.meta"'}
+OWN_UPPER = {"UMBRAL_MIN", "ENTRADA", "SESION", "D", "META", "AQUI", "IFS"}
 SED_PROGRAM = re.compile(r"""^["'](s/\^[A-Za-z_$0-9]+=//p)["']$""")
 AWK_FORBIDDEN = re.compile(r"system|getline|close|fflush|ENVIRON|[|>]")
 
 
-def check_command(where, words, redirs):
-    # Leading assignments (VAR=value cmd ...). Protected names only take exact values.
+def check_command(where, words, redirs, func=None):
+    # Leading assignments (VAR=value cmd ...). Protected names only take exact values;
+    # upper-case names (environment: PATH, GIT_DIR, BASH_ENV...) only the plugin's own.
     while words and re.match(r"^[A-Za-z_][A-Za-z0-9_]*\+?=", words[0]):
         name, value = words[0].split("=", 1)
         name = name.rstrip("+")
         if name in PROTECTED and value not in PROTECTED[name]:
             err(where, f"{name} may not be set to {value}")
+        if re.match(r"^[A-Z_][A-Z0-9_]*$", name) and name not in OWN_UPPER:
+            err(where, f"setting {name} is not allowed")
         words = words[1:]
     if not words:
         return
@@ -255,8 +264,8 @@ def check_command(where, words, redirs):
         if len(words) < 2 or words[1] not in META_FILES:
             err(where, f"{cmd} may only write the .meta files under $D: {plain}")
     elif cmd in SIMPLE or cmd in FUNCTIONS:
-        if cmd == "local" and any("=" in w for w in words[1:]):
-            err(where, "local may only declare names")
+        if cmd == "local" and not all(re.match(r"^[a-z_][a-z0-9_]*$", w) for w in words[1:]):
+            err(where, "local may only declare lower-case names")
     elif cmd == "git":
         if len(words) < 4 or words[1] != "-C" or words[3] != "rev-parse":
             err(where, f"git may only be called as git -C <dir> rev-parse: {plain}")
@@ -267,7 +276,9 @@ def check_command(where, words, redirs):
         if AWK_FORBIDDEN.search(words[1] if len(words) > 1 else ""):
             err(where, "awk program may not write, run commands or read other input")
     elif cmd in EXACT:
-        if plain not in EXACT[cmd]:
+        if plain in DOLLAR1_SHAPES and func not in DOLLAR1_FUNCS:
+            err(where, f"{plain} is only allowed inside poner_meta/borrar_meta")
+        elif plain not in EXACT[cmd]:
             err(where, f"{cmd} is only allowed as one of its exact shapes: {plain}")
     elif re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", cmd) and cmd.endswith("()"):
         pass
@@ -281,15 +292,17 @@ def check_command(where, words, redirs):
 
 def check_bash(path):
     where = path.name
-    sources = [path.read_text(encoding="utf-8")]
+    sources = [(path.read_text(encoding="utf-8"), None)]
     while sources:
-        lexer = Lexer(sources.pop(), where)
+        src, outer = sources.pop()
+        lexer = Lexer(src, where)
         tokens = lexer.run()
-        sources.extend(lexer.nested)
-        words, redirs, i = [], [], 0
-        expect_target = None
+        words, redirs = [], []
+        expect_target, func, depth, pending = None, outer, 0, None
         for kind, val in tokens + [("O", "\n")]:
             if expect_target:
+                if val == '"$1.tmp.$$"' and func not in DOLLAR1_FUNCS:
+                    err(where, "writes through $1 are only allowed inside poner_meta/borrar_meta")
                 if expect_target.endswith(">&"):
                     if val not in ("1", "2"):
                         err(where, f"fd duplication to {val} is not allowed")
@@ -305,19 +318,34 @@ def check_bash(path):
                 words.append(val)
             else:
                 if val == "(" and words and len(words) == 1 and re.match(r"^[A-Za-z_]\w*$", words[0]):
-                    FUNCTIONS.add(words[0])
-                    words = []
+                    name = words[0]
+                    if where != "comun.sh" or name not in FUNCTIONS or name in DEFINED:
+                        err(where, f"defining function {name} is not allowed")
+                    DEFINED.add(name)
+                    pending, words = name, []
                     continue
                 if val == ")" and not words:
                     continue
+                if val == "{":
+                    if pending:
+                        func, pending, depth = pending, None, 0
+                    elif func and func != outer:
+                        depth += 1
+                if val == "}" and func and func != outer:
+                    if depth == 0:
+                        check_command(where, words, redirs, func)
+                        words, redirs, func = [], [], outer
+                        continue
+                    depth -= 1
                 while words and words[0] in KEYWORDS:
                     words = words[1:]
                 if words and words[0] in ("for", "case", "function", "select"):
                     if words[0] != "for":
                         err(where, f"{words[0]} is not allowed")
                     words = []
-                check_command(where, words, redirs)
+                check_command(where, words, redirs, func)
                 words, redirs = [], []
+        sources.extend((body, func) for body in lexer.nested)
 
 
 # --- Python rules -------------------------------------------------------------
@@ -327,7 +355,8 @@ PY_BANNED = {"exec", "eval", "compile", "__import__", "getattr", "setattr", "glo
              "locals", "vars", "input", "breakpoint", "memoryview", "os", "pathlib",
              "subprocess", "socket", "shutil", "importlib"}
 PY_BANNED_ATTR = {"write", "writelines", "write_text", "write_bytes", "system", "popen",
-                  "unlink", "rename", "replace_file", "mkdir", "rmdir"}
+                  "unlink", "rename", "replace_file", "mkdir", "rmdir", "modules", "open",
+                  "system", "spawn", "fork", "load_module"}
 
 
 def check_python(path):
@@ -343,7 +372,7 @@ def check_python(path):
         for n in names:
             if n not in PY_IMPORTS:
                 err(where, f"import not allowed: {n}")
-        if isinstance(node, ast.Name) and node.id in PY_BANNED:
+        if isinstance(node, ast.Name) and (node.id in PY_BANNED or (node.id.startswith("__") and node.id not in ("__name__", "__doc__"))):
             err(where, f"name not allowed: {node.id}")
         if isinstance(node, ast.Attribute) and (node.attr in PY_BANNED_ATTR or node.attr.startswith("__")):
             err(where, f"attribute not allowed: {node.attr}")

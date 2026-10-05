@@ -5,7 +5,7 @@
 iniciar_gancho Stop
 
 META="$D/$SESION.meta"
-[ -n "$(leer_meta "$META" inicio)" ] || poner_meta "$META" inicio "$(ahora)"
+[ "$(leer_num "$META" inicio)" -gt 0 ] || poner_meta "$META" inicio "$(ahora)"
 
 # 1. Nota entre marcas, solo si si-auto la pidió (bloqueo o compactación):
 #    así no se guarda una nota que Claude solo esté citando.
@@ -37,9 +37,9 @@ if [ "$(campo stop_hook_active)" = true ]; then
 fi
 
 # 4. Umbral: pasaron N min desde el inicio, la última nota o el último bloqueo...
-inicio="$(leer_meta "$META" inicio)"
-ultima="$(leer_meta "$META" ultima_nota)"; ultima="${ultima:-0}"
-bloqueo="$(leer_meta "$META" ultimo_bloqueo)"; bloqueo="${bloqueo:-0}"
+inicio="$(leer_num "$META" inicio)"
+ultima="$(leer_num "$META" ultima_nota)"
+bloqueo="$(leer_num "$META" ultimo_bloqueo)"
 base=$(( inicio > ultima ? inicio : ultima ))
 ref=$(( base > bloqueo ? base : bloqueo ))
 t="$(ahora)"
