@@ -1,0 +1,8 @@
+{
+  "name": "si-auto",
+  "description": "Opcional. Guarda una nota por sesión fuera del árbol de trabajo y la entrega a la siguiente sesión, sin escribir en el repo ni hacer commit. Requiere si@sielay y python3; se enciende repo por repo.",
+  "author": { "name": "emiliovos" },
+  "homepage": "https://github.com/emiliovos/sielay-skills",
+  "license": "MIT",
+  "dependencies": ["si@sielay"]
+}
