@@ -61,6 +61,10 @@ copia; siembra 'GIT_DIR="/tmp/x" git -C "$1" rev-parse --show-toplevel'; auto "r
 copia; siembra 'local -n x=D';                                         auto "rechaza local -n"
 copia; siembra 'x = __builtins__' leer-json.py;                        auto "rechaza __builtins__"
 copia; siembra 'x = sys.modules' leer-json.py;                         auto "rechaza sys.modules"
+copia; siembra 'open(*["x", "w"])' leer-json.py;                       auto "rechaza open con *args"
+copia; siembra 'open("x", **{"mode": "w"})' leer-json.py;              auto "rechaza open con **kwargs"
+copia; siembra 'abrir = open' leer-json.py;                            auto "rechaza guardar open en otra variable"
+copia; siembra "x=\$'a\\'b'; echo x > \"\$HOME/y\"";                     auto "\$'...' con comilla escapada no desalinea el análisis"
 
 copia; python3 - "$TMP/repo/plugins/si-auto/hooks/hooks.json" <<'PY'
 import json, sys; p = sys.argv[1]; d = json.load(open(p))

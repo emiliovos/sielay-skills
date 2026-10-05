@@ -83,7 +83,12 @@ class Lexer:
             self.i += 1
             return "${" + self.balanced("{", "}") + "}"
         if self.peek() == "'":
-            j = self.s.index("'", self.i + 1)
+            # $'...' (ANSI-C quoting): \' does not close the string.
+            j = self.i + 1
+            while j < len(self.s) and self.s[j] != "'":
+                j += 2 if self.s[j] == "\\" else 1
+            if j >= len(self.s):
+                err(self.where, "unterminated $'...' string")
             text = self.s[self.i - 1:j + 1]
             self.i = j + 1
             return text
@@ -362,6 +367,7 @@ PY_BANNED_ATTR = {"write", "writelines", "write_text", "write_bytes", "system", 
 def check_python(path):
     where = path.name
     tree = ast.parse(path.read_text(encoding="utf-8"))
+    calls = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             names = [a.name.split(".")[0] for a in node.names]
@@ -377,10 +383,17 @@ def check_python(path):
         if isinstance(node, ast.Attribute) and (node.attr in PY_BANNED_ATTR or node.attr.startswith("__")):
             err(where, f"attribute not allowed: {node.attr}")
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "open":
+            calls.add(id(node.func))
+            if any(isinstance(a, ast.Starred) for a in node.args) or any(k.arg is None for k in node.keywords):
+                err(where, "open() may not take *args or **kwargs")
             mode = node.args[1] if len(node.args) > 1 else next(
                 (k.value for k in node.keywords if k.arg == "mode"), None)
             if mode is not None and not (isinstance(mode, ast.Constant) and mode.value in ("r", "rt")):
                 err(where, "open() may only read")
+    # open may only appear as the function of a direct call, never stored or passed around.
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Name) and node.id == "open" and id(node) not in calls:
+            err(where, "open may only be called directly")
 
 
 def main():
