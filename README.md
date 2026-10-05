@@ -44,6 +44,14 @@ Ejemplo de un repo que cierra en un solo archivo, trabaja en `main` y entrega el
 - Handoff: pantalla
 ```
 
+Si unos repos se pushean distinto que otros (por ejemplo, el repo del proyecto va por PR y los de docs y planes van directo a `main`), agrega excepciones a la línea `Push` después de `;`, nombrando cada repo por la carpeta raíz de su checkout. El primer valor aplica a todos los repos que no nombres:
+
+```
+- Push: rama+PR; pve2-docs, pve2-plans: main directo
+```
+
+Si la sesión arranca fuera de un repo (por ejemplo, en el home de un servidor que maneja varios proyectos), la skill lee el `CLAUDE.md` del directorio donde arrancó.
+
 Cada valor que pongas reemplaza al de por defecto, nunca se suma: con `Estado` en una ruta no se crean bitácoras ni `codebase-summary.md`, y el handoff va dentro de ese archivo salvo que pongas `Handoff: <ruta>`. Con `Handoff: estado` o `pantalla` no se crea `HANDOFF.md`. La skill nunca escribe rutas de solo lectura ni corre scripts de publicación o deploy.
 
 Solo hay dos caminos: la sección exacta o los valores por defecto. Sin la sección, la skill no deduce nada del texto libre del `CLAUDE.md`: usa los valores por defecto y lo dice al empezar. Si la prosa sugiere otro cierre, pregunta antes de escribir nada.
