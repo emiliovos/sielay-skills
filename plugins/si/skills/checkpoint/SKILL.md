@@ -1,6 +1,6 @@
 ---
 name: checkpoint
-description: "Ritual de cierre de sesión + handoff genérico para cualquier proyecto. Úsalo al terminar de trabajar: resuelve el contexto y el contrato de cierre del proyecto (CLAUDE.md o descriptor) → bitácora/estado → docs → commit → push según el flujo del repo → handoff copy-paste para seguir en otra terminal con contexto limpio. Si el repo define su propio cierre, lo sigue sin crear archivos nuevos. Actívalo cuando el usuario diga '/checkpoint', 'checkpoint', 'cierra la sesión', 'termina y dame handoff', 'cerremos', 'wrap up', 'dame el handoff', o al final de una tanda de trabajo."
+description: "Ritual de cierre de sesión + handoff genérico para cualquier proyecto. Úsalo al terminar de trabajar: resuelve el contexto y el contrato de cierre del proyecto (CLAUDE.md o descriptor) → bitácora/estado → docs → commit → push según el flujo del repo → handoff copy-paste para seguir en otra terminal con contexto limpio. Si el CLAUDE.md del repo declara su cierre en la sección '## Cierre de sesión', lo sigue sin crear archivos nuevos; si no, usa los valores por defecto. Actívalo cuando el usuario diga '/checkpoint', 'checkpoint', 'cierra la sesión', 'termina y dame handoff', 'cerremos', 'wrap up', 'dame el handoff', o al final de una tanda de trabajo."
 user-invocable: true
 when_to_use: "Invoke al cerrar una sesión de trabajo: deja el trabajo commiteado (en el repo/entorno correcto), la bitácora o el archivo de estado y los docs al día, y un prompt de handoff para retomar en frío. Resuelve acceso, rutas, flujo de push y destino del handoff por proyecto en vez de asumir constantes fijas — una sola skill sirve para proyectos con y sin convenciones propias. Para proyectos SIN buzón de coordinación (trabajo en solitario)."
 argument-hint: "[<slug-del-proyecto>] [nota opcional de cierre]"
@@ -11,7 +11,7 @@ metadata:
   deps: "git configurado en el repo destino. Opcional: una sección '## Cierre de sesión' en el CLAUDE.md del repo o un descriptor de proyecto (p.ej. docs/projects/<slug>/project.json) para fijar archivo de estado, flujo de push y destino del handoff; si no existen, se usan los valores por defecto."
   installs: []
   risk: none
-  version: "2.1.0"
+  version: "2.2.0"
 ---
 
 # Checkpoint — cierre de sesión + handoff
@@ -37,7 +37,7 @@ Del argumento saca el `<slug>` si lo dieron; si no, infiérelo del trabajo de la
 ⚠️ **Remoto ajeno:** si `origin` es un **upstream que no es tuyo** (fork no creado), NO se puede pushear ahí. Márcalo y sáltate el push (ver Paso 4). No dejes que parezca respaldado si no lo está.
 
 ### 0.2 Contrato de cierre
-Busca en el `CLAUDE.md` del repo (o en los campos equivalentes del descriptor) una sección con **este formato exacto**:
+Busca en el `CLAUDE.md` del repo (o en los campos `cierre.estado`, `cierre.push` y `cierre.handoff` del descriptor) una sección con **este formato exacto**. Conviene declarar las tres líneas:
 
 ```
 ## Cierre de sesión
@@ -55,20 +55,20 @@ Ejemplo (repo que cierra en un solo archivo y trabaja en main):
 - Handoff: pantalla
 ```
 
-Si no existe la sección, pero el `CLAUDE.md` describe su cierre en texto libre (dónde va el estado, si se trabaja en main, dónde va el handoff), dedúcelo de ahí y di de qué frase salió cada valor. Si es ambiguo, pregunta en una línea.
+**Solo hay dos caminos: la sección exacta o los valores por defecto.** Sin la sección, el contrato son los valores por defecto de la tabla, aunque el `CLAUDE.md` hable del cierre en texto libre: **nunca deduzcas valores de la prosa**. Si el `CLAUDE.md` parece describir un cierre distinto (otro archivo de estado, trabajo en main, handoff en otro lado), **antes de escribir nada** pregunta en una línea si usas los valores por defecto o si el usuario prefiere agregar la sección; no decidas solo.
 
 | Valor | Significado | Por defecto (el repo no dice nada) |
 |---|---|---|
 | **Estado** | `<ruta>`: bitácora y estado van solo a ese archivo. `journals`: bitácora en `docs/journals/YYMMDD-<slug>.md` | `journals` |
 | **Push** | `rama+PR` · `main directo` · `no pushear` | `rama+PR` |
-| **Handoff** | `<ruta>`: ese archivo. `estado`: dentro del archivo de estado. `pantalla`: solo en el chat | `HANDOFF.md` en el plan activo; si no hay plan activo o está fuera del repo o es de solo lectura, `pantalla` |
+| **Handoff** | `<ruta>`: ese archivo. `estado`: dentro del archivo de estado. `pantalla`: solo en el chat Si `Estado` es una ruta: `estado` (dentro de ese archivo). Si no: `HANDOFF.md` en el plan activo; si no hay plan activo o está fuera del repo o es de solo lectura, `pantalla` |
 
 Reglas del contrato:
-- **Reemplaza, nunca suma.** Cada valor que el repo define sustituye por completo al valor por defecto. Si `Estado` es una ruta, **no** se escribe `docs/journals/` ni `codebase-summary.md` ni ningún otro doc "además de". Si `Handoff` es `estado` o `pantalla`, **no** se crea `HANDOFF.md`. Solo los valores que el repo no menciona usan el valor por defecto.
+- **Reemplaza, nunca suma.** Cada valor que el repo define sustituye por completo al valor por defecto. Si `Estado` es una ruta, **no** se escribe `docs/journals/` ni `codebase-summary.md` ni ningún otro doc "además de". Si `Handoff` es `estado` o `pantalla`, **no** se crea `HANDOFF.md`. Con `Estado` en una ruta, `HANDOFF.md` solo existe si el repo lo pide con `Handoff: <ruta>`. Los valores que la sección no menciona usan el valor por defecto de la tabla.
 - **Rutas de solo lectura** (las que el `CLAUDE.md` marque así, o cualquier carpeta fuera del repo que no sea tuya) **nunca se escriben**, aunque sean "el plan activo".
 - **Publicar no es pushear:** si el repo publica con un script propio (p.ej. `deploy/publicar.sh`) o con un deploy, checkpoint **nunca lo corre**. Solo lo menciona en el handoff como paso pendiente del usuario.
 
-**Reporta en 3-4 líneas** el contexto resuelto (repo, cómo se accede, identidad git, estado del remoto) y el contrato de cierre (estado, push, handoff, y de dónde salió cada valor) antes de seguir.
+**Reporta en 3-4 líneas** el contexto resuelto (repo, cómo se accede, identidad git, estado del remoto) y el contrato de cierre (estado, push, handoff) antes de seguir. Si no hay sección, dilo así: "sin contrato, usando valores por defecto; si tu repo cierra distinto, agrega la sección `## Cierre de sesión` (ver el README de emiliovos/sielay-skills)".
 
 ## Constantes del proyecto (fallback — EDITAR solo si no hay descriptor ni CLAUDE.md)
 

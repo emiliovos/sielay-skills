@@ -26,7 +26,7 @@ claude plugin update si@sielay
 
 ## Repos con su propio cierre de sesión
 
-`/si:checkpoint` usa por defecto bitácora en `docs/journals/`, `codebase-summary.md`, rama + PR y `HANDOFF.md` en el plan activo. Si tu repo cierra distinto, copia esta sección en su `CLAUDE.md` y deja en cada línea una sola de las opciones:
+`/si:checkpoint` usa por defecto bitácora en `docs/journals/`, `codebase-summary.md`, rama + PR y `HANDOFF.md` en el plan activo. Si tu repo cierra distinto, copia esta sección en su `CLAUDE.md` con **las tres líneas** y deja en cada una una sola de las opciones:
 
 ```
 ## Cierre de sesión
@@ -44,7 +44,9 @@ Ejemplo de un repo que cierra en un solo archivo, trabaja en `main` y entrega el
 - Handoff: pantalla
 ```
 
-Cada valor que pongas reemplaza al de por defecto, nunca se suma: con `Estado` en una ruta no se crean bitácoras ni `codebase-summary.md`, y con `Handoff: estado` o `pantalla` no se crea `HANDOFF.md`. Lo que no pongas usa el valor por defecto. La skill nunca escribe rutas de solo lectura ni corre scripts de publicación o deploy. Si no hay sección, intenta deducir el cierre del texto libre del `CLAUDE.md`, pero la sección exacta es lo único que garantiza el resultado.
+Cada valor que pongas reemplaza al de por defecto, nunca se suma: con `Estado` en una ruta no se crean bitácoras ni `codebase-summary.md`, y el handoff va dentro de ese archivo salvo que pongas `Handoff: <ruta>`. Con `Handoff: estado` o `pantalla` no se crea `HANDOFF.md`. La skill nunca escribe rutas de solo lectura ni corre scripts de publicación o deploy.
+
+Solo hay dos caminos: la sección exacta o los valores por defecto. Sin la sección, la skill no deduce nada del texto libre del `CLAUDE.md`: usa los valores por defecto y lo dice al empezar. Si la prosa sugiere otro cierre, pregunta antes de escribir nada.
 
 ## Claude Desktop (chat)
 
