@@ -48,7 +48,9 @@ while IFS= read -r m; do
   t="$(ahora)"
   if [ -z "$termino" ]; then
     if [ "$otro" -gt 0 ]; then
-      ! kill -0 "$otro" 2>/dev/null || continue
+      # Viva solo si ese PID existe y sigue siendo Claude (un PID reciclado no cuenta).
+      comando="$(ps -o comm= -p "$otro" 2>/dev/null)"
+      [ "${comando##*/}" != claude ] || continue
     else
       [ $(( t - inicio )) -ge 86400 ] || continue
     fi

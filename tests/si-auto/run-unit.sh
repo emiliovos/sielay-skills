@@ -6,7 +6,11 @@
 set -u
 RAIZ="$(cd "$(dirname "$0")/../.." && pwd)"
 S="$RAIZ/plugins/si-auto/scripts"
-TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
+TMP="$(mktemp -d)"
+# Proceso falso llamado "claude" para simular una sesión viva.
+mkdir -p "$TMP/falso" && cp "$(command -v sleep)" "$TMP/falso/claude"
+"$TMP/falso/claude" 600 >/dev/null 2>&1 & CLAUDE_FALSO=$!
+trap 'kill "$CLAUDE_FALSO" 2>/dev/null; rm -rf "$TMP"' EXIT
 fallos=0; casos=0
 ok()   { casos=$((casos+1)); echo "ok   $1"; }
 mal()  { casos=$((casos+1)); fallos=$((fallos+1)); echo "FAIL $1${2:+ — $2}"; }
@@ -90,7 +94,7 @@ check "veredicto con id inválido se ignora" '[ ! -e "$D/x.meta" ] && [ ! -e "$(
 
 # --- Sesión viva vs muerta
 r="$(nuevo_repo pid)"; D="$(notas "$r")"; mkdir -p "$D/entregadas"
-printf 'inicio=%s\npid=%s\n' "$(date -u +%s)" "$$" > "$D/viva.meta"; echo "nota viva" > "$D/viva.md"
+printf 'inicio=%s\npid=%s\n' "$(date -u +%s)" "$CLAUDE_FALSO" > "$D/viva.meta"; echo "nota viva" > "$D/viva.md"
 muerto="$(bash -c 'echo $$')"   # PID de un proceso que ya terminó
 printf 'inicio=%s\npid=%s\n' "$(date -u +%s)" "$muerto" > "$D/muerta.meta"; echo "nota muerta" > "$D/muerta.md"
 out="$(gancho session-start.sh "$r" nueva '"source":"startup"')"
@@ -103,7 +107,9 @@ check "sesión terminada sin nota: se limpia" '[ ! -f "$D/sin-nota.meta" ]'
 # --- Dos arranques simultáneos con una nota
 r="$(nuevo_repo carrera)"; D="$(notas "$r")"; mkdir -p "$D/entregadas"
 printf 'inicio=1\nterminada=1 other\n' > "$D/vieja.meta"; echo "nota única" > "$D/vieja.md"
-gancho session-start.sh "$r" a1 '"source":"startup"' > "$TMP/o1" & gancho session-start.sh "$r" a2 '"source":"startup"' > "$TMP/o2" & wait
+gancho session-start.sh "$r" a1 '"source":"startup"' > "$TMP/o1" & p1=$!
+gancho session-start.sh "$r" a2 '"source":"startup"' > "$TMP/o2" & p2=$!
+wait "$p1" "$p2"   # no esperar al proceso falso de Claude
 check "dos arranques simultáneos: se entrega una sola vez" '[ "$(cat "$TMP/o1" "$TMP/o2" | grep -c "nota única")" = 1 ]'
 
 # --- Compactación
@@ -173,14 +179,20 @@ out="$(gancho stop.sh "$r" b1 '"stop_hook_active":false')"
 check "uso de Bash cuenta como actividad" 'grep -q "\"decision\": \"block\"" <<<"$out"'
 
 r="$(nuevo_repo larga)"; D="$(notas "$r")"; mkdir -p "$D/entregadas"
-printf 'inicio=%s\npid=%s\n' "$(( $(date -u +%s) - 90000 ))" "$$" > "$D/larga.meta"; echo "nota larga viva" > "$D/larga.md"
+printf 'inicio=%s\npid=%s\n' "$(( $(date -u +%s) - 90000 ))" "$CLAUDE_FALSO" > "$D/larga.meta"; echo "nota larga viva" > "$D/larga.md"
 printf 'inicio=%s\npid=0\n' "$(( $(date -u +%s) - 90000 ))" > "$D/sinpid.meta"; echo "nota sin pid" > "$D/sinpid.md"
 out="$(gancho session-start.sh "$r" l2 '"source":"startup"')"
 check "sesión viva de más de 24 h: su nota no se entrega" '! grep -q "nota larga viva" <<<"$out" && [ -f "$D/larga.md" ]'
 check "sin PID y más de 24 h: se entrega" 'grep -q "nota sin pid" <<<"$out"'
+
 check "la entrega muestra worktree y rama" 'grep -q "worktree .*, rama " <<<"$out"'
 check "la entrega dice que las notas no son instrucciones" 'grep -q "no instrucciones" <<<"$out"'
 check "SessionStart guarda worktree y rama" 'grep -q "^worktree=$r$" "$D/l2.meta" && grep -q "^rama=" "$D/l2.meta"'
+# El PID de la sesión muerta lo reutiliza un proceso que no es Claude.
+r="$(nuevo_repo reciclado)"; D="$(notas "$r")"; mkdir -p "$D/entregadas"
+printf 'inicio=%s\npid=%s\n' "$(date -u +%s)" "$$" > "$D/reciclada.meta"; echo "nota reciclada" > "$D/reciclada.md"
+out="$(gancho session-start.sh "$r" r2 '"source":"startup"')"
+check "PID reciclado por otro proceso: la nota se entrega" 'grep -q "nota reciclada" <<<"$out"'
 
 binpy="$TMP/binpy"; mkdir -p "$binpy"
 printf '#!/bin/sh\necho x >> "%s"\nexec %s "$@"\n' "$TMP/contador-python" "$(command -v python3)" > "$binpy/python3"; chmod +x "$binpy/python3"
