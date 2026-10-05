@@ -11,7 +11,7 @@ metadata:
   deps: "git configurado en el repo destino. Opcional: una sección '## Cierre de sesión' en el CLAUDE.md del repo o un descriptor de proyecto (p.ej. docs/projects/<slug>/project.json) para fijar archivo de estado, flujo de push y destino del handoff; si no existen, se usan los valores por defecto."
   installs: []
   risk: none
-  version: "2.2.0"
+  version: "2.2.1"
 ---
 
 # Checkpoint — cierre de sesión + handoff
@@ -61,7 +61,7 @@ Ejemplo (repo que cierra en un solo archivo y trabaja en main):
 |---|---|---|
 | **Estado** | `<ruta>`: bitácora y estado van solo a ese archivo. `journals`: bitácora en `docs/journals/YYMMDD-<slug>.md` | `journals` |
 | **Push** | `rama+PR` · `main directo` · `no pushear` | `rama+PR` |
-| **Handoff** | `<ruta>`: ese archivo. `estado`: dentro del archivo de estado. `pantalla`: solo en el chat Si `Estado` es una ruta: `estado` (dentro de ese archivo). Si no: `HANDOFF.md` en el plan activo; si no hay plan activo o está fuera del repo o es de solo lectura, `pantalla` |
+| **Handoff** | `<ruta>`: ese archivo. `estado`: dentro del archivo de estado. `pantalla`: solo en el chat | Si `Estado` es una ruta: `estado` (dentro de ese archivo). Si no: `HANDOFF.md` en el plan activo; si no hay plan activo o está fuera del repo o es de solo lectura, `pantalla` |
 
 Reglas del contrato:
 - **Reemplaza, nunca suma.** Cada valor que el repo define sustituye por completo al valor por defecto. Si `Estado` es una ruta, **no** se escribe `docs/journals/` ni `codebase-summary.md` ni ningún otro doc "además de". Si `Handoff` es `estado` o `pantalla`, **no** se crea `HANDOFF.md`. Con `Estado` en una ruta, `HANDOFF.md` solo existe si el repo lo pide con `Handoff: <ruta>`. Los valores que la sección no menciona usan el valor por defecto de la tabla.
