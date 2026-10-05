@@ -26,7 +26,7 @@ if [ "$(leer_meta "$META" recibio)" = 1 ]; then
   veredictos="$(printf '%s' "$ENTRADA" | py veredictos)"
 fi
 while IFS=$'\t' read -r id valor; do
-  [ -n "$id" ] || continue
+  [[ "$id" =~ ^[A-Za-z0-9-]+$ ]] || continue
   m="$D/entregadas/$id.meta"
   if [ "$(leer_meta "$m" entregada_a)" = "$SESION" ]; then
     poner_meta "$m" veredicto "$valor"

@@ -73,15 +73,35 @@ class Lexer:
                 self.i += 1
             if "$(" in body or "`" in body:
                 err(self.where, "command substitution inside $((...)) is not allowed")
+            # bash evaluates variable values inside arithmetic (a[$(cmd)] runs cmd), so only
+            # protected variables, whose values come from leer_num/ahora, may appear here.
+            for name in re.findall(r"[A-Za-z_][A-Za-z0-9_]*", body):
+                if name not in ARITH_VARS:
+                    err(self.where, f"variable {name} may not be used in arithmetic")
             return "$((" + body + "))"
         if self.peek() == "(":
             self.i += 1
             body = self.balanced()
-            self.nested.append(body)
+            self.nested.append((body, len(self.tokens)))
             return "$(" + body + ")"
         if self.peek() == "{":
             self.i += 1
-            return "${" + self.balanced("{", "}") + "}"
+            body = self.balanced("{", "}")
+            if "$(" in body or "`" in body or "<(" in body or ">(" in body:
+                err(self.where, "command substitution inside ${...} is not allowed")
+            if "@" in body:
+                err(self.where, "${...@...} transformations are not allowed")
+            # Indirection, substrings and array subscripts evaluate variable values as
+            # arithmetic, so they are limited to the protected arithmetic variables.
+            if body.startswith("!"):
+                err(self.where, "indirect expansion ${!...} is not allowed")
+            if re.search(r":(?![-=?+])", body):
+                err(self.where, "substring expansion ${x:...} is not allowed")
+            for sub in re.findall(r"\[([^\]]*)\]", body):
+                for name in re.findall(r"[A-Za-z_][A-Za-z0-9_]*", sub):
+                    if name not in ARITH_VARS:
+                        err(self.where, f"variable {name} may not be used as an array subscript")
+            return "${" + body + "}"
         if self.peek() == "'":
             # $'...' (ANSI-C quoting): \' does not close the string.
             j = self.i + 1
@@ -161,13 +181,16 @@ class Lexer:
             elif c in "<>" and self.peek(1) == "(":
                 flush()
                 self.i += 2
-                self.nested.append(self.balanced())
+                body = self.balanced()
+                if c == ">" or body.strip() not in PROC_SUBS:
+                    err(self.where, f"process substitution not allowed: {body.strip()}")
+                self.nested.append((body, len(self.tokens)))
                 self.tokens.append(("W", "$P"))
             elif c in "<>" or (c == "&" and self.peek(1) == ">") or (c.isdigit() and not word and self.peek(1) in "<>"):
                 fd = ""
                 if c.isdigit():
                     fd, self.i = c, self.i + 1
-                m = re.match(r"<<<|<<-?|>>|>&|<&|&>>?|>\||[<>]", self.s[self.i:])
+                m = re.match(r"<<<|<<-?|<>|>>|>&|<&|&>>?|>\||[<>]", self.s[self.i:])
                 op = m.group(0)
                 self.i += len(op)
                 flush()
@@ -201,16 +224,30 @@ class Lexer:
 
 # --- Bash rules ---------------------------------------------------------------
 
+# Variables allowed in $((...)): each one only takes the exact values listed in PROTECTED.
+ARITH_VARS = {"i", "t", "inicio", "ultima", "bloqueo", "base", "ref", "UMBRAL_MIN"}
+
+# The only process substitutions and here-strings: they feed the loops that set m, id and CAMPOS.
+PROC_SUBS = {'ls -tr "$D"/*.meta 2>/dev/null', 'printf \'%s\' "$ENTRADA" | py campos'}
+HERESTRINGS = {'"$veredictos"'}
+# for-loop headers set loop variables, so they have exact shapes too.
+FOR_HEADERS = {"for _ in 1 2 3 4 5 6",
+               "for n in session_id cwd transcript_path stop_hook_active source reason trigger",
+               'for n in "$D"/*.md', 'for n in "$D"/entregadas/*.md'}
+
 KEYWORDS = {"if", "then", "elif", "else", "fi", "while", "until", "do", "done", "!"}
 # The only functions, all defined once in comun.sh. Scripts cannot add their own.
 FUNCTIONS = {"py", "campo", "bitacora", "leer_meta", "leer_num", "poner_meta", "borrar_meta", "ahora",
              "umbral_del_contrato", "preparar_repo", "iniciar_gancho"}
 # Shapes that write through "$1" are only allowed inside these two helpers.
 DOLLAR1_FUNCS = {"poner_meta", "borrar_meta"}
-DOLLAR1_SHAPES = {'mv "$1.tmp.$$" "$1"'}
+DOLLAR1_SHAPES = {'mv "$1.tmp.$$" "$1"', 'grep -v "^$2=" "$1"'}
+# Shapes that read through "$1", and the only function each may appear in.
+FUNC_ONLY = {'sed -n "s/^$2=//p" "$1"': {"leer_meta"}, 'leer_meta "$1" "$2"': {"leer_num"}}
 DEFINED = set()
-SIMPLE = {"echo", "cat", "tail", "tr", "ls", "basename", "dirname", "date", "ps", "grep",
-          "true", ":", "[", "[[", "cd", "pwd", "continue", "break", "exit", "return", "local"}
+# Commands that cannot read or write files by themselves.
+SIMPLE = {"echo", "tr", "basename", "dirname", "true", ":", "[", "[[", "pwd",
+          "continue", "break", "exit", "return", "local"}
 # Exact shapes for commands that write, and for the few commands with fixed arguments.
 EXACT = {
     "mv": {'mv "$1.tmp.$$" "$1"', 'mv "$D/$SESION.md.tmp" "$D/$SESION.md"',
@@ -224,6 +261,18 @@ EXACT = {
     "command": {"command -v python3"},
     "kill": {'kill -0 "$otro"'},
     "read": {"read -r id valor", "read -r m"},
+    # Readers: only the notes dir, the .meta files and the repo's CLAUDE.md (never .env, ~/.ssh...).
+    "cat": {"cat", 'cat "$D/entregadas/$id.md"'},
+    "tail": {"tail -1", 'tail -n 20 "$D/bitacora.log"'},
+    "ls": {'ls -tr "$D"/*.meta'},
+    "grep": {'grep -v "^$2=" "$1"'},
+    "sed": {'sed -n "s/^$2=//p" "$1"', "sed -n 's/^entregada_a=//p' \"$m\"",
+            "sed -n 's/^terminada=//p' \"${n%.md}.meta\"", "sed -n 's/^veredicto=//p' \"$m\""},
+    "ps": {'ps -o comm= -p "$otro"', 'ps -o comm= -p "$p"', 'ps -o ppid= -p "$p"'},
+    "date": {"date -u +%s", "date -u +%FT%TZ"},
+    "cd": {'cd "$(dirname "${BASH_SOURCE[0]}")"'},
+    "py": {"py campos", "py nota", "py veredictos", "py contexto SessionStart", "py bloqueo",
+           'py ediciones "$(campo transcript_path)" "$base"'},
     "mapfile": {"mapfile -t CAMPOS"},
 }
 REDIRECT_TARGETS = {'"$D/bitacora.log"', '"$D/$SESION.md.tmp"', '"$1.tmp.$$"',
@@ -239,11 +288,24 @@ PROTECTED = {
     "comun": {'"$(git -C "$1" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)"',
               '"$(git -C "$dir" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)"'},
     "IFS": {"", "$'\\t'"},
+    "i": {"0", "$((i + 1))"},
+    "t": {'"$(ahora)"'},
+    "inicio": {'"$(leer_num "$META" inicio)"', '"$(leer_num "$m" inicio)"'},
+    "ultima": {'"$(leer_num "$META" ultima_nota)"'},
+    "bloqueo": {'"$(leer_num "$META" ultimo_bloqueo)"'},
+    "base": {"$(( inicio > ultima ? inicio : ultima ))"},
+    "ref": {"$(( base > bloqueo ? base : bloqueo ))"},
+    "UMBRAL_MIN": {"30", '"$umbral"', '"$SI_AUTO_UMBRAL_MIN"'},
+    "umbral": {'"$(umbral_del_contrato "$RAIZ")"'},
+    "veredictos": {'""', '"$(printf \'%s\' "$ENTRADA" | py veredictos)"'},
+    "n": set(),
     "RAIZ": {'""', '"$(git -C "$1" rev-parse --show-toplevel 2>/dev/null)"'},
     "CAMPOS": {""},  # CAMPOS=() lexes as "CAMPOS=" followed by ( )
 }
 # The .meta files the write helpers may touch ($1 inside them is checked as a redirect target).
 META_FILES = {'"$META"', '"$m"', '"$D/entregadas/$id.meta"'}
+# Input redirections may only read a process substitution, never a file.
+INPUT_TARGETS = {"$P"}
 OWN_UPPER = {"UMBRAL_MIN", "ENTRADA", "SESION", "D", "META", "AQUI", "IFS", "RAIZ", "CAMPOS"}
 SED_PROGRAM = re.compile(r"""^["'](s/\^[A-Za-z_$0-9]+=//p)["']$""")
 AWK_FORBIDDEN = re.compile(r"system|getline|close|fflush|ENVIRON|[|>]")
@@ -268,23 +330,28 @@ def check_command(where, words, redirs, func=None):
         err(where, "printf -v is not allowed")
     elif cmd == "printf":
         pass
-    elif cmd in ("poner_meta", "borrar_meta"):
-        if len(words) < 2 or words[1] not in META_FILES:
-            err(where, f"{cmd} may only write the .meta files under $D: {plain}")
-    elif cmd in SIMPLE or cmd in FUNCTIONS:
+    elif cmd in ("poner_meta", "borrar_meta", "leer_meta", "leer_num"):
+        if plain in FUNC_ONLY:
+            if func not in FUNC_ONLY[plain]:
+                err(where, f"{plain} is only allowed inside {sorted(FUNC_ONLY[plain])}")
+        elif len(words) < 2 or words[1] not in META_FILES:
+            err(where, f"{cmd} may only touch the .meta files under $D: {plain}")
+    elif cmd == "awk":
+        if len(words) != 3 or not words[1].startswith("'") or words[2] != '"$1/CLAUDE.md"' \
+                or func != "umbral_del_contrato" or AWK_FORBIDDEN.search(words[1]):
+            err(where, "awk may only read the contract from CLAUDE.md, without writing or running commands")
+    elif cmd == "[[" and re.search(r"\s-(eq|ne|lt|le|gt|ge)\s", plain):
+        err(where, "numeric comparisons inside [[ ]] are not allowed (they evaluate variable values); use [ ]")
+    elif cmd in SIMPLE or (cmd in FUNCTIONS and cmd not in EXACT):
         if cmd == "local" and not all(re.match(r"^[a-z_][a-z0-9_]*$", w) for w in words[1:]):
             err(where, "local may only declare lower-case names")
     elif cmd == "git":
         if len(words) < 4 or words[1] != "-C" or words[3] != "rev-parse":
             err(where, f"git may only be called as git -C <dir> rev-parse: {plain}")
-    elif cmd == "sed":
-        if len(words) != 4 or words[1] != "-n" or not SED_PROGRAM.match(words[2]):
-            err(where, f"sed may only print a key=value field: {plain}")
-    elif cmd == "awk":
-        if AWK_FORBIDDEN.search(words[1] if len(words) > 1 else ""):
-            err(where, "awk program may not write, run commands or read other input")
     elif cmd in EXACT:
-        if plain in DOLLAR1_SHAPES and func not in DOLLAR1_FUNCS:
+        if plain in FUNC_ONLY and func not in FUNC_ONLY[plain]:
+            err(where, f"{plain} is only allowed inside {sorted(FUNC_ONLY[plain])}")
+        elif plain in DOLLAR1_SHAPES and func not in DOLLAR1_FUNCS:
             err(where, f"{plain} is only allowed inside poner_meta/borrar_meta")
         elif plain not in EXACT[cmd]:
             err(where, f"{cmd} is only allowed as one of its exact shapes: {plain}")
@@ -293,6 +360,8 @@ def check_command(where, words, redirs, func=None):
     else:
         err(where, f"command not allowed: {cmd}")
     if cmd == "read":
+        if redirs:
+            err(where, "read may not have its own redirection; it reads only from its loop")
         for name in words[2:]:
             if name in PROTECTED and name not in ("id", "m"):
                 err(where, f"read may not set {name}")
@@ -307,7 +376,9 @@ def check_bash(path):
         tokens = lexer.run()
         words, redirs = [], []
         expect_target, func, depth, pending = None, outer, 0, None
+        func_at = []          # function in effect at each token, for nested $(...) bodies
         for kind, val in tokens + [("O", "\n")]:
+            func_at.append(func)
             if expect_target:
                 if val == '"$1.tmp.$$"' and func not in DOLLAR1_FUNCS:
                     err(where, "writes through $1 are only allowed inside poner_meta/borrar_meta")
@@ -316,6 +387,10 @@ def check_bash(path):
                         err(where, f"fd duplication to {val} is not allowed")
                 elif ">" in expect_target and val not in REDIRECT_TARGETS:
                     err(where, f"write to {val} is not allowed (only under $D)")
+                elif expect_target.lstrip("0123456789") == "<" and val not in INPUT_TARGETS:
+                    err(where, f"reading {val} by redirection is not allowed")
+                elif expect_target == "<<<" and val not in HERESTRINGS:
+                    err(where, f"here-string {val} is not allowed")
                 redirs.append(f"{expect_target}{val}")
                 expect_target = None
                 continue
@@ -350,10 +425,12 @@ def check_bash(path):
                 if words and words[0] in ("for", "case", "function", "select"):
                     if words[0] != "for":
                         err(where, f"{words[0]} is not allowed")
+                    elif " ".join(words) not in FOR_HEADERS:
+                        err(where, f"for loop not allowed: {' '.join(words)}")
                     words = []
                 check_command(where, words, redirs, func)
                 words, redirs = [], []
-        sources.extend((body, func) for body in lexer.nested)
+        sources.extend((body, func_at[min(at, len(func_at) - 1)]) for body, at in lexer.nested)
 
 
 # --- Python rules -------------------------------------------------------------
@@ -361,7 +438,8 @@ def check_bash(path):
 PY_IMPORTS = {"json", "re", "sys", "datetime"}
 PY_BANNED = {"exec", "eval", "compile", "__import__", "getattr", "setattr", "globals",
              "locals", "vars", "input", "breakpoint", "memoryview", "os", "pathlib",
-             "subprocess", "socket", "shutil", "importlib"}
+             "subprocess", "socket", "shutil", "importlib", "help", "exit", "quit",
+             "copyright", "credits", "license"}
 PY_BANNED_ATTR = {"write", "writelines", "write_text", "write_bytes", "system", "popen",
                   "unlink", "rename", "replace_file", "mkdir", "rmdir", "modules", "open",
                   "system", "spawn", "fork", "load_module"}
@@ -387,6 +465,8 @@ def check_python(path):
             err(where, f"attribute not allowed: {node.attr}")
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "open":
             calls.add(id(node.func))
+            if not node.args or not (isinstance(node.args[0], ast.Name) and node.args[0].id == "ruta"):
+                err(where, "open() may only read the transcript path (ruta)")
             if any(isinstance(a, ast.Starred) for a in node.args) or any(k.arg is None for k in node.keywords):
                 err(where, "open() may not take *args or **kwargs")
             mode = node.args[1] if len(node.args) > 1 else next(

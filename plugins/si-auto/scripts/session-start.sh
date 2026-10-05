@@ -41,6 +41,7 @@ entregar=""
 while IFS= read -r m; do
   [ -n "$m" ] || continue
   id="$(basename "$m" .meta)"
+  [[ "$id" =~ ^[A-Za-z0-9-]+$ ]] || continue
   [ "$id" != "$SESION" ] || continue
   termino="$(leer_meta "$m" terminada)"
   otro="$(leer_num "$m" pid)"

@@ -66,6 +66,56 @@ copia; siembra 'open("x", **{"mode": "w"})' leer-json.py;              auto "rec
 copia; siembra 'abrir = open' leer-json.py;                            auto "rechaza guardar open en otra variable"
 copia; siembra "x=\$'a\\'b'; echo x > \"\$HOME/y\"";                     auto "\$'...' con comilla escapada no desalinea el análisis"
 
+# Casos del intento manual de burlar el gate (lecturas de secretos, variables que
+# controlan rutas y ejecución escondida en valores de variables). Formato: archivo|línea.
+while IFS='|' read -r archivo linea; do
+  [ -n "$archivo" ] || continue
+  copia; siembra "$linea" "$archivo"; auto "rechaza [$archivo] $linea"
+done <<'CASOS'
+stop.sh|y="${x:-$(touch "$HOME/a")}"
+stop.sh|y="${x:-`touch a`}"
+stop.sh|cat "$HOME/.ssh/id_rsa"
+stop.sh|cat "$RAIZ/.env" >> "$D/bitacora.log"
+stop.sh|bitacora x "$(cat "$RAIZ/.env")"
+stop.sh|leer_meta "$RAIZ/.env" API_KEY
+stop.sh|tail -n 5 "$HOME/.bash_history"
+stop.sh|grep -r token "$HOME"
+stop.sh|sed -n 's/^x=//p' "$RAIZ/.env"
+stop.sh|awk -f "$HOME/prog.awk" "$1/CLAUDE.md"
+stop.sh|date -f "$HOME/.ssh/id_rsa"
+stop.sh|ls "$HOME/.ssh"
+stop.sh|ps -o args= -e
+stop.sh|cd "$HOME" && cat id_rsa
+stop.sh|echo x 1<> "$HOME/a"
+stop.sh|cat < /etc/passwd
+stop.sh|read -r m < "$HOME/.ssh/id_rsa"
+stop.sh|mapfile -t CAMPOS < "$RAIZ/.env"
+stop.sh|py ediciones "$HOME/.ssh/id_rsa" 0
+leer-json.py|print(open("/etc/passwd").read())
+leer-json.py|help()
+leer-json.py|sys.stdin = open("/etc/passwd")
+session-start.sh|for m in "$RAIZ/CLAUDE.md"; do mv "$m" "$D/entregadas/$id.meta"; done
+session-start.sh|read -r m <<<"$RAIZ/CLAUDE.md"
+session-start.sh|while IFS= read -r m; do mv "$m" "$D/entregadas/$id.meta"; done <<<"$RAIZ/CLAUDE.md"
+session-start.sh|while IFS= read -r m; do mv "$m" "$D/entregadas/$id.meta"; done < <(echo "$RAIZ/CLAUDE.md")
+stop.sh|while IFS=$'\t' read -r id valor; do poner_meta "$D/entregadas/$id.meta" x y; done <<<"../../../x z"
+stop.sh|for id in ../../x; do mv "$D/$id.md" "$D/entregadas/$id.md"; done
+ver-notas.sh|for n in "$RAIZ/a.md"; do m="${n%.md}.meta"; done
+stop.sh|veredictos="../../x integrada"
+stop.sh|x='$(touch a)'; echo "${x@P}"
+stop.sh|x='a[$(touch b)]'; [[ $x -gt 0 ]]
+stop.sh|t='a[$(touch b)]'
+stop.sh|ref='a[$(touch b)]'
+session-start.sh|inicio='a[$(touch b)]'
+comun.sh|UMBRAL_MIN='a[$(touch b)]'
+stop.sh|x='a[$(touch b)]'; y=$(( x + 1 ))
+stop.sh|x='a[$(touch b)]'; [ $(( x )) -gt 0 ]
+stop.sh|x='a[$(touch b)]'; echo "${!x}"
+stop.sh|y='a[$(touch b)]'; echo "${SESION:y}"
+stop.sh|y='a[$(touch b)]'; echo "${CAMPOS[y]}"
+stop.sh|y='a[$(touch b)]'; echo "${CAMPOS[$y]}"
+CASOS
+
 copia; python3 - "$TMP/repo/plugins/si-auto/hooks/hooks.json" <<'PY'
 import json, sys; p = sys.argv[1]; d = json.load(open(p))
 d["hooks"]["UserPromptSubmit"] = d["hooks"]["Stop"]; json.dump(d, open(p, "w"))
