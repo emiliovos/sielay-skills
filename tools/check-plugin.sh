@@ -71,12 +71,13 @@ market_jq='if type != "object" then "marketplace.json is not a JSON object" else
   ((keys - ["name","owner","description","plugins","metadata"])[]
     | "marketplace.json: top-level key not allowed: \(.)"),
   (if .name != "sielay" then "marketplace.json: name must be \"sielay\"" else empty end),
-  (if (.plugins | type) != "array" or (.plugins | length) != 1
-   then "marketplace.json: plugins must list exactly one plugin"
-   else .plugins[0] | if type != "object" then "marketplace.json: plugin entry is not an object" else
+  (if (.plugins | type) != "array" or (.plugins | length) < 1 or (.plugins | length) > 2
+   then "marketplace.json: plugins must list si and, optionally, si-auto"
+   else .plugins | to_entries[] | .key as $i | ([["si","./plugins/si"],["si-auto","./plugins/si-auto"]][$i]) as $want
+     | .value | if type != "object" then "marketplace.json: plugin entry is not an object" else
      ((keys - ["name","source","description"])[] | "marketplace.json: plugin key not allowed: \(.)"),
-     (if .name != "si" then "marketplace.json: plugin name must be \"si\"" else empty end),
-     (if .source != "./plugins/si" then "marketplace.json: plugin source must be \"./plugins/si\"" else empty end)
+     (if .name != $want[0] then "marketplace.json: plugin \($i + 1) name must be \"\($want[0])\"" else empty end),
+     (if .source != $want[1] then "marketplace.json: plugin \($i + 1) source must be \"\($want[1])\"" else empty end)
    end end) end'
 read -r -d '' check_py <<'PY' || true
 import json, sys
@@ -103,14 +104,17 @@ else:
         keys(d, ["name","owner","description","plugins","metadata"], "marketplace.json: top-level key not allowed")
         if d.get("name") != "sielay": out.append('marketplace.json: name must be "sielay"')
         ps = d.get("plugins")
-        if not isinstance(ps, list) or len(ps) != 1:
-            out.append("marketplace.json: plugins must list exactly one plugin")
-        elif not isinstance(ps[0], dict):
-            out.append("marketplace.json: plugin entry is not an object")
+        # Order is fixed: si first, then the optional si-auto.
+        want = [("si", "./plugins/si"), ("si-auto", "./plugins/si-auto")]
+        if not isinstance(ps, list) or not 1 <= len(ps) <= 2:
+            out.append("marketplace.json: plugins must list si and, optionally, si-auto")
         else:
-            keys(ps[0], ["name","source","description"], "marketplace.json: plugin key not allowed")
-            if ps[0].get("name") != "si": out.append('marketplace.json: plugin name must be "si"')
-            if ps[0].get("source") != "./plugins/si": out.append('marketplace.json: plugin source must be "./plugins/si"')
+            for i, (p, (name, source)) in enumerate(zip(ps, want), 1):
+                if not isinstance(p, dict):
+                    out.append("marketplace.json: plugin entry is not an object"); continue
+                keys(p, ["name","source","description"], "marketplace.json: plugin key not allowed")
+                if p.get("name") != name: out.append(f'marketplace.json: plugin {i} name must be "{name}"')
+                if p.get("source") != source: out.append(f'marketplace.json: plugin {i} source must be "{source}"')
 print("\n".join(out))
 PY
 check_json() { # kind file jq-program

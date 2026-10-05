@@ -20,6 +20,15 @@ jobs:
       - name: Safety gate
         run: bash tools/check-plugin.sh plugins/si
 
+      - name: Safety gate (si-auto)
+        run: bash tools/check-si-auto.sh plugins/si-auto
+
+      # No Claude, no network: each hook is fed the JSON Claude Code would send.
+      - name: si-auto tests
+        run: |
+          bash tests/si-auto/run-unit.sh
+          bash tests/si-auto/run-gate.sh
+
       # Pinned gitleaks binary, verified against a hardcoded sha256 (not the
       # release's own checksum file) so a tampered release cannot pass.
       - name: Secret scan (gitleaks)
@@ -33,6 +42,7 @@ jobs:
           echo "$GITLEAKS_SHA256  $RUNNER_TEMP/$tarball" | sha256sum -c -
           tar -xzf "$RUNNER_TEMP/$tarball" -C "$RUNNER_TEMP" gitleaks
           "$RUNNER_TEMP/gitleaks" detect --no-git -s plugins/si --redact --no-banner -v
+          "$RUNNER_TEMP/gitleaks" detect --no-git -s plugins/si-auto --redact --no-banner -v
 
       - name: Install Claude Code (native installer, no npm)
         run: |
@@ -45,3 +55,4 @@ jobs:
         run: |
           claude plugin validate .
           claude plugin validate plugins/si
+          claude plugin validate plugins/si-auto

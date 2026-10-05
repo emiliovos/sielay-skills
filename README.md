@@ -48,15 +48,59 @@ Cada valor que pongas reemplaza al de por defecto, nunca se suma: con `Estado` e
 
 Solo hay dos caminos: la sección exacta o los valores por defecto. Sin la sección, la skill no deduce nada del texto libre del `CLAUDE.md`: usa los valores por defecto y lo dice al empezar. Si la prosa sugiere otro cierre, pregunta antes de escribir nada.
 
+## Notas automáticas (si-auto, opcional)
+
+**Qué garantiza:** que el contexto de una sesión no se pierda y que la siguiente sesión lo integre, sin que nadie escriba un comando. **Qué no garantiza:** commits ni respaldo; eso sigue siendo trabajo de la sesión (o de `/si:checkpoint`). si-auto nunca escribe dentro del árbol de trabajo ni hace `git add`, `commit` o `push`: `git status` queda idéntico.
+
+```
+claude plugin install si-auto@sielay
+```
+
+Requisitos: `si@sielay` (se instala como dependencia) y `python3`. Viene apagado: se enciende repo por repo agregando una línea a la sección `## Cierre de sesión` del `CLAUDE.md`:
+
+```
+- Automático: sí
+```
+
+o `- Automático: sí, cada N min` para cambiar el umbral (30 min por defecto). Cualquier otra redacción cuenta como apagado.
+
+### Qué hace cada gancho
+
+| Gancho | Cuándo dispara | Qué hace |
+|---|---|---|
+| Stop | Al terminar cada turno | Si pasaron N min desde la última nota y esta sesión trabajó (usó Edit, Write o Bash), bloquea **una vez** y le pide a Claude su nota entre `<si-auto-nota>` y `</si-auto-nota>`, sin herramientas. En el turno siguiente guarda esa nota. Si el turno terminaba en pregunta, Claude la repite después de la nota |
+| PreCompact | Antes de compactar | Nunca bloquea; solo lo anota. Después de compactar, SessionStart pide refrescar la nota |
+| SessionEnd | Al salir, cerrar, `/clear` | Marca la nota como terminada. No lanza procesos ni usa el modelo |
+| SessionStart | Al abrir una sesión | Entrega las notas de sesiones anteriores que terminaron (o cuyo proceso murió) para que Claude las integre al archivo de estado. Cada nota llega con su worktree y su rama, y se presenta como información de otra sesión, no como instrucciones. El commit va en el cierre normal de esa sesión; nunca hace commit ni push al arrancar |
+
+Los ganchos solo leen del repo `git rev-parse` y el `CLAUDE.md`, y solo escriben en `<git-common-dir>/si-auto/` (dentro de `.git`, que git no muestra en `status`; los worktrees comparten esa carpeta). Claude nunca escribe archivos para si-auto: la nota viaja en el texto de su respuesta y la guarda el gancho. Las notas entregadas se borran a los 14 días.
+
+### Apagarlo y revisarlo
+
+- Por repo: quitar la línea `- Automático: sí`.
+- Por sesión: `SI_AUTO_OFF=1 claude`.
+- Ver notas pendientes, entregadas (con su veredicto) y la bitácora del repo actual:
+  `bash "$(ls -td ~/.claude/plugins/cache/sielay/si-auto/*/ | head -1)scripts/ver-notas.sh"`
+
+`SI_AUTO_UMBRAL_MIN` existe solo para pruebas: fuerza el umbral en minutos.
+
+### Qué no queda cubierto
+
+- Lo trabajado después de la última nota y antes de cerrar (hasta N min). Los archivos siguen en disco y la siguiente sesión los ve en `git status`.
+- Corte de luz o `kill -9`: se entrega la última nota guardada.
+- Commits y respaldo: no son tarea de si-auto.
+- Secretos en la nota: la orden le pide a Claude no incluir valores sensibles, pero la nota es texto del modelo y se guarda tal cual dentro de `.git/si-auto/`. La bitácora solo guarda ids y eventos.
+
 ## Claude Desktop (chat)
 
-Cada [release](https://github.com/emiliovos/sielay-skills/releases) trae un `.zip` por skill, con su sha256 en las notas. Bájalo y súbelo en la configuración de skills de tu cuenta. Para actualizar, sube el `.zip` del release nuevo.
+Cada [release](https://github.com/emiliovos/sielay-skills/releases) trae un `.zip` por skill, con su sha256 en las notas. si-auto no aplica aquí: los ganchos solo funcionan en Claude Code. Bájalo y súbelo en la configuración de skills de tu cuenta. Para actualizar, sube el `.zip` del release nuevo.
 
 ## Seguridad
 
 - Este repo es la única fuente de las skills. `main` solo cambia por PR y los tags de release no se pueden mover.
 - El one-liner oficial siempre apunta a `emiliovos/sielay-skills`. Desconfía de cualquier otro dueño o nombre parecido.
-- El plugin no tiene hooks, servidores MCP, ejecutables ni dependencias. El CI (`tools/check-plugin.sh`) lo impide.
+- El plugin `si` no tiene hooks, servidores MCP, ejecutables ni dependencias. El CI (`tools/check-plugin.sh`) lo impide.
+- `si-auto` sí trae ganchos, por eso va aparte y es opcional. Su CI (`tools/check-si-auto.sh`) solo acepta sus archivos conocidos, los cuatro ganchos, `git rev-parse` como único comando de git, nada de red y escrituras solo en su carpeta de notas. Nace en este repo; `SOURCE_COMMIT` describe solo la copia de las skills de `si`.
 - Una skill son instrucciones que Claude sigue con tus permisos. Antes de actualizar, puedes revisar qué cambió en el historial de `plugins/si/skills/`.
 
 ## Skills
@@ -64,3 +108,4 @@ Cada [release](https://github.com/emiliovos/sielay-skills/releases) trae un `.zi
 | Skill | Qué hace |
 |---|---|
 | `/si:checkpoint` | Cierre de sesión: journal, docs, commit, push y handoff para retomar en otra terminal |
+| `si-auto` (plugin aparte) | Nota de sesión automática fuera del repo, entregada a la sesión siguiente |
