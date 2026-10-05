@@ -4,7 +4,7 @@
 set -u
 dir="${1:-$PWD}"
 comun="$(git -C "$dir" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" ||
-  { echo "No es un repo de git: $dir"; exit 1; }
+  { echo "No es un repositorio: $dir"; exit 1; }
 D="$comun/si-auto"
 [ -d "$D" ] || { echo "si-auto no ha guardado nada en este repo."; exit 0; }
 echo "== Notas pendientes"
