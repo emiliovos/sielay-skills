@@ -20,7 +20,11 @@ bitacora() { printf '%s\t%s\t%s\t%s\n' "$(date -u +%FT%TZ)" "$1" "${SESION:-?}" 
 # Archivos .meta: líneas clave=valor. Se reescriben con tmp + mv para no dejarlos a medias.
 leer_meta() { [ -f "$1" ] && sed -n "s/^$2=//p" "$1" | tail -1; }
 poner_meta() {
-  { [ -f "$1" ] && grep -v "^$2=" "$1"; printf '%s=%s\n' "$2" "$3"; } > "$1.tmp" && mv "$1.tmp" "$1"
+  { [ -f "$1" ] && grep -v "^$2=" "$1"; printf '%s=%s\n' "$2" "$3"; } > "$1.tmp.$$" && mv "$1.tmp.$$" "$1"
+}
+borrar_meta() {
+  [ -f "$1" ] || return 0
+  { grep -v "^$2=" "$1" || true; } > "$1.tmp.$$" && mv "$1.tmp.$$" "$1"
 }
 
 # Imprime el umbral en minutos si el CLAUDE.md de la raíz enciende si-auto; si no, nada.
@@ -28,6 +32,7 @@ poner_meta() {
 umbral_del_contrato() {
   [ -f "$1/CLAUDE.md" ] || return 0
   awk '
+    { sub(/\r$/, "") }
     /^## / { dentro = ($0 == "## Cierre de sesión") ; next }
     dentro && /^- Automático: sí[[:space:]]*$/ { print 30; exit }
     dentro && match($0, /^- Automático: sí, cada [0-9]+ min[[:space:]]*$/) {
@@ -42,7 +47,10 @@ preparar_repo() {
   raiz="$(git -C "$1" rev-parse --show-toplevel 2>/dev/null)" || exit 0
   umbral="$(umbral_del_contrato "$raiz")"
   [ -n "$umbral" ] || exit 0
-  UMBRAL_MIN="${SI_AUTO_UMBRAL_MIN:-$umbral}"
+  # El contrato exige N >= 1; SI_AUTO_UMBRAL_MIN (solo pruebas) admite 0.
+  [[ "$umbral" =~ ^[0-9]+$ ]] && [ "$umbral" -ge 1 ] || exit 0
+  UMBRAL_MIN="$umbral"
+  if [[ "${SI_AUTO_UMBRAL_MIN:-}" =~ ^[0-9]+$ ]]; then UMBRAL_MIN="$SI_AUTO_UMBRAL_MIN"; fi
   comun="$(git -C "$1" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" || exit 0
   D="$comun/si-auto"
   mkdir -p "$D/entregadas"
@@ -56,7 +64,13 @@ iniciar_gancho() {
     # Sin python3 no se puede leer el JSON: se anota y session-start avisa una vez.
     preparar_repo "$PWD"
     bitacora sin-python3 "$1"
-    : > "$D/falta-python3"
+    if [ "$1" = SessionStart ]; then
+      # El texto plano de SessionStart llega a Claude como contexto.
+      echo "si-auto: falta python3, así que las notas automáticas no funcionan en este repo. Avísale al usuario en una línea."
+      rm -f "$D/falta-python3"
+    else
+      : > "$D/falta-python3"
+    fi
     exit 0
   fi
   preparar_repo "$(campo cwd)"

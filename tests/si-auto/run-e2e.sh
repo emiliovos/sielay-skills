@@ -44,7 +44,9 @@ j="$(claude_en "$r" "Hola. Responde en una línea.")"
 s2="$(sesion <<<"$j")"
 check "entrega: nota movida a entregadas para la sesión nueva" 'grep -q "^entregada_a=$s2" "$D/entregadas/$s1.meta"'
 check "entrega: veredicto registrado" 'grep -qE "^veredicto=(ya-reflejada|integrada|parcial)" "$D/entregadas/$s1.meta"'
-check "entrega: git status limpio" 'limpio "$r"'
+# Integrar la nota al archivo de estado es trabajo de la sesión viva; si-auto no escribe nada más.
+check "entrega: solo cambia el archivo de estado del contrato" '[ -z "$(git -C "$r" status --porcelain | grep -v " docs/$" | grep -v " docs/estado.md$")" ]'
+check "entrega: veredicto coherente con el archivo de estado" 'v="$(sed -n "s/^veredicto=//p" "$D/entregadas/$s1.meta")"; [ "$v" != integrada ] || [ -n "$(git -C "$r" status --porcelain)" ]'
 
 # 3. Turno que termina en pregunta: la pregunta se repite después de la nota.
 r="$(nuevo_repo pregunta)"; D="$(notas "$r")"
@@ -61,7 +63,8 @@ check "compactación: git status limpio" 'limpio "$r"'
 # 5. Tres sesiones a la vez en la misma carpeta: cada una guarda su propia nota.
 r="$(nuevo_repo tres)"; D="$(notas "$r")"
 for i in 1 2 3; do claude_en "$r" "Crea trabajo/s$i.txt con el texto $i. Luego dime listo." > "$TMP/j$i" & done; wait
-n=0; for i in 1 2 3; do [ -s "$D/$(sesion < "$TMP/j$i").md" ] && n=$((n+1)); done
+# Si una sesión termina antes de que otra arranque, la nueva recibe su nota: cuenta igual.
+n=0; for i in 1 2 3; do id="$(sesion < "$TMP/j$i")"; { [ -s "$D/$id.md" ] || [ -s "$D/entregadas/$id.md" ]; } && n=$((n+1)); done
 check "tres sesiones: tres notas" '[ "$n" = 3 ]'
 check "tres sesiones: git status limpio" 'limpio "$r"'
 

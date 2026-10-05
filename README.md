@@ -89,6 +89,7 @@ Los ganchos solo leen del repo `git rev-parse` y el `CLAUDE.md`, y solo escriben
 - Lo trabajado después de la última nota y antes de cerrar (hasta N min). Los archivos siguen en disco y la siguiente sesión los ve en `git status`.
 - Corte de luz o `kill -9`: se entrega la última nota guardada.
 - Commits y respaldo: no son tarea de si-auto.
+- Secretos en la nota: la orden le pide a Claude no incluir valores sensibles, pero la nota es texto del modelo y se guarda tal cual dentro de `.git/si-auto/`. La bitácora solo guarda ids y eventos.
 
 ## Claude Desktop (chat)
 

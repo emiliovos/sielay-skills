@@ -39,7 +39,8 @@ def campo(nombre):
 
 
 def nota():
-    encontradas = re.findall(r"<si-auto-nota>(.*?)</si-auto-nota>", ultimo_mensaje(), re.S)
+    # Las marcas deben ir solas en su línea, como las pide la orden de Stop.
+    encontradas = re.findall(r"(?m)^<si-auto-nota>[ \t]*$(.*?)^</si-auto-nota>[ \t]*$", ultimo_mensaje(), re.S)
     if encontradas:
         print(encontradas[-1].strip())
 

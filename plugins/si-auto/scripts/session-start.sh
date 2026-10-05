@@ -15,22 +15,26 @@ fi
 pid=0; p=$PPID
 for _ in 1 2 3 4 5 6; do
   [ -n "$p" ] && [ "$p" -gt 1 ] || break
-  if [ "$(ps -o comm= -p "$p" 2>/dev/null)" = claude ]; then pid=$p; break; fi
+  comando="$(ps -o comm= -p "$p" 2>/dev/null)"
+  if [ "${comando##*/}" = claude ]; then pid=$p; break; fi
   p="$(ps -o ppid= -p "$p" 2>/dev/null | tr -d ' ')"
 done
 [ -n "$(leer_meta "$META" inicio)" ] || poner_meta "$META" inicio "$(ahora)"
 poner_meta "$META" pid "$pid"
+# Una sesión reanudada vuelve a estar viva: su nota no se entrega a otras.
+borrar_meta "$META" terminada
 
 # Las notas ya entregadas se conservan 14 días para la revisión del piloto.
 find "$D/entregadas" -type f -mtime +14 -delete 2>/dev/null
 
 if [ "$(campo source)" = compact ]; then
+  poner_meta "$META" pide_nota 1
   printf '%ssi-auto: se acaba de compactar la conversación. En tu próxima respuesta escribe tu nota de sesión actualizada entre <si-auto-nota> y </si-auto-nota> (qué se hizo, decisiones, qué quedó a medias, siguiente paso; sin valores sensibles; máximo 15 líneas; sin herramientas).\n' "$aviso" | py contexto SessionStart
   exit 0
 fi
 
 # Notas de otras sesiones: se entregan si la sesión terminó, si su proceso ya no vive,
-# o si lleva más de un día sin marca de terminada y sin PID conocido.
+# o si lleva más de un día sin marca de terminada (PID desconocido o reciclado).
 entregar=""
 while IFS= read -r m; do
   [ -n "$m" ] || continue
@@ -39,20 +43,18 @@ while IFS= read -r m; do
   termino="$(leer_meta "$m" terminada)"
   otro="$(leer_meta "$m" pid)"; otro="${otro:-0}"
   inicio="$(leer_meta "$m" inicio)"; inicio="${inicio:-0}"
-  if [ -z "$termino" ]; then
-    if [ "$otro" -gt 0 ]; then
-      ! kill -0 "$otro" 2>/dev/null || continue
-    else
-      [ $(( $(ahora) - inicio )) -ge 86400 ] || continue
-    fi
+  t="$(ahora)"
+  if [ -z "$termino" ] && [ $(( t - inicio )) -lt 86400 ]; then
+    [ "$otro" -gt 0 ] || continue
+    ! kill -0 "$otro" 2>/dev/null || continue
   fi
+  # Reclamo atómico del .meta: si otro arranque lo movió primero, este no hace nada.
+  mv "$m" "$D/entregadas/$id.meta" 2>/dev/null || continue
   if [ ! -f "$D/$id.md" ]; then
-    rm -f "$m"   # sesión terminada que nunca escribió nota: nada que entregar
+    rm -f "$D/entregadas/$id.meta"   # terminó sin escribir nota: nada que entregar
     continue
   fi
-  # Reclamo atómico: si otro arranque movió la nota primero, este no la entrega.
-  mv "$D/$id.md" "$D/entregadas/$id.md" 2>/dev/null || continue
-  mv "$m" "$D/entregadas/$id.meta"
+  mv "$D/$id.md" "$D/entregadas/$id.md"
   poner_meta "$D/entregadas/$id.meta" entregada_a "$SESION"
   poner_meta "$D/entregadas/$id.meta" entregada_en "$(ahora)"
   bitacora entregada "$id"

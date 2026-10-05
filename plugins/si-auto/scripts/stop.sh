@@ -7,9 +7,14 @@ iniciar_gancho Stop
 META="$D/$SESION.meta"
 [ -n "$(leer_meta "$META" inicio)" ] || poner_meta "$META" inicio "$(ahora)"
 
-# 1. Nota entre marcas: reemplaza la nota de esta sesión.
-nota="$(printf '%s' "$ENTRADA" | py nota)"
+# 1. Nota entre marcas, solo si si-auto la pidió (bloqueo o compactación):
+#    así no se guarda una nota que Claude solo esté citando.
+nota=""
+if [ "$(leer_meta "$META" pide_nota)" = 1 ]; then
+  nota="$(printf '%s' "$ENTRADA" | py nota)"
+fi
 if [ -n "$nota" ]; then
+  borrar_meta "$META" pide_nota
   printf '%s\n' "$nota" > "$D/$SESION.md.tmp" && mv "$D/$SESION.md.tmp" "$D/$SESION.md"
   poner_meta "$META" ultima_nota "$(ahora)"
   bitacora nota-guardada
@@ -37,13 +42,15 @@ ultima="$(leer_meta "$META" ultima_nota)"; ultima="${ultima:-0}"
 bloqueo="$(leer_meta "$META" ultimo_bloqueo)"; bloqueo="${bloqueo:-0}"
 base=$(( inicio > ultima ? inicio : ultima ))
 ref=$(( base > bloqueo ? base : bloqueo ))
-[ $(( $(ahora) - ref )) -ge $(( UMBRAL_MIN * 60 )) ] || exit 0
+t="$(ahora)"
+[ $(( t - ref )) -ge $(( UMBRAL_MIN * 60 )) ] || exit 0
 
 # ...y esta sesión editó al menos un archivo desde su última nota.
 editadas="$(py ediciones "$(campo transcript_path)" "$base")"
 [ "${editadas:-0}" -ge 1 ] || exit 0
 
 poner_meta "$META" ultimo_bloqueo "$(ahora)"
+poner_meta "$META" pide_nota 1
 bitacora bloqueo
 py bloqueo <<'ORDEN'
 si-auto: escribe ahora tu nota de sesión entre <si-auto-nota> y </si-auto-nota>, con: qué se hizo, decisiones, qué se validó, qué quedó a medias, archivos tocados sin commit, siguiente paso y un prompt de continuación. Sin valores sensibles (claves, tokens, contraseñas). Máximo 15 líneas. No uses herramientas para esto. Después, si tu respuesta anterior terminaba con una pregunta al usuario, repítela textual al final.

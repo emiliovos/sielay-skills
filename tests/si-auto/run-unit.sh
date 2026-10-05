@@ -130,6 +130,39 @@ check "sin python3: queda anotado" 'grep -q sin-python3 "$D/bitacora.log" && [ -
 out="$(gancho session-start.sh "$r" p1 '"source":"startup"')"
 check "sin python3: aviso único al arrancar" 'grep -q "sin python3" <<<"$out" && [ ! -f "$D/falta-python3" ]'
 
+# --- Casos de la revisión de código
+r="$(nuevo_repo reanudada)"; D="$(notas "$r")"
+gancho session-start.sh "$r" ra '"source":"startup"' >/dev/null
+printf 'nota de ra\n' > "$D/ra.md"
+gancho session-end.sh "$r" ra '"reason":"other"' >/dev/null
+gancho session-start.sh "$r" ra '"source":"resume"' >/dev/null
+out="$(gancho session-start.sh "$r" rb '"source":"startup"')"
+check "sesión reanudada sigue viva: su nota no se entrega" '! grep -q "nota de ra" <<<"$out" && [ -f "$D/ra.md" ] && ! grep -q "^terminada=" "$D/ra.meta"'
+
+r="$(nuevo_repo cero "${CONTRATO/Automático: sí/Automático: sí, cada 0 min}")"
+check "'cada 0 min' cuenta como apagado" '[ -z "$(gancho session-start.sh "$r" z1 "\"source\":\"startup\"")" ] && [ ! -d "$(notas "$r")" ]'
+r="$(nuevo_repo crlf "$(printf '%s' "$CONTRATO" | sed 's/$/\r/')")"
+check "CLAUDE.md con CRLF se reconoce" '[ "$(bash -c ". \"$S/comun.sh\"; umbral_del_contrato \"$r\"")" = 30 ]'
+r="$(nuevo_repo umbral-raro)"; D="$(notas "$r")"
+gancho session-start.sh "$r" u1 '"source":"startup"' >/dev/null; transcript_con_edicion u1
+out="$(SI_AUTO_UMBRAL_MIN='1+x' gancho stop.sh "$r" u1 '"stop_hook_active":false')"
+check "SI_AUTO_UMBRAL_MIN no numérico se ignora" '[ -z "$out" ]'
+
+r="$(nuevo_repo citada)"; D="$(notas "$r")"
+gancho session-start.sh "$r" q1 '"source":"startup"' >/dev/null
+gancho stop.sh "$r" q1 '"stop_hook_active":false,"last_assistant_message":"Ejemplo:\n<si-auto-nota>\ncitada\n</si-auto-nota>"' >/dev/null
+check "nota no pedida (citada) no se guarda" '[ ! -f "$D/q1.md" ]'
+gancho session-start.sh "$r" q1 '"source":"compact"' >/dev/null
+gancho stop.sh "$r" q1 '"stop_hook_active":false,"last_assistant_message":"<si-auto-nota>\ntras compactar\n</si-auto-nota>"' >/dev/null
+check "tras compactar la nota pedida se guarda" '[ "$(cat "$D/q1.md" 2>/dev/null)" = "tras compactar" ]'
+gancho session-start.sh "$r" q1 '"source":"compact"' >/dev/null
+gancho stop.sh "$r" q1 '"stop_hook_active":false,"last_assistant_message":"en línea <si-auto-nota>x</si-auto-nota>"' >/dev/null
+check "marcas en medio de una línea no cuentan" '[ "$(cat "$D/q1.md")" = "tras compactar" ]'
+
+r="$(nuevo_repo sin-python-arranque)"; D="$(notas "$r")"
+out="$(printf '{}' | (cd "$r" && PATH="$binsin" bash "$S/session-start.sh"))"
+check "sin python3 en SessionStart: avisa en ese momento" 'grep -q "falta python3" <<<"$out" && [ ! -f "$D/falta-python3" ]'
+
 # --- Velocidad del camino "nada que hacer"
 r="$(nuevo_repo rapido)"
 gancho session-start.sh "$r" v1 '"source":"startup"' >/dev/null

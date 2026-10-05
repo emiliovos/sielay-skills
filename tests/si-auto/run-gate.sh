@@ -32,6 +32,26 @@ copia; echo 'import socket' >> "$TMP/repo/$S/leer-json.py";                     
 copia; echo 'open("x", "w")' >> "$TMP/repo/$S/leer-json.py";                      auto "rechaza escritura en python"
 copia; echo '#!/bin/bash' > "$TMP/repo/$S/extra.sh";                              auto "rechaza archivo no listado"
 copia; ln -s /etc/passwd "$TMP/repo/$S/enlace";                                   auto "rechaza enlace simbólico"
+# Casos con los que la revisión de código burló la primera versión del gate.
+siembra() { printf '%s\n' "$1" >> "$TMP/repo/$S/${2:-stop.sh}"; }
+copia; siembra 'sed -i "s/x/y/" "$raiz/CLAUDE.md"';                  auto "rechaza sed -i"
+copia; siembra "python3 -c 'print(1)'";                               auto "rechaza python3 -c"
+copia; siembra "bash -c 'true'";                                      auto "rechaza bash -c"
+copia; siembra "perl -e 'print 1'";                                   auto "rechaza perl"
+copia; siembra 'x=$(( $(rm -f "$raiz/CLAUDE.md") + 1 ))';             auto "rechaza \$(...) dentro de \$((...))"
+copia; printf 'cat <<FIN\n$(rm -f "$raiz/CLAUDE.md")\nFIN\n' >> "$TMP/repo/$S/stop.sh"; auto "rechaza heredoc sin comillas"
+copia; siembra 'read -r D <<<"$HOME"';                                auto "rechaza read que asigna D"
+copia; siembra 'SESION="../../x"';                                    auto "rechaza reasignar SESION"
+copia; siembra 'm="$raiz/README.md"; rm -f "$m"';                     auto "rechaza rm con variable redirigida"
+copia; siembra '$(printf %s gi t) -C . commit';                       auto "rechaza git ofuscado"
+copia; siembra 'import subprocess' leer-json.py;                      auto "rechaza import subprocess"
+copia; siembra 'import pathlib' leer-json.py;                         auto "rechaza pathlib"
+copia; siembra 'pathlib.Path("x").write_text("y")' leer-json.py;      auto "rechaza write_text"
+copia; siembra 'printf -v D "%s" "$HOME"';                            auto "rechaza printf -v"
+copia; siembra 'awk '"'"'{ print > "/tmp/x" }'"'"' "$D/bitacora.log"'; auto "rechaza awk que escribe"
+copia; siembra 'echo x | tee "$HOME/x"';                              auto "rechaza tee"
+copia; siembra 'poner_meta "$raiz/CLAUDE.md" x y';                     auto "rechaza poner_meta fuera de \$D"
+
 copia; python3 - "$TMP/repo/plugins/si-auto/hooks/hooks.json" <<'PY'
 import json, sys; p = sys.argv[1]; d = json.load(open(p))
 d["hooks"]["UserPromptSubmit"] = d["hooks"]["Stop"]; json.dump(d, open(p, "w"))
