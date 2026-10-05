@@ -11,7 +11,7 @@ metadata:
   deps: "git configurado en el repo destino. Opcional: una sección '## Cierre de sesión' en el CLAUDE.md del repo o un descriptor de proyecto (p.ej. docs/projects/<slug>/project.json) para fijar archivo de estado, flujo de push y destino del handoff; si no existen, se usan los valores por defecto."
   installs: []
   risk: none
-  version: "2.2.1"
+  version: "2.3.0"
 ---
 
 # Checkpoint — cierre de sesión + handoff
@@ -37,7 +37,7 @@ Del argumento saca el `<slug>` si lo dieron; si no, infiérelo del trabajo de la
 ⚠️ **Remoto ajeno:** si `origin` es un **upstream que no es tuyo** (fork no creado), NO se puede pushear ahí. Márcalo y sáltate el push (ver Paso 4). No dejes que parezca respaldado si no lo está.
 
 ### 0.2 Contrato de cierre
-Busca en el `CLAUDE.md` del repo (o en los campos `cierre.estado`, `cierre.push` y `cierre.handoff` del descriptor) una sección con **este formato exacto**. Conviene declarar las tres líneas:
+Busca en el `CLAUDE.md` del repo (o en los campos `cierre.estado`, `cierre.push` y `cierre.handoff` del descriptor) una sección con **este formato exacto**. Si la sesión arrancó fuera de un repo (p.ej. en el home de un host que maneja varios proyectos), usa el `CLAUDE.md` del directorio donde arrancó. Conviene declarar las tres líneas:
 
 ```
 ## Cierre de sesión
@@ -45,6 +45,14 @@ Busca en el `CLAUDE.md` del repo (o en los campos `cierre.estado`, `cierre.push`
 - Push: rama+PR | main directo | no pushear
 - Handoff: <ruta de archivo> | estado | pantalla
 ```
+
+Si unos repos se pushean distinto que otros (p.ej. el repo del proyecto va por PR y los repos de docs y planes van directo a main), agrega excepciones a la línea `Push` después de `;`, nombrando cada repo por la carpeta raíz de su checkout:
+
+```
+- Push: rama+PR; pve2-docs, pve2-plans: main directo
+```
+
+El primer valor aplica a todo repo que no esté nombrado. Puede haber varias excepciones separadas por `;` (`- Push: rama+PR; docs, plans: main directo; sandbox: no pushear`). Cada repo aparece una sola vez.
 
 Ejemplo (repo que cierra en un solo archivo y trabaja en main):
 
@@ -60,7 +68,7 @@ Ejemplo (repo que cierra en un solo archivo y trabaja en main):
 | Valor | Significado | Por defecto (el repo no dice nada) |
 |---|---|---|
 | **Estado** | `<ruta>`: bitácora y estado van solo a ese archivo. `journals`: bitácora en `docs/journals/YYMMDD-<slug>.md` | `journals` |
-| **Push** | `rama+PR` · `main directo` · `no pushear` | `rama+PR` |
+| **Push** | `rama+PR` · `main directo` · `no pushear`, con excepciones por repo después de `;` | `rama+PR` para todos los repos |
 | **Handoff** | `<ruta>`: ese archivo. `estado`: dentro del archivo de estado. `pantalla`: solo en el chat | Si `Estado` es una ruta: `estado` (dentro de ese archivo). Si no: `HANDOFF.md` en el plan activo; si no hay plan activo o está fuera del repo o es de solo lectura, `pantalla` |
 
 Reglas del contrato:
@@ -68,7 +76,7 @@ Reglas del contrato:
 - **Rutas de solo lectura** (las que el `CLAUDE.md` marque así, o cualquier carpeta fuera del repo que no sea tuya) **nunca se escriben**, aunque sean "el plan activo".
 - **Publicar no es pushear:** si el repo publica con un script propio (p.ej. `deploy/publicar.sh`) o con un deploy, checkpoint **nunca lo corre**. Solo lo menciona en el handoff como paso pendiente del usuario.
 
-**Reporta en 3-4 líneas** el contexto resuelto (repo, cómo se accede, identidad git, estado del remoto) y el contrato de cierre (estado, push, handoff) antes de seguir. Si no hay sección, dilo así: "sin contrato, usando valores por defecto; si tu repo cierra distinto, agrega la sección `## Cierre de sesión` (ver el README de emiliovos/sielay-skills)".
+**Reporta en 3-4 líneas** el contexto resuelto (repo, cómo se accede, identidad git, estado del remoto) y el contrato de cierre (estado, push con sus excepciones por repo, handoff) antes de seguir. Si una excepción nombra un repo que no existe en este host, dilo; no adivines a cuál se refería. Si no hay sección, dilo así: "sin contrato, usando valores por defecto; si tu repo cierra distinto, agrega la sección `## Cierre de sesión` (ver el README de emiliovos/sielay-skills)".
 
 ## Constantes del proyecto (fallback — EDITAR solo si no hay descriptor ni CLAUDE.md)
 
@@ -108,6 +116,7 @@ Si ya escribiste la bitácora o el estado de esta tanda, dilo y sáltalo.
 4. Commits chicos y enfocados; separa por scope si aplica. Si el repo ya estaba limpio, dilo y sáltalo.
 
 ## Paso 4 — push (según el contrato)
+- **Por repo:** para cada repo tocado, usa el modo de su excepción en la línea `Push` si lo nombra; si no, el primer valor. Repórtalo por repo ("proyecto: rama+PR, PR #12; pve2-docs: main directo").
 - **Solo si hay un remoto PROPIO** (no el upstream ajeno del Paso 0).
 - **`rama+PR`:** push a la rama de feature (`git push -u origin <rama>` si pide upstream), nunca a `main`/`master` directo. Abre o actualiza el PR de cada repo tocado.
 - **`main directo`:** push a la rama principal, solo porque el repo lo declara así. Sin PR.
