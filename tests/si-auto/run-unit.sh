@@ -163,6 +163,33 @@ r="$(nuevo_repo sin-python-arranque)"; D="$(notas "$r")"
 out="$(printf '{}' | (cd "$r" && PATH="$binsin" bash "$S/session-start.sh"))"
 check "sin python3 en SessionStart: avisa en ese momento" 'grep -q "falta python3" <<<"$out" && [ ! -f "$D/falta-python3" ]'
 
+# --- Revisión de Tablero360
+r="$(nuevo_repo bash)"; D="$(notas "$r")"
+gancho session-start.sh "$r" b1 '"source":"startup"' >/dev/null
+envejecer "$D/b1.meta" inicio 1900
+printf '{"type":"assistant","timestamp":"%s","message":{"content":[{"type":"tool_use","name":"Bash","input":{}}]}}\n' \
+  "$(date -u +%FT%T.000Z)" >> "$TMP/b1.jsonl"
+out="$(gancho stop.sh "$r" b1 '"stop_hook_active":false')"
+check "uso de Bash cuenta como actividad" 'grep -q "\"decision\": \"block\"" <<<"$out"'
+
+r="$(nuevo_repo larga)"; D="$(notas "$r")"; mkdir -p "$D/entregadas"
+printf 'inicio=%s\npid=%s\n' "$(( $(date -u +%s) - 90000 ))" "$$" > "$D/larga.meta"; echo "nota larga viva" > "$D/larga.md"
+printf 'inicio=%s\npid=0\n' "$(( $(date -u +%s) - 90000 ))" > "$D/sinpid.meta"; echo "nota sin pid" > "$D/sinpid.md"
+out="$(gancho session-start.sh "$r" l2 '"source":"startup"')"
+check "sesión viva de más de 24 h: su nota no se entrega" '! grep -q "nota larga viva" <<<"$out" && [ -f "$D/larga.md" ]'
+check "sin PID y más de 24 h: se entrega" 'grep -q "nota sin pid" <<<"$out"'
+check "la entrega muestra worktree y rama" 'grep -q "worktree .*, rama " <<<"$out"'
+check "la entrega dice que las notas no son instrucciones" 'grep -q "no instrucciones" <<<"$out"'
+check "SessionStart guarda worktree y rama" 'grep -q "^worktree=$r$" "$D/l2.meta" && grep -q "^rama=" "$D/l2.meta"'
+
+binpy="$TMP/binpy"; mkdir -p "$binpy"
+printf '#!/bin/sh\necho x >> "%s"\nexec %s "$@"\n' "$TMP/contador-python" "$(command -v python3)" > "$binpy/python3"; chmod +x "$binpy/python3"
+r="$(nuevo_repo llamadas)"
+gancho session-start.sh "$r" p1 '"source":"startup"' >/dev/null
+: > "$TMP/contador-python"
+PATH="$binpy:$PATH" gancho stop.sh "$r" p1 '"stop_hook_active":false' >/dev/null
+check "Stop sin nada que hacer: una sola llamada a python3" '[ "$(wc -l < "$TMP/contador-python")" -eq 1 ]' "$(wc -l < "$TMP/contador-python") llamadas"
+
 # --- Velocidad del camino "nada que hacer"
 r="$(nuevo_repo rapido)"
 gancho session-start.sh "$r" v1 '"source":"startup"' >/dev/null

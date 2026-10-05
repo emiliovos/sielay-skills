@@ -21,6 +21,10 @@ if [ -n "$nota" ]; then
 fi
 
 # 2. Veredictos sobre notas que esta misma sesión recibió al arrancar.
+veredictos=""
+if [ "$(leer_meta "$META" recibio)" = 1 ]; then
+  veredictos="$(printf '%s' "$ENTRADA" | py veredictos)"
+fi
 while IFS=$'\t' read -r id valor; do
   [ -n "$id" ] || continue
   m="$D/entregadas/$id.meta"
@@ -28,7 +32,7 @@ while IFS=$'\t' read -r id valor; do
     poner_meta "$m" veredicto "$valor"
     bitacora veredicto "$id $valor"
   fi
-done <<<"$(printf '%s' "$ENTRADA" | py veredictos)"
+done <<<"$veredictos"
 
 # 3. Nunca bloquear dos veces seguidas.
 if [ "$(campo stop_hook_active)" = true ]; then
@@ -45,7 +49,7 @@ ref=$(( base > bloqueo ? base : bloqueo ))
 t="$(ahora)"
 [ $(( t - ref )) -ge $(( UMBRAL_MIN * 60 )) ] || exit 0
 
-# ...y esta sesión editó al menos un archivo desde su última nota.
+# ...y esta sesión usó al menos una herramienta de actividad (Edit, Write, Bash...) desde su última nota.
 editadas="$(py ediciones "$(campo transcript_path)" "$base")"
 [ "${editadas:-0}" -ge 1 ] || exit 0
 

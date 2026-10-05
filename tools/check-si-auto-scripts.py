@@ -224,6 +224,7 @@ EXACT = {
     "command": {"command -v python3"},
     "kill": {'kill -0 "$otro"'},
     "read": {"read -r id valor", "read -r m"},
+    "mapfile": {"mapfile -t CAMPOS"},
 }
 REDIRECT_TARGETS = {'"$D/bitacora.log"', '"$D/$SESION.md.tmp"', '"$1.tmp.$$"',
                     '"$D/falta-python3"', "/dev/null", "&1", "&2"}
@@ -238,10 +239,12 @@ PROTECTED = {
     "comun": {'"$(git -C "$1" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)"',
               '"$(git -C "$dir" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)"'},
     "IFS": {"", "$'\\t'"},
+    "RAIZ": {'""', '"$(git -C "$1" rev-parse --show-toplevel 2>/dev/null)"'},
+    "CAMPOS": {""},  # CAMPOS=() lexes as "CAMPOS=" followed by ( )
 }
 # The .meta files the write helpers may touch ($1 inside them is checked as a redirect target).
 META_FILES = {'"$META"', '"$m"', '"$D/entregadas/$id.meta"'}
-OWN_UPPER = {"UMBRAL_MIN", "ENTRADA", "SESION", "D", "META", "AQUI", "IFS"}
+OWN_UPPER = {"UMBRAL_MIN", "ENTRADA", "SESION", "D", "META", "AQUI", "IFS", "RAIZ", "CAMPOS"}
 SED_PROGRAM = re.compile(r"""^["'](s/\^[A-Za-z_$0-9]+=//p)["']$""")
 AWK_FORBIDDEN = re.compile(r"system|getline|close|fflush|ENVIRON|[|>]")
 

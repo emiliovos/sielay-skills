@@ -9,10 +9,21 @@ ENTRADA=""
 SESION=""
 D=""
 UMBRAL_MIN=30
+RAIZ=""
 
 ahora() { date -u +%s; }
 py() { python3 "$AQUI/leer-json.py" "$@"; }
-campo() { printf '%s' "$ENTRADA" | py campo "$1"; }
+# Los campos del JSON del gancho se leen con una sola llamada a python (iniciar_gancho)
+# y campo() los busca por nombre, en el mismo orden que CAMPOS en leer-json.py.
+CAMPOS=()
+campo() {
+  local i n
+  i=0
+  for n in session_id cwd transcript_path stop_hook_active source reason trigger; do
+    if [ "$n" = "$1" ]; then printf '%s' "${CAMPOS[$i]:-}"; return 0; fi
+    i=$((i + 1))
+  done
+}
 
 # Una línea por evento; nunca contenido de notas.
 bitacora() { printf '%s\t%s\t%s\t%s\n' "$(date -u +%FT%TZ)" "$1" "${SESION:-?}" "${2:-}" >> "$D/bitacora.log"; }
@@ -45,9 +56,9 @@ umbral_del_contrato() {
 
 # Resuelve repo, contrato y carpeta de notas a partir de un directorio. Sale en silencio si no aplica.
 preparar_repo() {
-  local raiz comun umbral
-  raiz="$(git -C "$1" rev-parse --show-toplevel 2>/dev/null)" || exit 0
-  umbral="$(umbral_del_contrato "$raiz")"
+  local comun umbral
+  RAIZ="$(git -C "$1" rev-parse --show-toplevel 2>/dev/null)" || exit 0
+  umbral="$(umbral_del_contrato "$RAIZ")"
   [ -n "$umbral" ] || exit 0
   # El contrato exige N >= 1; SI_AUTO_UMBRAL_MIN (solo pruebas) admite 0.
   [[ "$umbral" =~ ^[0-9]+$ ]] && [ "$umbral" -ge 1 ] || exit 0
@@ -75,6 +86,7 @@ iniciar_gancho() {
     fi
     exit 0
   fi
+  mapfile -t CAMPOS < <(printf '%s' "$ENTRADA" | py campos)
   preparar_repo "$(campo cwd)"
   SESION="$(campo session_id)"
   [[ "$SESION" =~ ^[A-Za-z0-9-]+$ ]] || exit 0
