@@ -95,10 +95,15 @@ export function createPollLoop({ schedule, getClient, buildSession, handler, isO
         delay = Math.max(delay, MIN_EMPTY_POLL_MS)
       }
     } catch (err) {
-      const e = /** @type {{ kind?: string, retryAfterMs?: number, message?: string }} */ (err ?? {})
+      const e = /** @type {{ kind?: string, code?: string, retryAfterMs?: number, message?: string }} */ (err ?? {})
       if (e.kind === 'unauthorized') {
         stopped = true
         await safeStatus('unauthorized', 'el hub rechazó el token: vuelve a emparejar con /link pair <slot>')
+      } else if (e.code === 'too_many_sessions') {
+        // The device's session quota (16 new sessions in 7 days), not a request rate:
+        // nothing changes by retrying sooner, so wait steadily and say why.
+        delay = MAX_DELAY_MS
+        await safeStatus('backoff', 'esta máquina abrió demasiadas sesiones nuevas (más de 16 en 7 días); reintento cada minuto')
       } else if (e.kind === 'paused') {
         delay = PAUSE_MS
         await safeStatus('paused', 'sielay-link está apagado en el hub')

@@ -102,3 +102,7 @@ test('hub errors become clear Spanish messages', async () => {
 test('an unknown tool name is denied', async () => {
   assert.ok((await runLinkTool('link_release', {}, deps().d)).deny)
 })
+
+test('too_many_sessions explains the session quota', async () => {
+  assert.match(describeHubError(new HubError('rate_limited', 'x', { status: 429, code: 'too_many_sessions' })), /16 sesiones/)
+})

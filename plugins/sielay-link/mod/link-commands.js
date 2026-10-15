@@ -45,7 +45,7 @@ async function statusText($, rt) {
   ])
   const mode = built.mode
   return [
-    `sielay-link ${off ? '(apagado)' : `— ${st?.loop ?? 'iniciando'}`}${st?.detail ? `: ${st.detail}` : ''}`,
+    `Estado: ${off ? 'apagado' : (st?.loop ?? 'iniciando')}${st?.detail ? ` (${st.detail})` : ''}`,
     `Hub: ${rt.hubUrl ?? `inválido (${rt.hubError})`} · token: ${rt.tokenSource}`,
     `Dirección: ${st?.address ?? '(sin asignar)'} · nombre: ${built.session.name} (${built.nameSource})`,
     `Modo: ${mode.mode} (${mode.fresh ? 'fresco' : 'no fresco'}, visto ${ago(mode.ageMs)}) · estado: ${mode.state}`,

@@ -63,6 +63,7 @@ const CODE_MESSAGES = {
   unknown_peer: 'No existe esa dirección. Revisa las disponibles con link_peers.',
   too_large: 'El mensaje pasa de 16 KB. Resúmelo o divídelo.',
   invalid: 'El hub rechazó el mensaje por formato inválido.',
+  too_many_sessions: 'Esta máquina abrió más de 16 sesiones nuevas en 7 días. Reusa una sesión (mismo nombre y carpeta) o pide a un admin que revise.',
 }
 
 /**

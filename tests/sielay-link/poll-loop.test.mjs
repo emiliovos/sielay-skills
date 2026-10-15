@@ -212,3 +212,12 @@ test('an empty answer that came back fast waits at least the floor before the ne
   await new Promise(r => setTimeout(r, 10))
   assert.equal(timers[0].ms, MIN_EMPTY_POLL_MS)
 })
+
+test('429 too_many_sessions is reported as the session quota and retried at a steady 60 s', async () => {
+  const h = harness({ answers: [new HubError('rate_limited', 'x', { status: 429, code: 'too_many_sessions' }), ok()] })
+  h.loop.start()
+  await h.step()
+  assert.equal(h.timers[0].ms, 60_000)
+  assert.equal(h.statuses.at(-1), 'backoff')
+  assert.equal(h.loop.isStopped, false)
+})
