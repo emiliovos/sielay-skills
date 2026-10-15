@@ -32,7 +32,14 @@ export async function startFakeHub({ token }) {
         }
         const out = []
         for (const m of messages.values()) {
-          if (m.gate !== 'auto' || m.status !== 'queued') continue
+          if (m.status !== 'queued') continue
+          if (m.gate === 'accepted') {
+            // Phase 2 decideLease: a person accepted it; redelivered with run=1 until acked.
+            m.status = 'delivered'
+            out.push({ ...m.delivery, run: 1, gate: 'accepted' })
+            continue
+          }
+          if (m.gate !== 'auto') continue
           const run = receiver.mode === 'bypassPermissions' && receiver.mode_fresh === 1 ? 1 : 0
           if (!run) m.gate = 'strip'
           m.status = 'delivered'

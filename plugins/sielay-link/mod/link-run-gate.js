@@ -6,13 +6,20 @@
 // to the strip, where only a person's Accept keystroke runs it. A dashboard
 // "release" only ever moves a message to the strip; the model has no tool to
 // decide or release anything.
+//
+// One more case runs: run=1 with gate=accepted. The hub sends that only for a
+// message a person already accepted in this terminal whose `injected` ack never
+// arrived (the lease expired), and keeps redelivering it until it does. It is
+// injected as-is, in any mode; the dedupe by id keeps it from running twice.
 
 /**
  * @param {{ delivery: { run?: unknown, gate?: unknown }, mode: { mode?: unknown, fresh?: unknown } }} input
  * @returns {boolean}
  */
 export function shouldInject({ delivery, mode }) {
-  return delivery.run === 1 && delivery.gate === 'auto' && mode.mode === 'bypassPermissions' && mode.fresh === true
+  if (delivery.run !== 1) return false
+  if (delivery.gate === 'accepted') return true
+  return delivery.gate === 'auto' && mode.mode === 'bypassPermissions' && mode.fresh === true
 }
 
 /**

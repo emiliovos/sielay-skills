@@ -40,8 +40,15 @@ test('Reject in the strip decides rejected and never injects', () => {
   assert.deepEqual(onStripReject({ id: 'm1' }), { decide: 'rejected', inject: false })
 })
 
-test('run=1 with any gate other than auto never injects (defence against a hub bug)', () => {
-  for (const gate of ['strip', 'held', 'accepted', 'rejected', undefined]) {
+test('an accepted message redelivered by the hub (run=1, gate=accepted) injects in any mode: a person already accepted it', () => {
+  for (const mode of [fresh, { mode: 'default', fresh: false }, { mode: 'unknown', fresh: false }]) {
+    assert.equal(shouldInject({ delivery: { run: 1, gate: 'accepted' }, mode }), true, mode.mode)
+  }
+  assert.equal(shouldInject({ delivery: { run: 0, gate: 'accepted' }, mode: fresh }), false, 'only with run=1')
+})
+
+test('run=1 with a gate that is neither auto nor accepted never injects (defence against a hub bug)', () => {
+  for (const gate of ['strip', 'held', 'rejected', undefined]) {
     assert.equal(shouldInject({ delivery: { run: 1, gate }, mode: fresh }), false, String(gate))
   }
 })

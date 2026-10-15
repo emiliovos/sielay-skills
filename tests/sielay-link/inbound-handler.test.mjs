@@ -72,3 +72,18 @@ test('the strip keeps arrival order, so the item shown first does not change und
   await h.handlePoll('inst', { messages: [], strip: [{ ...stripped, id: 'm0', seq: 0 }, stripped] })
   assert.equal(h.currentStrip()[0].id, 'm7')
 })
+
+test('an accepted redelivery is never acked shown: a failed write sends no ack and keeps it out of the strip', async () => {
+  const store = memStore()
+  let fail = true
+  const injected = []
+  const { h, strip } = handler(store, async t => { if (fail) throw new Error('socket down'); injected.push(t) })
+  const accepted = { ...stripped, id: 'acc-1', run: 1, gate: 'accepted' }
+  assert.deepEqual(await h.handlePoll('inst', { messages: [accepted], strip: [] }), [], 'no ack while the write fails')
+  assert.deepEqual(strip(), [])
+  fail = false
+  assert.deepEqual(await h.handlePoll('inst', { messages: [accepted], strip: [] }), [{ id: 'acc-1', outcome: 'injected' }])
+  assert.equal(injected.length, 1)
+  assert.deepEqual(await h.handlePoll('inst', { messages: [accepted], strip: [] }), [{ id: 'acc-1', outcome: 'injected' }], 'redelivered again: re-acked, not re-injected')
+  assert.equal(injected.length, 1)
+})

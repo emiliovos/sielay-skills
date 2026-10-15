@@ -80,7 +80,9 @@ Cualquier otro mensaje va a la **franja** de arriba del prompt. La franja muestr
 - **Los botones no tienen tecla.** Un número tecleado en el prompt nunca acepta nada. Para usarlos, enfoca la franja con ctrl+x tab, muévete con las flechas y pulsa Enter, o haz clic.
 - **Para teclearlo:** `/link accept <id>` o `/link reject <id>`, con el id que muestra la franja. El comando solo cuenta si lo tecleas tú; si lo lanza otro plugin o el modelo, se rechaza.
 - **Siempre actúa sobre el id que ves.** La franja respeta el orden de llegada, así que un mensaje nuevo no reemplaza al que tienes en pantalla.
-- **Aceptar es tu confirmación:** el mensaje se entrega sea cual sea tu modo. Si la entrega falla después de aceptar, el plugin la reintenta en cada poll, también si se recarga. Si cierras la sesión antes de que entre, depende del hub volver a entregarlo.
+- **Aceptar es tu confirmación:** el mensaje se entrega sea cual sea tu modo.
+  - Si la entrega falla después de aceptar, el plugin la reintenta en cada poll, también si se recarga.
+  - Mientras no reciba el ack `injected`, el hub vuelve a entregar el mensaje marcado como `accepted`. El plugin lo entrega tal cual, sin pasar por la franja ni mirar el modo, porque ya lo aceptaste; el dedupe por id evita que corra dos veces.
 - **Liberar no ejecuta:** «Liberar» desde el dashboard solo manda el mensaje a tu franja.
 
 **Frescura del modo.** Claude Code solo informa el modo de permisos en los hooks de un turno: al enviar un prompt, al usar una herramienta y al terminar. Con la sesión en idle no hay lectura en vivo: un shift+tab no avisa a nadie. La regla vigente (`IDLE_POLICY` en `mod/link-mode-freshness.js`) es «último modo visto»:

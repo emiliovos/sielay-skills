@@ -90,6 +90,27 @@ for (const mode of [{ mode: 'default', fresh: true }, { mode: 'bypassPermissions
   })
 }
 
+test('an accepted message the hub redelivers (lease expired before the injected ack) is injected once, in any mode', async () => {
+  const t = await setup({ mode: { mode: 'default', fresh: false } })
+  try {
+    t.hub.messages.set('m-acc', { delivery: { ...delivery, id: 'm-acc' }, gate: 'accepted', status: 'queued' })
+    t.loop.start()
+    await t.pollOnce()
+    assert.equal(t.injected.length, 1)
+    assert.deepEqual(t.getStrip(), [], 'never shown in the strip again')
+    await t.pollOnce()
+    assert.equal(t.hub.messages.get('m-acc').status, 'acked')
+    const acks = t.hub.log.filter(l => l.path === '/api/link/poll').flatMap(l => l.body.ack ?? [])
+    assert.deepEqual(acks, [{ id: 'm-acc', outcome: 'injected' }])
+    t.hub.messages.get('m-acc').status = 'queued' // a second redelivery: deduped, re-acked, not injected again
+    await t.pollOnce()
+    assert.equal(t.injected.length, 1)
+  } finally {
+    t.loop.stop()
+    await t.hub.close()
+  }
+})
+
 test('Reject in the strip decides rejected and never injects', async () => {
   const t = await setup({ mode: { mode: 'default', fresh: true } })
   try {
