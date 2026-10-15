@@ -104,7 +104,7 @@ export async function runLinkCommand($, rt, args, origin) {
       return { text: 'Solo la persona en esta terminal puede aceptar o rechazar, tecleando el comando.' }
     }
     const r = await decideStripItem($, rt, found.id, sub)
-    return { text: r.ok ? `Mensaje ${shortId(found.id)} ${sub === 'accept' ? 'aceptado y entregado' : 'rechazado'}.` : `sielay-link: ${r.error}` }
+    return { text: r.ok ? `Mensaje ${shortId(found.id)} ${sub === 'accept' ? 'aceptado y entregado' : 'rechazado'}.` : String(r.error) }
   }
   if (sub === 'pair') {
     if (!rt.pairing) return { text: `sielay-link no arrancó: ${rt.hubError ?? 'revisa /link'}` }
