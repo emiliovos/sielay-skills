@@ -124,7 +124,7 @@ Cada [release](https://github.com/emiliovos/sielay-skills/releases) trae un `.zi
   - solo un módulo hace red y solo otro corre procesos;
   - sin `asUser` y sin el token en `$.store`.
 
-  CODEOWNERS pide la revisión del dueño para cada cambio.
+  Es defensa en profundidad. Lo que se instala cambia solo cuando la entrada del marketplace apunta a un tag nuevo.
 - Una skill son instrucciones que Claude sigue con tus permisos. Antes de actualizar, puedes revisar qué cambió en el historial de `plugins/si/skills/`.
 
 ## Skills
