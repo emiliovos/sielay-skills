@@ -5,12 +5,22 @@
 # and hook wiring, the hub origin allow-list, network calls only in the hub
 # client, host processes only in the delivery adapter, and no secrets.
 #
-#   usage: tools/check-sielay-link.sh [plugin-dir]
+# The text rules below are defence in depth, not a proof: a determined author
+# can always write code a grep does not read. With --engine (needs `claude` on
+# the PATH; CI runs it after installing Claude Code) the gate also reads the
+# `$` calls the engine's own parser reports for the module, which follows `$`
+# through every function, and allow-lists them exactly. The engine already
+# refuses `$` written any other way than `$.noun.event(...)` (no brackets, no
+# destructuring, no passing a noun around), so that list is complete.
+#
+#   usage: tools/check-sielay-link.sh [--engine] [plugin-dir]
 set -euo pipefail
 
 fail=0
 err() { echo "ERROR: $*" >&2; fail=1; }
 
+engine=0
+if [ "${1:-}" = "--engine" ]; then engine=1; shift; fi
 root="${1:-plugins/sielay-link}"
 [ -d "$root" ] || { echo "ERROR: plugin dir not found: $root" >&2; exit 1; }
 root="$(cd "$root" && pwd -P)"
@@ -26,7 +36,7 @@ bin/sielay-link-socket-write.mjs types types/index.d.ts README.md tests tests/si
 mod mod/sielay-link-mod.js mod/link-band.jsx mod/link-pane.jsx mod/link-commands.js mod/link-delivery-adapter.js
 mod/link-hub-client.js mod/link-inbound-framing.js mod/link-inbound-handler.js mod/link-mode-freshness.js
 mod/link-pairing.js mod/link-poll-loop.js mod/link-run-gate.js mod/link-runtime.js mod/link-session-name-resolution.js
-mod/link-session-payload.js mod/link-state-refs.js mod/link-tools.js"
+mod/link-session-payload.js mod/link-state-refs.js mod/link-tools.js mod/link-inbound-store.js mod/link-strip-selection.js"
 while IFS= read -r -d '' p; do
   rel="${p#"$root"/}"
   case "$rel" in .claude-plugin/types|.claude-plugin/types/*|tsconfig.json) continue ;; esac
@@ -69,20 +79,61 @@ if [ -n "$out" ]; then echo "$out" | sed 's/^/ERROR: /' >&2; fail=1; fi
 
 # --- Runtime code rules (mod/ and bin/; the engine test file is exempt). They
 # run on a copy with comments stripped, so prose and JSDoc types never match.
+# The stripper tracks strings and template literals (nested `${}` included):
+# `//` inside a string is never taken for a comment, so `' //'; $.process.run()`
+# cannot hide a call. When unsure it keeps the text (a false alarm, never a miss).
 src="$(mktemp -d)"; trap 'rm -rf "$src"' EXIT
 python3 - "$root" "$src" <<'PY'
-import pathlib, re, sys
+import pathlib, sys
 root, dst = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
+
+def strip_comments(text):
+    out, i, n = [], 0, len(text)
+    stack = ["code"]          # code | ' | " | ` ; code entries inside `${}` carry a brace depth
+    depth = [0]
+    while i < n:
+        c, nxt, mode = text[i], text[i + 1] if i + 1 < n else "", stack[-1]
+        if mode == "code":
+            if c == "/" and nxt == "/":
+                j = text.find("\n", i)
+                i = n if j < 0 else j
+                continue
+            if c == "/" and nxt == "*":
+                j = text.find("*/", i + 2)
+                chunk = text[i:] if j < 0 else text[i:j + 2]
+                out.append("\n" * chunk.count("\n"))
+                i += len(chunk)
+                continue
+            if c in "'\"`":
+                stack.append(c); depth.append(0)
+            elif c == "{":
+                depth[-1] += 1
+            elif c == "}":
+                if depth[-1] == 0 and len(stack) > 1:
+                    stack.pop(); depth.pop()      # end of a `${...}` back into its template
+                else:
+                    depth[-1] -= 1
+            out.append(c); i += 1
+            continue
+        if c == "\\":
+            out.append(text[i:i + 2]); i += 2
+            continue
+        if mode == "`" and c == "$" and nxt == "{":
+            out.append("${"); i += 2
+            stack.append("code"); depth.append(0)
+            continue
+        if c == mode or (c == "\n" and mode in "'\""):
+            stack.pop(); depth.pop()
+        out.append(c); i += 1
+    return "".join(out)
+
 for sub in ("mod", "bin"):
     for f in sorted((root / sub).rglob("*")):
         if not f.is_file():
             continue
-        text = f.read_text(encoding="utf-8")
-        text = re.sub(r"/\*[\s\S]*?\*/", lambda m: "\n" * m.group(0).count("\n"), text)
-        text = re.sub(r"(^|\s)//.*$", r"\1", text, flags=re.M)
         out = dst / f.relative_to(root)
         out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_text(text, encoding="utf-8")
+        out.write_text(strip_comments(f.read_text(encoding="utf-8")), encoding="utf-8")
 PY
 code=("$src/mod" "$src/bin")
 only_in() { # pattern allowed-file description
@@ -100,6 +151,9 @@ forbid 'dangerouslySetInnerHTML' 'dangerouslySetInnerHTML is forbidden'
 forbid '\beval\(|new Function\(|\bimport\(' 'eval, new Function and dynamic import are forbidden'
 forbid 'child_process|\bspawn\(|process\.spawn|\$\.process\.[a-z]+[^.(a-z]' 'spawning processes other than $.process.run is forbidden'
 forbid 'config\.set' '$.config.set is not used: a sensitive field throws and a plain one stores in clear'
+forbid '\$\s*\[|\$\.[A-Za-z]+\s*\[|\$\?\.' '$ must be spelled $.noun.event(...): no brackets or optional chaining'
+forbid '\}\s*=\s*\$\b|=\s*\$\.[A-Za-z]+\s*[;,)]|=\s*\$\s*[;,)]' 'no destructuring of $ or aliasing a noun of $'
+forbid 'fs\.write|socketPath' '$.fs.write and socket fetches are not used'
 only_in 'fetch\(' 'mod/link-hub-client.js' 'network call (fetch)'
 only_in 'process\.run' 'mod/link-delivery-adapter.js' 'host process ($.process.run)'
 
@@ -113,6 +167,42 @@ done < <(grep -rnoE 'https?://[A-Za-z0-9.:@-]+' "${code[@]}" || true)
 # The token never goes to $.store: no store.set within 3 lines of "token".
 if hits=$(grep -rniE -B3 -A3 'store\.set' "$src/mod" | grep -iE 'token' | grep -viE 'tokenSource|tokenFilePath'); then
   echo "$hits" >&2; err "\$.store.set near a token"
+fi
+
+# --- Engine call list (--engine): the exact `$` calls, and who makes them.
+if [ "$engine" -eq 1 ]; then
+  command -v claude >/dev/null 2>&1 || { echo "ERROR: --engine needs claude on the PATH" >&2; exit 1; }
+  if ! report="$(claude plugin validate --json "$root" 2>/dev/null)"; then err "claude plugin validate failed"; fi
+  if out=$(python3 -c '
+import json, re, sys
+report = json.loads(sys.stdin.read())
+notes = [n for c in report.get("contents", []) for n in c.get("notes", []) if " calls: " in n]
+if len(notes) != 1:
+    print("expected exactly one calls: note from the engine"); sys.exit()
+text = notes[0].split(" calls: ", 1)[1]
+allowed = {
+    "$.clock.after", "$.clock.now", "$.command.register", "$.env.get", "$.fs.exists", "$.fs.read",
+    "$.session.cwd", "$.session.id", "$.state.get", "$.state.set", "$.store.get", "$.store.set",
+    "$.tool.register", "$.ui.log", "$.ui.open", "$.ui.toast",
+}
+only_via = {"$.http.fetch": {"createHubClient"}, "$.process.run": {"createDeliveryAdapter"}, "$.prompt.submit": {"createDeliveryAdapter"}}
+truncated = "…" in text
+out = []
+for noun, via in re.findall(r"(\$\.[a-z]+\.[a-z]+)(?: \(via ([^)]*)\))?", text):
+    vias = {v.strip() for v in via.split(",") if v.strip()}
+    if noun in only_via:
+        if vias != only_via[noun]: out.append(f"{noun} must be called only via {sorted(only_via[noun])} (got {sorted(vias)})")
+    elif noun not in allowed:
+        out.append(f"{noun} is not on the allow-list of $ calls")
+for noun in only_via:
+    if noun not in text: out.append(f"{noun} missing from the engine call list")
+if truncated:
+    visible = text.split("…", 1)[0]
+    last = re.findall(r"\$\.([a-z]+)\.", visible)
+    if not last or last[-1] < "store": out.append("the engine call list is cut before $.store: cannot check it whole")
+print("\n".join(out))
+' <<<"$report"); then :; else err "engine call check could not run"; fi
+  if [ -n "$out" ]; then echo "$out" | sed 's/^/ERROR: /' >&2; fail=1; fi
 fi
 
 # --- Secrets, private addresses and personal paths, anywhere in the plugin.

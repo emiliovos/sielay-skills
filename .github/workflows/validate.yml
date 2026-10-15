@@ -39,9 +39,7 @@ jobs:
       # No Claude, no network beyond 127.0.0.1: pure modules, a fake hub over
       # node:http and a temp unix socket; then the gate's own negative cases.
       - name: sielay-link tests
-        run: |
-          bash tests/sielay-link/run-unit.sh
-          bash tests/sielay-link/run-gate.sh
+        run: bash tests/sielay-link/run-unit.sh
 
       # Pinned gitleaks binary, verified against a hardcoded sha256 (not the
       # release's own checksum file) so a tampered release cannot pass.
@@ -75,3 +73,10 @@ jobs:
           claude plugin validate plugins/si-auto
           claude plugin validate --strict plugins/sielay-link
           claude plugin test plugins/sielay-link
+
+      # The engine's own list of the module's $ calls, allow-listed exactly,
+      # then the gate's negative cases (text rules and engine rules).
+      - name: Safety gate with the engine (sielay-link)
+        run: |
+          bash tools/check-sielay-link.sh --engine plugins/sielay-link
+          bash tests/sielay-link/run-gate.sh
