@@ -12,6 +12,16 @@
       "name": "si-auto",
       "source": "./plugins/si-auto",
       "description": "Opcional. Guarda una nota por sesión fuera del árbol de trabajo y la entrega a la siguiente sesión, sin escribir en el repo ni hacer commit. Requiere si@sielay y python3; se enciende repo por repo."
+    },
+    {
+      "name": "sielay-link",
+      "source": {
+        "source": "git-subdir",
+        "url": "emiliovos/sielay-skills",
+        "path": "plugins/sielay-link",
+        "ref": "sielay-link-v1.0.0"
+      },
+      "description": "Opcional. Conecta sesiones de Claude Code emparejadas por el hub de sielay: mensajes entre sesiones, franja para aceptar o rechazar y auto-ejecución solo entre pares en bypass. Requiere un slot que crea un admin. Fijado al tag sielay-link-v1.0.0."
     }
   ]
 }

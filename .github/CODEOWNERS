@@ -1,0 +1,5 @@
+# sielay-link carries a hub token into sessions that may run in bypass mode:
+# every change to it needs the owner's review.
+/plugins/sielay-link/ @emiliovos
+/tools/check-sielay-link.sh @emiliovos
+/tests/sielay-link/ @emiliovos

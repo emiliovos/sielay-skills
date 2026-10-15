@@ -71,13 +71,16 @@ market_jq='if type != "object" then "marketplace.json is not a JSON object" else
   ((keys - ["name","owner","description","plugins","metadata"])[]
     | "marketplace.json: top-level key not allowed: \(.)"),
   (if .name != "sielay" then "marketplace.json: name must be \"sielay\"" else empty end),
-  (if (.plugins | type) != "array" or (.plugins | length) < 1 or (.plugins | length) > 2
-   then "marketplace.json: plugins must list si and, optionally, si-auto"
-   else .plugins | to_entries[] | .key as $i | ([["si","./plugins/si"],["si-auto","./plugins/si-auto"]][$i]) as $want
+  (if (.plugins | type) != "array" or (.plugins | length) < 1 or (.plugins | length) > 3
+   then "marketplace.json: plugins must list si and, optionally, si-auto and sielay-link"
+   else .plugins | to_entries[] | .key as $i | ([["si","./plugins/si"],["si-auto","./plugins/si-auto"],["sielay-link",null]][$i]) as $want
      | .value | if type != "object" then "marketplace.json: plugin entry is not an object" else
      ((keys - ["name","source","description"])[] | "marketplace.json: plugin key not allowed: \(.)"),
      (if .name != $want[0] then "marketplace.json: plugin \($i + 1) name must be \"\($want[0])\"" else empty end),
-     (if .source != $want[1] then "marketplace.json: plugin \($i + 1) source must be \"\($want[1])\"" else empty end)
+     (if $want[1] != null then (if .source != $want[1] then "marketplace.json: plugin \($i + 1) source must be \"\($want[1])\"" else empty end)
+      elif ((.source | type) != "object" or ((.source | del(.ref)) != {"source":"git-subdir","url":"emiliovos/sielay-skills","path":"plugins/sielay-link"})
+            or ((.source.ref // "") | test("^sielay-link-v[0-9]+[.][0-9]+[.][0-9]+$") | not))
+      then "marketplace.json: sielay-link must be a git-subdir of emiliovos/sielay-skills pinned to a sielay-link-vX.Y.Z tag" else empty end)
    end end) end'
 read -r -d '' check_py <<'PY' || true
 import json, sys
@@ -104,17 +107,26 @@ else:
         keys(d, ["name","owner","description","plugins","metadata"], "marketplace.json: top-level key not allowed")
         if d.get("name") != "sielay": out.append('marketplace.json: name must be "sielay"')
         ps = d.get("plugins")
-        # Order is fixed: si first, then the optional si-auto.
-        want = [("si", "./plugins/si"), ("si-auto", "./plugins/si-auto")]
-        if not isinstance(ps, list) or not 1 <= len(ps) <= 2:
-            out.append("marketplace.json: plugins must list si and, optionally, si-auto")
+        # Order is fixed: si first, then the optional si-auto, then sielay-link,
+        # which is pinned to a release tag (its source is checked below).
+        want = [("si", "./plugins/si"), ("si-auto", "./plugins/si-auto"), ("sielay-link", None)]
+        if not isinstance(ps, list) or not 1 <= len(ps) <= 3:
+            out.append("marketplace.json: plugins must list si and, optionally, si-auto and sielay-link")
         else:
             for i, (p, (name, source)) in enumerate(zip(ps, want), 1):
                 if not isinstance(p, dict):
                     out.append("marketplace.json: plugin entry is not an object"); continue
                 keys(p, ["name","source","description"], "marketplace.json: plugin key not allowed")
                 if p.get("name") != name: out.append(f'marketplace.json: plugin {i} name must be "{name}"')
-                if p.get("source") != source: out.append(f'marketplace.json: plugin {i} source must be "{source}"')
+                src = p.get("source")
+                if source is not None:
+                    if src != source: out.append(f'marketplace.json: plugin {i} source must be "{source}"')
+                else:
+                    import re
+                    pinned = isinstance(src, dict) and {k: v for k, v in src.items() if k != "ref"} == {
+                        "source": "git-subdir", "url": "emiliovos/sielay-skills", "path": "plugins/sielay-link"}
+                    if not (pinned and re.fullmatch(r"sielay-link-v\d+\.\d+\.\d+", str(src.get("ref", "")))):
+                        out.append("marketplace.json: sielay-link must be a git-subdir of emiliovos/sielay-skills pinned to a sielay-link-vX.Y.Z tag")
 print("\n".join(out))
 PY
 check_json() { # kind file jq-program
