@@ -1,0 +1,32 @@
+{
+  "name": "sielay-link",
+  "version": "1.0.0",
+  "description": "Conecta sesiones de Claude Code emparejadas por un hub de sielay: mensajes entre sesiones, franja para aceptar o rechazar y auto-ejecución solo entre pares en bypass.",
+  "author": { "name": "emiliovos" },
+  "license": "MIT",
+  "homepage": "https://github.com/emiliovos/sielay-skills",
+  "repository": "https://github.com/emiliovos/sielay-skills",
+  "keywords": ["sielay", "sessions", "messaging"],
+  "userConfig": {
+    "link_token": {
+      "type": "string",
+      "title": "Token de sielay-link",
+      "description": "Opcional. /link pair lo guarda solo en ~/.claude/sielay-link/token; pégalo aquí solo si ese archivo no se pudo escribir. Si tiene valor, gana sobre el archivo.",
+      "sensitive": true,
+      "required": false
+    },
+    "hub_url": {
+      "type": "string",
+      "title": "Hub de sielay",
+      "description": "Solo https://sielay.cloud o https://sielay.vostec.mx; cualquier otro se rechaza.",
+      "default": "https://sielay.cloud",
+      "options": ["https://sielay.cloud", "https://sielay.vostec.mx"]
+    },
+    "machine_name": {
+      "type": "string",
+      "title": "Nombre de la máquina (informativo)",
+      "description": "Solo para ti: la máquina real la fija el admin en el slot.",
+      "required": false
+    }
+  }
+}

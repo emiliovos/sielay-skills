@@ -99,6 +99,16 @@ Los ganchos solo leen del repo `git rev-parse` y el `CLAUDE.md`, y solo escriben
 - Commits y respaldo: no son tarea de si-auto.
 - Secretos en la nota: la orden le pide a Claude no incluir valores sensibles, pero la nota es texto del modelo y se guarda tal cual dentro de `.git/si-auto/`. La bitácora solo guarda ids y eventos.
 
+## Conectar sesiones (sielay-link, opcional)
+
+Deja que sesiones de Claude Code emparejadas por el hub de sielay se escriban entre sí. Un admin crea un slot por máquina y aprueba el emparejamiento con 2FA. Los mensajes que no se auto-ejecutan esperan en una franja hasta que la persona los acepta.
+
+```
+claude plugin install sielay-link@sielay
+```
+
+Luego, en la sesión: `/link pair <slot>`. Requiere Claude Code 2.1.300 y Node 22 o más reciente. La entrada va fijada al tag `sielay-link-v1.0.0`. Instalación, nombres, reglas de auto-ejecución y seguridad: [plugins/sielay-link/README.md](plugins/sielay-link/README.md).
+
 ## Claude Desktop (chat)
 
 Cada [release](https://github.com/emiliovos/sielay-skills/releases) trae un `.zip` por skill, con su sha256 en las notas. si-auto no aplica aquí: los ganchos solo funcionan en Claude Code. Bájalo y súbelo en la configuración de skills de tu cuenta. Para actualizar, sube el `.zip` del release nuevo.
@@ -109,6 +119,12 @@ Cada [release](https://github.com/emiliovos/sielay-skills/releases) trae un `.zi
 - El one-liner oficial siempre apunta a `emiliovos/sielay-skills`. Desconfía de cualquier otro dueño o nombre parecido.
 - El plugin `si` no tiene hooks, servidores MCP, ejecutables ni dependencias. El CI (`tools/check-plugin.sh`) lo impide.
 - `si-auto` sí trae ganchos, por eso va aparte y es opcional. Su CI (`tools/check-si-auto.sh`) solo acepta sus archivos conocidos, los cuatro ganchos, `git rev-parse` como único comando de git, nada de red y escrituras solo en su carpeta de notas. Nace en este repo; `SOURCE_COMMIT` describe solo la copia de las skills de `si`.
+- `sielay-link` trae un módulo de hooks, un ejecutable de Node y red, y va fijado a un tag. Su CI (`tools/check-sielay-link.sh`) exige estas reglas:
+  - el hub solo puede estar en `https://sielay.cloud` o `https://sielay.vostec.mx`;
+  - solo un módulo hace red y solo otro corre procesos;
+  - sin `asUser` y sin el token en `$.store`.
+
+  Es defensa en profundidad. Lo que se instala cambia solo cuando la entrada del marketplace apunta a un tag nuevo.
 - Una skill son instrucciones que Claude sigue con tus permisos. Antes de actualizar, puedes revisar qué cambió en el historial de `plugins/si/skills/`.
 
 ## Skills
@@ -117,3 +133,4 @@ Cada [release](https://github.com/emiliovos/sielay-skills/releases) trae un `.zi
 |---|---|
 | `/si:checkpoint` | Cierre de sesión: journal, docs, commit, push y handoff para retomar en otra terminal |
 | `si-auto` (plugin aparte) | Nota de sesión automática fuera del repo, entregada a la sesión siguiente |
+| `sielay-link` (plugin aparte) | Mensajes entre sesiones de Claude Code emparejadas por el hub de sielay, con franja para aceptar o rechazar |

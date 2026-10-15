@@ -23,11 +23,23 @@ jobs:
       - name: Safety gate (si-auto)
         run: bash tools/check-si-auto.sh plugins/si-auto
 
+      - name: Safety gate (sielay-link)
+        run: bash tools/check-sielay-link.sh plugins/sielay-link
+
       # No Claude, no network: each hook is fed the JSON Claude Code would send.
       - name: si-auto tests
         run: |
           bash tests/si-auto/run-unit.sh
           bash tests/si-auto/run-gate.sh
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+
+      # No Claude, no network beyond 127.0.0.1: pure modules, a fake hub over
+      # node:http and a temp unix socket; then the gate's own negative cases.
+      - name: sielay-link tests
+        run: bash tests/sielay-link/run-unit.sh
 
       # Pinned gitleaks binary, verified against a hardcoded sha256 (not the
       # release's own checksum file) so a tampered release cannot pass.
@@ -43,16 +55,28 @@ jobs:
           tar -xzf "$RUNNER_TEMP/$tarball" -C "$RUNNER_TEMP" gitleaks
           "$RUNNER_TEMP/gitleaks" detect --no-git -s plugins/si --redact --no-banner -v
           "$RUNNER_TEMP/gitleaks" detect --no-git -s plugins/si-auto --redact --no-banner -v
+          "$RUNNER_TEMP/gitleaks" detect --no-git -s plugins/sielay-link --redact --no-banner -v
 
       - name: Install Claude Code (native installer, no npm)
         run: |
           curl -fsSL https://claude.ai/install.sh | bash
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
-      # --strict is not used: it demands a "version" field, and the plugin
-      # deliberately has none so its version is the commit and updates flow.
-      - name: Validate marketplace and plugin
+      # --strict is not used for si: it demands a "version" field, and that
+      # plugin deliberately has none so its version is the commit and updates
+      # flow. sielay-link is pinned (version + tag), so it is validated strictly
+      # and its engine-level tests run against the installed Claude Code.
+      - name: Validate marketplace and plugins
         run: |
           claude plugin validate .
           claude plugin validate plugins/si
           claude plugin validate plugins/si-auto
+          claude plugin validate --strict plugins/sielay-link
+          claude plugin test plugins/sielay-link
+
+      # The engine's own list of the module's $ calls, allow-listed exactly,
+      # then the gate's negative cases (text rules and engine rules).
+      - name: Safety gate with the engine (sielay-link)
+        run: |
+          bash tools/check-sielay-link.sh --engine plugins/sielay-link
+          bash tests/sielay-link/run-gate.sh

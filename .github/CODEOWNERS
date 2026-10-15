@@ -1,0 +1,10 @@
+# Who owns the parts that make sielay-link safe to install. The main branch
+# ruleset decides whether a code owner's review is required; this file only
+# names the owner.
+/plugins/sielay-link/ @emiliovos
+/tools/check-sielay-link.sh @emiliovos
+/tools/check-plugin.sh @emiliovos
+/tests/sielay-link/ @emiliovos
+/.github/workflows/validate.yml @emiliovos
+/.github/CODEOWNERS @emiliovos
+/.claude-plugin/marketplace.json @emiliovos

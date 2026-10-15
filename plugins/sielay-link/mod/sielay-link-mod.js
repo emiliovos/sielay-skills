@@ -1,0 +1,133 @@
+// sielay-link: lets paired Claude Code sessions message each other through a
+// sielay hub. Entry module (hooks/hooks.json). Every hook is registered here;
+// the work lives in the modules it imports, most of them pure.
+
+import { createRuntime, startLink, sessionPayload } from './link-runtime.js'
+import { recordModeSample, recordSessionTitle, recordTurnEnd } from './link-session-payload.js'
+import { LINK_TOOL_SPECS, runLinkTool } from './link-tools.js'
+import { runLinkCommand } from './link-commands.js'
+import { PROMPT_FALLBACK_CONTEXT } from './link-inbound-framing.js'
+import { renderBand } from './link-band.jsx'
+import { renderPane } from './link-pane.jsx'
+
+// $.state reference: literal plugin/key, declared in each file that uses it.
+const CONVERSATIONS = /** @type {const} */ ({ plugin: 'sielay-link', key: 'conversations' })
+
+/** @typedef {import('claude-code').EngineInterface} Engine */
+/** @typedef {import('./link-runtime.js').Runtime} Runtime */
+
+/**
+ * Registers the tools and the command. Tools are left out entirely while
+ * SIELAY_LINK_OFF=1, so the model never sees them.
+ * @param {Engine} $ @param {Runtime} rt
+ */
+async function setUp($, rt) {
+  await $.command.register({
+    name: 'link',
+    description: 'sielay-link: estado, nombre, pares y emparejamiento de esta sesión',
+    argumentHint: '[name <x> | off | on | peers | pair <slot>]',
+  })
+  if ((await $.env.get('SIELAY_LINK_OFF')) === '1') return
+  for (const spec of LINK_TOOL_SPECS) await $.tool.register(spec)
+  await startLink($, rt)
+}
+
+/**
+ * @param {Engine} $ @param {Runtime} rt @param {string} name @param {Record<string, unknown>} input
+ */
+async function callTool($, rt, name, input) {
+  if ((await $.env.get('SIELAY_LINK_OFF')) === '1') return { deny: 'sielay-link está apagado (SIELAY_LINK_OFF=1).' }
+  const answer = await runLinkTool(name, input, {
+    client: rt.client,
+    sessionFrom: async () => {
+      const s = await sessionPayload($, rt)
+      return { name: s.name, instance_id: s.instance_id, cwd_hash: s.cwd_hash, mode: s.mode, mode_fresh: s.mode_fresh, mode_age_s: s.mode_age_s }
+    },
+    conversationPeer: async id => (await $.state.get(CONVERSATIONS)).value?.[id],
+    rememberConversation: async (id, address) => {
+      const { value = {} } = await $.state.get(CONVERSATIONS)
+      await $.state.set(CONVERSATIONS, { ...value, [id]: address })
+    },
+    newId: () => crypto.randomUUID(),
+  })
+  return answer.deny !== undefined ? { deny: answer.deny } : { result: answer.result }
+}
+
+/**
+ * `.catch` for hooks that only observe: whatever failed, the event goes on as it came.
+ * @param {unknown} _$ @param {any} e @param {any} next
+ */
+function passThrough(_$, e, next) {
+  return next(e)
+}
+
+/**
+ * `.catch` for the tools: a failure is a refusal the model can read, never a hang.
+ * @param {unknown} _$ @param {unknown} _e @param {any} next
+ */
+function toolFailed(_$, _e, next) {
+  return next.called ? next(_e) : { deny: 'sielay-link falló al atender la herramienta; revisa /link.' }
+}
+
+/**
+ * @param {import('claude-code').On} on
+ * @param {import('claude-code').PluginOptions} options
+ */
+export function register(on, options) {
+  const rt = createRuntime(/** @type {Record<string, unknown>} */ (options ?? {}))
+
+  on('session.start', async ($, e, next) => {
+    const started = await next(e)
+    try {
+      await setUp($, rt)
+    } catch (err) {
+      $.ui.log(`sielay-link no arrancó: ${err instanceof Error ? err.message : String(err)}`)
+    }
+    return started
+  })
+
+  // Mode samples (R5): only these classic events carry permission_mode.
+  on('classic.UserPromptSubmit', async ($, e, next) => {
+    await recordModeSample($, e, 'UserPromptSubmit')
+    await recordSessionTitle($, e.session_title)
+    return next(e)
+  }).catch(passThrough)
+  on('classic.PostToolUse', async ($, e, next) => {
+    await recordModeSample($, e, 'PostToolUse')
+    return next(e)
+  }).catch(passThrough)
+  on('classic.PostToolBatch', async ($, e, next) => {
+    await recordModeSample($, e, 'PostToolBatch')
+    return next(e)
+  }).catch(passThrough)
+  on('classic.Stop', async ($, e, next) => {
+    await recordModeSample($, e, 'Stop')
+    return next(e)
+  }).catch(passThrough)
+  // Every turn end, including Esc and API errors (which raise no classic Stop):
+  // without it an interrupted turn would look like it is still running.
+  on('turn.complete', async ($, e, next) => {
+    await recordTurnEnd($, e)
+    return next(e)
+  }).catch(passThrough)
+  on('classic.SessionStart', async ($, e, next) => {
+    await recordSessionTitle($, e.session_title)
+    return next(e)
+  }).catch(passThrough)
+
+  // The fallback adapter's own prompts carry a fixed context naming who sent them.
+  on('prompt.submit', ($, e, next) =>
+    e.origin.kind === 'plugin' && e.origin.name === $.plugin.name
+      ? next({ ...e, context: [...(e.context ?? []), PROMPT_FALLBACK_CONTEXT] })
+      : next(e),
+  ).catch(passThrough)
+
+  on('tool.call', { tool: 'mcp__sielay-link__link_send' }, ($, e) => callTool($, rt, 'link_send', e)).catch(toolFailed)
+  on('tool.call', { tool: 'mcp__sielay-link__link_reply' }, ($, e) => callTool($, rt, 'link_reply', e)).catch(toolFailed)
+  on('tool.call', { tool: 'mcp__sielay-link__link_peers' }, ($, e) => callTool($, rt, 'link_peers', e)).catch(toolFailed)
+
+  on('command.run', { command: 'link' }, async ($, e) => runLinkCommand($, rt, e.args, e.origin))
+
+  on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => (await renderBand($, e, rt)) ?? next(e))
+  on('ui.render', { component: 'Pane', requestId: 'sielay-link' }, async ($, e) => renderPane($, e, rt))
+}
