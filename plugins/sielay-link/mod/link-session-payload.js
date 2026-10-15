@@ -3,6 +3,7 @@
 
 import { modeState } from './link-mode-freshness.js'
 import { resolveSessionName, cwdHash } from './link-session-name-resolution.js'
+import { claimInstanceId, instanceKey } from './link-instance-identity.js'
 
 // $.state references: literal plugin/key, declared in each file that uses them.
 const MODE_SAMPLES = /** @type {const} */ ({ plugin: 'sielay-link', key: 'modeSamples' })
@@ -83,6 +84,25 @@ async function readProjectFile($, cwd) {
 }
 
 /**
+ * The instance_id for (cwd, name): reused across reloads, /clear, --resume and
+ * restarts, distinct for a second terminal live in the same folder (see
+ * link-instance-identity.js). The owner is this Claude Code process's
+ * messaging socket, which exists only while the process lives.
+ * @param {Engine} $ @param {string} hash @param {string} name @param {string} sessionId @param {number} now
+ */
+async function instanceIdFor($, hash, name, sessionId, now) {
+  const socket = await $.env.get('CLAUDE_CODE_MESSAGING_SOCKET')
+  return claimInstanceId({
+    store: { get: key => $.store.get(key), set: (key, value) => $.store.set(key, value) },
+    key: instanceKey(hash, name),
+    me: socket ? `sock:${socket}` : `sess:${sessionId}`,
+    now,
+    ownerAlive: async owner => (owner.startsWith('sock:') ? $.fs.exists(owner.slice(5)) : true),
+    newId: () => crypto.randomUUID(),
+  })
+}
+
+/**
  * @typedef {{ adapter: { tmuxSessionName: (env: string|undefined) => Promise<string|undefined> } | null, tmux: { name?: string, at: number } }} PayloadRuntime
  */
 
@@ -91,7 +111,7 @@ async function readProjectFile($, cwd) {
  * @param {PayloadRuntime} rt
  */
 export async function buildSessionPayload($, rt) {
-  const [instanceId, cwd, now] = await Promise.all([$.session.id(), $.session.cwd(), $.clock.now()])
+  const [sessionId, cwd, now] = await Promise.all([$.session.id(), $.session.cwd(), $.clock.now()])
   const hash = await cwdHash(cwd)
   if (rt.adapter && now - rt.tmux.at > TMUX_TTL_MS) {
     rt.tmux = { name: await rt.adapter.tmuxSessionName(await $.env.get('TMUX')), at: now }
@@ -111,6 +131,7 @@ export async function buildSessionPayload($, rt) {
     nativeTitle: title ?? undefined,
     cwd,
   })
+  const instanceId = await instanceIdFor($, hash, resolved.name, sessionId, now)
   return {
     session: {
       name: resolved.name,

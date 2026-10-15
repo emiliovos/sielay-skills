@@ -18,7 +18,7 @@ function fakeHub(on: any, script: (path: string, body: any, n: number) => unknow
   return sent
 }
 
-function fakeHost(on: any) {
+function fakeHost(on: any, sessionId: () => string = () => 'sess-1') {
   const helper: string[] = []
   const tools: string[] = []
   const opened: any[] = []
@@ -30,7 +30,7 @@ function fakeHost(on: any) {
   on('command.register', () => ({ value: undefined }))
   on('tool.register', ($: any, e: any) => (tools.push(e.name), { value: undefined }))
   on('ui.open', ($: any, e: any) => (opened.push(e), { value: undefined }))
-  on('session.id', () => ({ value: 'sess-1' }))
+  on('session.id', () => ({ value: sessionId() }))
   on('session.cwd', () => ({ value: '/srv/proyecto' }))
   on('process.run', ($: any, e: any) => {
     if (e.argv[0] === 'node' && e.argv[1] === '--version') return { value: { exitCode: 0, stdout: 'v22.0.0\n', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
@@ -211,4 +211,23 @@ test('turn.complete (Esc or error, no Stop) marks the turn ended, so the session
   await clock.settle()
   const after = sent.filter(s => s.url.endsWith('/api/link/poll')).at(-1)!
   expect(after.body.session).toMatchObject({ state: 'idle' })
+})
+
+test('the instance_id survives /clear (new session id, same live process) so the hub sees the same instance', { options: { link_token: 'test-token' } }, async ($, on) => {
+  const clock = mock.clock(on, { now: 4_000_000 })
+  mock.store(on)
+  mock.env(on, { HOME: '/nowhere', CLAUDE_CODE_MESSAGING_SOCKET: '/run/cc-socks/1.sock' })
+  let sid = 'sess-before-clear'
+  fakeHost(on, () => sid)
+  const sent = fakeHub(on, path => (path === '/api/link/poll' ? { session: { id: 's' }, messages: [], strip: [], poll_after_ms: 60_000 } : {}))
+  await $.session.start({ cwd: '/srv/p', surface: 'terminal', isInteractive: true })
+  await clock.advance(10)
+  await clock.settle()
+  sid = 'sess-after-clear'
+  await clock.advance(61_000)
+  await clock.settle()
+  const ids = sent.filter(s => s.url.endsWith('/api/link/poll')).map(s => s.body.session.instance_id)
+  expect(ids.length).toBeGreaterThanOrEqual(2)
+  expect(new Set(ids).size).toBe(1)
+  expect(ids[0]).not.toBe('sess-before-clear')
 })

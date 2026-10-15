@@ -1,6 +1,6 @@
 // The long-poll loop: one self-rescheduling timer (`$.clock.after` in the mod)
 // with try/finally, so an exception never ends it. No `$`: everything is
-// injected. The session (and its instance_id = `$.session.id()`) is re-read
+// injected. The session (and its instance_id, see link-instance-identity.js) is re-read
 // on every round, so /clear and --resume are picked up.
 //
 // Errors: 503 pauses (60 s), 401 stops until restart(), 429 waits

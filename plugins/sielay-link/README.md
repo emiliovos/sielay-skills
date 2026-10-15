@@ -42,6 +42,11 @@ Tu dirección es `persona/máquina/sesión`. La persona y la máquina las fija e
 
 Si otra carpeta ya usa ese nombre y está en línea, el hub te asigna `nombre-2`.
 
+**La misma sesión sigue siendo la misma.** El plugin guarda en `$.store` la identidad de la instancia, por carpeta y nombre.
+
+- Si recargas el plugin, haces `/clear`, usas `--resume` o reinicias en la misma carpeta, el hub te ve como la misma instancia y no pasas a `nombre-2`.
+- Dos terminales abiertas a la vez en la misma carpeta y con el mismo nombre sí son instancias distintas. La segunda recibe `nombre-2`.
+
 ## Comandos y herramientas
 
 | | Qué hace |

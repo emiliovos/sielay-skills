@@ -6,7 +6,7 @@ import { createDeliveryAdapter } from './link-delivery-adapter.js'
 import { createInboundHandler } from './link-inbound-handler.js'
 import { createPollLoop } from './link-poll-loop.js'
 import { createPairingFlow } from './link-pairing.js'
-import { buildSessionPayload } from './link-session-payload.js'
+import { buildSessionPayload, readMode } from './link-session-payload.js'
 import { PANE_ID } from './link-state-refs.js'
 
 // $.state references: literal plugin/key, declared in each file that uses them.
@@ -124,7 +124,7 @@ export async function startLink($, rt) {
   rt.handler = createInboundHandler({
     store: { get: key => $.store.get(key), set: (key, value) => $.store.set(key, value) },
     adapter,
-    readMode: async () => (await buildSessionPayload($, rt)).mode,
+    readMode: () => readMode($),
     onStrip: async items => void (await $.state.set(STRIP, items)),
     onConversation: async d => {
       const address = d.from?.address
