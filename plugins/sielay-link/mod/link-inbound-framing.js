@@ -76,6 +76,17 @@ function count(n) {
  */
 
 /**
+ * True for a hub Delivery the client can act on (id, conversation and body present).
+ * @param {unknown} d
+ * @returns {d is Delivery}
+ */
+export function isDelivery(d) {
+  if (d === null || typeof d !== 'object') return false
+  const o = /** @type {Record<string, unknown>} */ (d)
+  return typeof o.id === 'string' && o.id !== '' && typeof o.conversation_id === 'string' && typeof o.body === 'string'
+}
+
+/**
  * `[sielay-link de=<address> conv=<id> turno=<n>/<max> verificado-por-hub — responde con link_reply]`,
  * a blank line, then the neutralized body.
  *

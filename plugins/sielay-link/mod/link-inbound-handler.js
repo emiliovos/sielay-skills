@@ -14,7 +14,7 @@
 // - The strip keeps arrival order: a newer message never takes the place of
 //   the one on screen.
 
-import { frameInbound } from './link-inbound-framing.js'
+import { frameInbound, isDelivery } from './link-inbound-framing.js'
 import { shouldInject, onStripAccept, onStripReject } from './link-run-gate.js'
 import { createInboundStore } from './link-inbound-store.js'
 
@@ -23,16 +23,6 @@ import { createInboundStore } from './link-inbound-store.js'
  * @typedef {{ id: string, outcome: 'injected'|'shown' }} Ack
  * @typedef {import('./link-inbound-store.js').StoreLike} StoreLike
  */
-
-/**
- * @param {unknown} d
- * @returns {d is Delivery}
- */
-export function isDelivery(d) {
-  if (d === null || typeof d !== 'object') return false
-  const o = /** @type {Record<string, unknown>} */ (d)
-  return typeof o.id === 'string' && o.id !== '' && typeof o.conversation_id === 'string' && typeof o.body === 'string'
-}
 
 /**
  * @param {{
