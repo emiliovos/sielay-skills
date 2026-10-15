@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, rmSync, readFileSync, statSync } from 'node:fs'
+import { mkdtempSync, rmSync, readFileSync, statSync, chmodSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -86,6 +86,12 @@ test('token file: token on stdin, never in argv; real sh writes a 0600 file', as
     const path = join(dir, 'nested', 'token')
     await a.writeTokenFile(path, 'secret-for-test')
     assert.equal(readFileSync(path, 'utf8'), 'secret-for-test')
+    assert.equal(statSync(path).mode & 0o777, 0o600)
+    assert.equal(statSync(join(dir, 'nested')).mode & 0o777, 0o700)
+    // An older, world-readable file is replaced, never written into.
+    chmodSync(path, 0o644)
+    await a.writeTokenFile(path, 'second-secret')
+    assert.equal(readFileSync(path, 'utf8'), 'second-secret')
     assert.equal(statSync(path).mode & 0o777, 0o600)
     assert.ok(!realProc.calls[0].argv.some(x => x.includes('secret-for-test')))
     await assert.rejects(a.writeTokenFile('relative/token', 't'), /absolute/)

@@ -5,11 +5,20 @@
 //
 // Errors: 503 pauses (60 s), 401 stops until restart(), 429 waits
 // retry-after or backs off, anything else backs off 1 s → 60 s.
+//
+// One loop only: every start() opens a new generation and a timer from an
+// older one does nothing. A tick that finds another still running (a restart
+// while a 25 s poll is in flight) retries shortly instead of returning, so a
+// restart can never leave the loop dead.
 
 export const WAIT_S = 25
 export const MAX_DELAY_MS = 60_000
 export const PAUSE_MS = 60_000
 export const OFF_RECHECK_MS = 5_000
+/** An empty answer that came back faster than this waits this long (no tight loop). */
+export const MIN_EMPTY_POLL_MS = 1_000
+/** How soon a tick that found another one running tries again. */
+export const BUSY_RETRY_MS = 250
 
 /**
  * @typedef {'starting'|'online'|'off'|'unpaired'|'paused'|'unauthorized'|'backoff'} LoopStatus
@@ -25,9 +34,10 @@ export const OFF_RECHECK_MS = 5_000
  *   isOff: () => Promise<boolean>,
  *   onStatus?: (status: LoopStatus, detail?: string) => Promise<void> | void,
  *   onSession?: (session: { id?: string, address?: string, name_assigned?: string }) => Promise<void> | void,
+ *   now?: () => number | Promise<number>,
  * }} deps
  */
-export function createPollLoop({ schedule, getClient, buildSession, handler, isOff, onStatus = () => {}, onSession = () => {} }) {
+export function createPollLoop({ schedule, getClient, buildSession, handler, isOff, onStatus = () => {}, onSession = () => {}, now = () => Date.now() }) {
   /** @type {Ack[]} */
   let pendingAcks = []
   let failures = 0
@@ -43,7 +53,11 @@ export function createPollLoop({ schedule, getClient, buildSession, handler, isO
 
   /** @param {number} gen */
   async function tick(gen) {
-    if (gen !== generation || stopped || running) return
+    if (gen !== generation || stopped) return
+    if (running) {
+      schedule(BUSY_RETRY_MS, () => void tick(gen))
+      return
+    }
     running = true
     let delay = 0
     try {
@@ -63,6 +77,7 @@ export function createPollLoop({ schedule, getClient, buildSession, handler, isO
       pendingAcks = []
       /** @type {any} */
       let data
+      const startedAt = await now()
       try {
         data = await client.poll({ session, ...(ack.length ? { ack } : {}), wait_s: WAIT_S })
       } catch (err) {
@@ -75,6 +90,10 @@ export function createPollLoop({ schedule, getClient, buildSession, handler, isO
       await onStatus('online')
       const after = Number(data?.poll_after_ms)
       delay = pendingAcks.length ? 0 : Number.isFinite(after) ? Math.min(MAX_DELAY_MS, Math.max(0, after)) : 0
+      const empty = !Array.isArray(data?.messages) || data.messages.length === 0
+      if (empty && !pendingAcks.length && (await now()) - startedAt < MIN_EMPTY_POLL_MS) {
+        delay = Math.max(delay, MIN_EMPTY_POLL_MS)
+      }
     } catch (err) {
       const e = /** @type {{ kind?: string, retryAfterMs?: number, message?: string }} */ (err ?? {})
       if (e.kind === 'unauthorized') {

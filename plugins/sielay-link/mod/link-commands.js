@@ -5,6 +5,8 @@ import { describeHubError } from './link-tools.js'
 import { buildSessionPayload } from './link-session-payload.js'
 import { PANE_ID } from './link-state-refs.js'
 import { isOff } from './link-runtime.js'
+import { resolveStripId, isPersonOrigin, shortId } from './link-strip-selection.js'
+import { decideStripItem, showStripItem, oneLine } from './link-band.jsx'
 
 // $.state references: literal plugin/key, declared in each file that uses them.
 const OFF = /** @type {const} */ ({ plugin: 'sielay-link', key: 'off' })
@@ -18,6 +20,9 @@ const HELP = [
   '  /link off | on      apaga o enciende sielay-link en esta sesión',
   '  /link peers         sesiones con las que puedes hablar',
   '  /link pair <slot>   empareja esta máquina (el slot lo crea un admin)',
+  '  /link show <id>     abre el mensaje completo de la franja en el panel',
+  '  /link accept <id>   acepta ese mensaje de la franja (solo tecleado por ti)',
+  '  /link reject <id>   lo rechaza',
 ].join('\n')
 
 /** @typedef {import('claude-code').EngineInterface} Engine */
@@ -50,9 +55,10 @@ async function statusText($, rt) {
 
 /**
  * @param {Engine} $ @param {Runtime} rt @param {string} args
+ * @param {unknown} origin the command's PromptOrigin: deciding needs the person's own Enter
  * @returns {Promise<{ text: string }>}
  */
-export async function runLinkCommand($, rt, args) {
+export async function runLinkCommand($, rt, args, origin) {
   const [sub = '', ...rest] = args.trim().split(/\s+/).filter(Boolean)
   const arg = rest.join(' ')
 
@@ -80,11 +86,25 @@ export async function runLinkCommand($, rt, args) {
       const { peers = [] } = await rt.client.peers()
       if (!peers.length) return { text: 'No tienes pares todavía. Un admin los crea en el dashboard.' }
       /** @param {{ address: string, online?: boolean, mode?: string, state?: string, project?: string|null }} p */
-      const line = p => `${p.online ? '●' : '○'} ${p.address}  ${p.mode ?? '?'} · ${p.state ?? '?'}${p.project ? ` · ${p.project}` : ''}`
+      const line = p => `${p.online ? '●' : '○'} ${oneLine(p.address, 120)}  ${oneLine(p.mode ?? '?', 30)} · ${oneLine(p.state ?? '?', 20)}${p.project ? ` · ${oneLine(p.project, 80)}` : ''}`
       return { text: peers.map(line).join('\n') }
     } catch (err) {
       return { text: describeHubError(err) }
     }
+  }
+  if (sub === 'show' || sub === 'accept' || sub === 'reject') {
+    const { value: strip = [] } = await $.state.get(STRIP)
+    const found = resolveStripId(strip, arg)
+    if (!found.id) return { text: found.error ?? 'No encontrado.' }
+    if (sub === 'show') {
+      await showStripItem($, found.id)
+      return { text: `Mensaje ${shortId(found.id)} abierto en el panel.` }
+    }
+    if (!isPersonOrigin(origin)) {
+      return { text: 'Solo la persona en esta terminal puede aceptar o rechazar, tecleando el comando.' }
+    }
+    const r = await decideStripItem($, rt, found.id, sub)
+    return { text: r.ok ? `Mensaje ${shortId(found.id)} ${sub === 'accept' ? 'aceptado y entregado' : 'rechazado'}.` : `sielay-link: ${r.error}` }
   }
   if (sub === 'pair') {
     if (!rt.pairing) return { text: `sielay-link no arrancó: ${rt.hubError ?? 'revisa /link'}` }

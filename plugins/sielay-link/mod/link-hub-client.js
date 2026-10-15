@@ -3,8 +3,10 @@
 //
 // Security (public plugin running inside bypass sessions):
 // - the hub origin is allow-listed; any other `hub_url` is refused at load;
-// - redirects are never followed (a 3xx is an error), so a token never
-//   leaves the allow-listed origin;
+// - redirects: `$.http.fetch` follows them itself (up to 5) and, across
+//   origins, drops every header but accept/content-type, so the Bearer token
+//   never reaches another origin. A 3xx that does reach this code (a build
+//   that stops following) is treated as an error, never followed by hand;
 // - 503 pauses, 401 stops, 429 backs off: the caller reads `HubError.kind`.
 
 export const ALLOWED_HUB_ORIGINS = Object.freeze(['https://sielay.cloud', 'https://sielay.vostec.mx'])
@@ -112,7 +114,7 @@ export function createHubClient($, { hubUrl, token }) {
     }
 
     if (res.status >= 300 && res.status < 400) {
-      throw new HubError('redirect', `hub answered a redirect (${res.status}); not followed`, { status: res.status })
+      throw new HubError('redirect', `hub answered a redirect (${res.status}); not followed by the client`, { status: res.status })
     }
     /** @type {any} */
     let data

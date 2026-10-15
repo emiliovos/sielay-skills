@@ -49,5 +49,41 @@ fresh; json_set 'pj["userConfig"]["hub_url"]["default"] = "https://evil.example"
 fresh; json_set 'pj["userConfig"]["extra"] = {"type": "string"}';                                   expect_fail "extra userConfig field"
 fresh; echo '{"modules": ["../mod/other.js"]}' > "$TMP/p/hooks/hooks.json";                         expect_fail "hooks.json rewired"
 
+# Evasions from the PR #10 review.
+fresh; plant mod/link-runtime.js "export async function ev1(\$) { const s = ' //'; return \$.process.run(['id']) }"; expect_fail "a string holding // cannot hide a call"
+fresh; plant mod/link-runtime.js "export async function ev2(\$) { const u = \`a\${'//'}b\`; return \$.process.run(['id']) }"; expect_fail "a template holding // cannot hide a call"
+fresh; plant mod/link-runtime.js 'export async function ev3($) { return $["process"].run(["id"]) }';   expect_fail "bracket access on \$"
+fresh; plant mod/link-runtime.js 'export async function ev4($) { return $.http["fetch"]("x") }';       expect_fail "bracket access on a noun"
+fresh; plant mod/link-runtime.js 'export async function ev5($) { const { run } = $.process; return run(["id"]) }'; expect_fail "destructured noun"
+fresh; plant mod/link-runtime.js 'export async function ev6($) { const p = $.process; return p }';    expect_fail "aliased noun"
+fresh; plant mod/link-runtime.js 'export async function ev7($) { await $.fs.write("/x", "y") }';        expect_fail "\$.fs.write"
+fresh; plant mod/link-runtime.js 'export const ev8 = { socketPath: "/x" }';                              expect_fail "socketPath"
+
+# Engine call list (--engine): calls no text rule knows, read by the engine's parser.
+if command -v claude >/dev/null 2>&1; then
+  expect_fail_engine() { # name
+    cases=$((cases+1))
+    if bash "$GATE" --engine "$TMP/p" >/dev/null 2>&1; then echo "FAIL $1 (gate passed)"; fails=$((fails+1)); else echo "ok   $1"; fi
+  }
+  fresh; cases=$((cases+1))
+  if bash "$GATE" --engine "$TMP/p" >/dev/null 2>&1; then echo "ok   clean copy passes --engine"; else echo "FAIL clean copy --engine"; fails=$((fails+1)); fi
+  # The engine lists only calls reachable from a hook (code that can run), so
+  # each case is planted inside startLink, which session.start reaches.
+  plant_in_start() { python3 - "$TMP/p/mod/link-runtime.js" "$1" <<'PY2'
+import sys
+path, line = sys.argv[1], sys.argv[2]
+s = open(path).read()
+head = "export async function startLink($, rt) {\n"
+assert head in s
+open(path, "w").write(s.replace(head, head + "  " + line + "\n", 1))
+PY2
+  }
+  fresh; plant_in_start 'await $.audio.speak("hola")';                     expect_fail_engine "--engine: a \$ call off the allow-list"
+  fresh; plant_in_start 'await $.agent.list()';                            expect_fail_engine "--engine: another \$ call off the allow-list"
+  fresh; plant_in_start 'await $.prompt.submit({ text: "x" })';             expect_fail_engine "--engine: prompt.submit outside the adapter"
+else
+  echo "skip --engine cases (claude not on the PATH)"
+fi
+
 echo "gate cases: $((cases-fails))/$cases ok"
 [ "$fails" -eq 0 ]

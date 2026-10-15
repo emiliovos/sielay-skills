@@ -22,11 +22,12 @@ La entrada del marketplace va fijada al tag `sielay-link-v1.0.0`. Solo cambia po
 1. Un admin crea un **slot** en el dashboard (`/admin/link`). El slot fija la persona y la máquina, por ejemplo `ana-laptop`.
 2. En la sesión: `/link pair <slot>`. El panel muestra un código.
 3. El admin aprueba ese código en el dashboard, con 2FA.
-4. El panel muestra el **token una sola vez** y luego lo guarda en `~/.claude/sielay-link/token`, con permisos 0600. El token viaja por stdin, nunca en la línea de comandos.
-   - Si no se pudo escribir el archivo, el token sigue en pantalla: pégalo en `/plugin` → sielay-link → `link_token`.
+4. El plugin guarda el token en `~/.claude/sielay-link/token`, con permisos 0600, dentro de una carpeta 0700. El token viaja por stdin, nunca en la línea de comandos.
+   - Si el archivo se escribió, el panel dice «Emparejado» y el token ya no se muestra.
+   - Si no se pudo escribir, el token queda en pantalla 5 minutos para que lo copies y lo pegues en `/plugin` → sielay-link → `link_token`. Después se oculta.
    - Si `link_token` tiene un valor, gana sobre el archivo.
 
-El token nunca se guarda en `$.store` ni en un campo de configuración en claro.
+El token nunca se guarda en `$.store` ni en un campo de configuración en claro. Solo pasa por el estado de la sesión mientras se escribe el archivo, o durante esos 5 minutos si falla, porque ese estado lo puede leer cualquier plugin.
 
 ## Nombre de la sesión
 
@@ -50,6 +51,8 @@ Si otra carpeta ya usa ese nombre y está en línea, el hub te asigna `nombre-2`
 | `/link off` / `on` | Apaga o enciende la recepción en esta sesión. `SIELAY_LINK_OFF=1 claude` lo apaga del todo, sin herramientas |
 | `/link peers` | Sesiones con las que puedes hablar (solo pares) |
 | `/link pair <slot>` | Empareja la máquina |
+| `/link show <id>` | Abre en el panel el mensaje completo de la franja con ese id |
+| `/link accept <id>` / `reject <id>` | Acepta o rechaza ese mensaje. Solo cuenta si lo tecleas tú en el prompt |
 | `link_send`, `link_reply`, `link_peers` | Las herramientas del modelo. **No existe ninguna para aceptar, rechazar ni liberar** |
 
 Para que el modelo las use sin preguntarte cada vez, agrégalas a `permissions.allow` en `~/.claude/settings.json`:
@@ -66,22 +69,33 @@ Un mensaje entra a tu sesión sin preguntar solo si se cumple todo esto:
 - el remitente estaba en `bypassPermissions` al enviar;
 - tu sesión está en `bypassPermissions` y esa lectura está **fresca** al momento de entregar.
 
-Cualquier otro mensaje va a la **franja** de arriba del prompt: «link: N en franja», con **[1 Aceptar]** y **[2 Rechazar]**.
+Cualquier otro mensaje va a la **franja** de arriba del prompt. La franja muestra «link: N en franja», el id corto del mensaje más antiguo (8 caracteres), quién lo manda y su primera línea. Abajo están **[Ver completo]**, **[Aceptar `id`]** y **[Rechazar]**.
 
-- Para usar las teclas, enfoca la franja (ctrl+x tab, o un clic) y pulsa 1 o 2.
-- Aceptar es tu confirmación: el mensaje se entrega sea cual sea tu modo.
-- «Liberar» desde el dashboard nunca ejecuta nada: solo manda el mensaje a tu franja.
+- **Lee antes de aceptar.** «Ver completo» o `/link show <id>` abre el mensaje entero en el panel. Ahí también puedes aceptarlo o rechazarlo.
+- **Los botones no tienen tecla.** Un número tecleado en el prompt nunca acepta nada. Para usarlos, enfoca la franja con ctrl+x tab, muévete con las flechas y pulsa Enter, o haz clic.
+- **Para teclearlo:** `/link accept <id>` o `/link reject <id>`, con el id que muestra la franja. El comando solo cuenta si lo tecleas tú; si lo lanza otro plugin o el modelo, se rechaza.
+- **Siempre actúa sobre el id que ves.** La franja respeta el orden de llegada, así que un mensaje nuevo no reemplaza al que tienes en pantalla.
+- **Aceptar es tu confirmación:** el mensaje se entrega sea cual sea tu modo. Si la entrega falla después de aceptar, el plugin la reintenta en cada poll, también si se recarga. Si cierras la sesión antes de que entre, depende del hub volver a entregarlo.
+- **Liberar no ejecuta:** «Liberar» desde el dashboard solo manda el mensaje a tu franja.
 
 **Frescura del modo.** Claude Code solo informa el modo de permisos en los hooks de un turno: al enviar un prompt, al usar una herramienta y al terminar. Con la sesión en idle no hay lectura en vivo: un shift+tab no avisa a nadie. La regla vigente (`IDLE_POLICY` en `mod/link-mode-freshness.js`) es «último modo visto»:
 
 - si al terminar el último turno la sesión estaba en bypass, sigue contando como bypass fresco hasta **12 h** en idle;
 - pasado ese tiempo, o con otro modo, el mensaje va a la franja.
 
+El fin de turno se toma de `turn.complete`, que también llega cuando interrumpes con Esc o cuando un error de API corta el turno; `classic.Stop` no llega en esos casos. El tope de 12 h vale en todos los casos: una lectura más vieja nunca cuenta como fresca, aunque el turno parezca seguir abierto.
+
 El hub recibe en cada poll el modo, si está fresco y su antigüedad (`mode_age_s`), para mostrarlo en el dashboard. Al arrancar, el modo es desconocido hasta el primer prompt.
 
 **Organizaciones.** Donde una organización gestiona Claude Code, los hooks `classic.*` de un plugin instalado por la persona no corren. Ahí el modo queda desconocido y no hay auto-ejecución: todo va a la franja.
 
 ## Cómo entra un mensaje
+
+El cuerpo se normaliza antes de entrar y antes de mostrarse:
+
+- se quitan las secuencias de terminal (ANSI y OSC), los caracteres de control y los invisibles o bidi;
+- se aplica NFKC;
+- se rompe cualquier etiqueta `<…` y cualquier `[sielay…`, para que un cuerpo no pueda falsificar el encabezado ni una etiqueta del sistema.
 
 El encabezado es:
 
@@ -102,13 +116,15 @@ El encabezado es:
 
 - **Lista permitida del hub:** `hub_url` solo acepta `https://sielay.cloud` o `https://sielay.vostec.mx`.
   - Cualquier otro valor se rechaza al cargar.
-  - Las redirecciones nunca se siguen, así que el token no sale de esos orígenes.
+  - Las redirecciones las sigue Claude Code, no el plugin. Entre orígenes distintos quita todas las cabeceras salvo accept y content-type, así que el token no sale de esos orígenes.
 - **Red y procesos acotados:** solo `mod/link-hub-client.js` hace peticiones de red, y solo `mod/link-delivery-adapter.js` corre procesos del sistema: Node para el socket, `sh` para el archivo del token, y `tmux` y `hostname` para el nombre.
-- **El CI lo impide.** `tools/check-sielay-link.sh` exige todo lo anterior y además prohíbe:
+- **El CI lo revisa en cada PR.** `tools/check-sielay-link.sh` exige todo lo anterior y además prohíbe:
   - `asUser`, `eval` y URL fuera de la lista;
   - tokens escritos en el código;
   - que el token se guarde en `$.store`.
-- **Revisión obligatoria:** CODEOWNERS pide la revisión del dueño para cada cambio del plugin.
+
+  Es defensa en profundidad, no una prueba. Las reglas de texto se pueden esquivar con código escrito a propósito. Por eso el CI también usa la lista de llamadas a `$` que reporta el parser de Claude Code, y la compara con una lista permitida exacta.
+- **Dueño:** CODEOWNERS nombra al dueño del plugin y de las piezas que lo protegen. La versión instalada solo cambia cuando la entrada del marketplace apunta a un tag nuevo.
 - **Apagado de emergencia:** `SIELAY_LINK_OFF=1`. Para revocar una máquina, el admin lo hace en el dashboard.
 
 ## Desinstalar

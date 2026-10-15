@@ -4,6 +4,7 @@
 // Pure (no `$`): the mod passes the hub client and session readers in.
 
 import { normalizeName } from './link-session-name-resolution.js'
+import { neutralizeBody } from './link-inbound-framing.js'
 
 const MAX_BODY_BYTES = 16 * 1024
 
@@ -138,7 +139,13 @@ export async function runLinkTool(name, input, deps) {
   if (!['link_send', 'link_reply', 'link_peers'].includes(name)) return { deny: `herramienta desconocida: ${name}` }
   if (!deps.client) return { deny: 'sielay-link no está emparejado en esta máquina: corre /link pair <slot> (el slot lo crea un admin).' }
   try {
-    if (name === 'link_peers') return { result: asText(await deps.client.peers()) }
+    if (name === 'link_peers') {
+      const answer = await deps.client.peers()
+      const peers = Array.isArray(answer?.peers) ? answer.peers : []
+      /** @param {Record<string, unknown>} p */
+      const clean = p => Object.fromEntries(Object.entries(p).map(([k, v]) => [k, typeof v === 'string' ? neutralizeBody(v).slice(0, 200) : v]))
+      return { result: asText({ peers: peers.map(clean) }) }
+    }
 
     const textError = checkText(input.text)
     if (textError) return { deny: textError }

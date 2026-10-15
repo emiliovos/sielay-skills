@@ -88,8 +88,9 @@ export function createDeliveryAdapter($, { helperPath }) {
     },
 
     /**
-     * Writes the link token to a 0600 file. The token travels on stdin, never
-     * in argv, and the file is created under umask 077.
+     * Writes the link token to a 0600 file in a 0700 folder. The token travels
+     * on stdin, never in argv; an older file is removed first, so the token is
+     * never written into a file that already had wider permissions.
      *
      * @param {string} path absolute path
      * @param {string} token
@@ -97,7 +98,7 @@ export function createDeliveryAdapter($, { helperPath }) {
     async writeTokenFile(path, token) {
       if (!path.startsWith('/') && !/^[A-Za-z]:[\\/]/.test(path)) throw new Error('token path must be absolute')
       const r = await $.process.run(
-        ['sh', '-c', 'umask 077; mkdir -p "$(dirname "$1")" && cat > "$1" && chmod 600 "$1"', '_', path],
+        ['sh', '-c', 'umask 077; d="$(dirname "$1")"; mkdir -p "$d" && chmod 700 "$d" && rm -f "$1" && cat > "$1" && chmod 600 "$1"', '_', path],
         { stdin: token, timeoutMs: 10_000 },
       )
       if (r.exitCode !== 0) throw new Error(`could not write the token file (exit ${r.exitCode})`)

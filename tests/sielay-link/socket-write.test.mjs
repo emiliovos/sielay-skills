@@ -56,12 +56,13 @@ test('writes exactly two lines, auth first, token from the environment', async (
   })
 })
 
-test('token and socket may come on stdin instead of the environment', async () => {
+test('a socket or token on stdin is ignored: only the environment counts', async () => {
   await withSocket(async (path, received) => {
     const r = await runHelper(JSON.stringify({ content: 'x', socket: path, token: FAKE_TOKEN }), {})
-    assert.equal(r.code, 0)
+    assert.equal(r.code, 2)
+    assert.equal(r.report.code, 'no_socket')
     await new Promise(res => setTimeout(res, 20))
-    assert.equal(JSON.parse(received.join('').split('\n')[0]).token, FAKE_TOKEN)
+    assert.equal(received.length, 0, 'nothing was written to the socket named on stdin')
   })
 })
 

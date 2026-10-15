@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { createPairingFlow } from '../../plugins/sielay-link/mod/link-pairing.js'
+import { createPairingFlow, TOKEN_SHOWN_MS } from '../../plugins/sielay-link/mod/link-pairing.js'
 
 const START = { device_code: 'dev-code', user_code: 'ABCD-1234', verification_uri: 'https://sielay.cloud/enroll?link=7', expires_in: 600, interval: 5 }
 
@@ -85,6 +85,8 @@ test('the token is on screen BEFORE it is written, then saved and activated', as
   assert.ok(shownAt >= 0 && writeAt > shownAt, 'shown first, then written')
   const final = h.events.filter(e => e[0] === 'view').at(-1)[1]
   assert.equal(final.saved, 'file')
+  assert.equal(final.token, undefined, 'once the file is written the token leaves the view (and $.state)')
+  assert.ok(!JSON.stringify(final).includes('tok-123'))
   assert.deepEqual(h.events.at(-1), ['activate', 'tok-123', { address_prefix: 'ana/laptop', hub_url: 'https://sielay.cloud' }])
 })
 
@@ -97,6 +99,13 @@ test('when the file cannot be written the token stays on screen with the /plugin
   assert.equal(final.saved, 'failed')
   assert.match(final.note, /\/plugin/)
   assert.ok(h.events.some(e => e[0] === 'activate'), 'still usable for this session')
+  // It is cleared from the view after a few minutes even if nobody hides it.
+  assert.equal(h.timers.length, 1)
+  assert.equal(h.timers[0].ms, TOKEN_SHOWN_MS)
+  await h.fire()
+  const cleared = h.events.filter(e => e[0] === 'view').at(-1)[1]
+  assert.equal(cleared.token, undefined)
+  assert.ok(!JSON.stringify(cleared).includes('tok-9'))
 })
 
 test('a verification link outside the hub origin is not shown', async () => {

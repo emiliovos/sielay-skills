@@ -98,7 +98,7 @@ test('a call without a token fails before any request', async () => {
   assert.equal(f.calls.length, 0)
 })
 
-test('a redirect is never followed: cross-origin and same-origin both fail', async () => {
+test('a 3xx that reaches the client is an error, never followed by hand', async () => {
   for (const location of ['https://evil.example/api/link/poll', 'https://sielay.cloud/elsewhere']) {
     const client = createHubClient({ hubUrl: undefined, token: TOKEN, http: fakeFetch(() => ({ status: 301, headers: { location } })) })
     await assert.rejects(client.poll({}), err => err.kind === 'redirect' && err.status === 301)

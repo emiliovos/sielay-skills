@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { createPollLoop, WAIT_S, PAUSE_MS, OFF_RECHECK_MS } from '../../plugins/sielay-link/mod/link-poll-loop.js'
+import { createPollLoop, WAIT_S, PAUSE_MS, OFF_RECHECK_MS, MIN_EMPTY_POLL_MS } from '../../plugins/sielay-link/mod/link-poll-loop.js'
 import { createInboundHandler } from '../../plugins/sielay-link/mod/link-inbound-handler.js'
 import { HubError } from '../../plugins/sielay-link/mod/link-hub-client.js'
 
@@ -91,7 +91,7 @@ test('the loop survives an exception and backs off', async () => {
   await h.step()
   assert.equal(h.timers[0].ms, 2000)
   await h.step()
-  assert.equal(h.timers[0].ms, 0, 'success resets the backoff')
+  assert.equal(h.timers[0].ms, MIN_EMPTY_POLL_MS, 'success resets the backoff (an empty fast answer waits the floor)')
   assert.equal(h.statuses.at(-1), 'online')
 })
 
@@ -173,4 +173,42 @@ test('poll_after_ms is honoured and capped at 60 s', async () => {
   h.loop.start()
   await h.step()
   assert.equal(h.timers[0].ms, 60_000)
+})
+
+test('start() while a tick is in flight never kills the loop (single loop, no silent death)', async () => {
+  const timers = []
+  let release
+  let polls = 0
+  const loop = createPollLoop({
+    schedule: (ms, fn) => timers.push({ ms, fn }),
+    getClient: () => ({ poll: async () => (polls++, { messages: [], poll_after_ms: 0 }) }),
+    buildSession: async () => ({ instance_id: 'i' }),
+    handler: { handlePoll: async () => [] },
+    isOff: () => new Promise(r => (release = r)),
+    now: () => 0,
+  })
+  loop.start()
+  timers.shift().fn() // generation 1 is running, waiting on isOff
+  loop.start()
+  timers.shift().fn() // generation 2 finds a tick running
+  release(false)
+  await new Promise(r => setTimeout(r, 20))
+  assert.equal(timers.length, 1, 'exactly one timer queued: the loop is alive and single')
+})
+
+test('an empty answer that came back fast waits at least the floor before the next poll', async () => {
+  const timers = []
+  let t = 0
+  const loop = createPollLoop({
+    schedule: (ms, fn) => timers.push({ ms, fn }),
+    getClient: () => ({ poll: async () => ((t += 50), { messages: [], strip: [], poll_after_ms: 0 }) }),
+    buildSession: async () => ({ instance_id: 'i' }),
+    handler: { handlePoll: async () => [] },
+    isOff: async () => false,
+    now: () => t,
+  })
+  loop.start()
+  timers.shift().fn()
+  await new Promise(r => setTimeout(r, 10))
+  assert.equal(timers[0].ms, MIN_EMPTY_POLL_MS)
 })

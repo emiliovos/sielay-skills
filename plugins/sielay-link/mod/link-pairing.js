@@ -5,14 +5,19 @@
 // Token handling (the token is shown once, so it must never be lost):
 // 1. the token is put on screen (pane view) FIRST;
 // 2. then written to a 0600 file by the adapter (stdin, never argv);
-// 3. if that fails it stays on screen with the `/plugin` paste fallback.
+// 3. once written it leaves the view at once ($.state is readable by any
+//    plugin, so it is only there while it has to be);
+// 4. if the write fails it stays on screen with the `/plugin` paste
+//    fallback for TOKEN_SHOWN_MS, then leaves the view too.
 // It is never written to `$.store` or to a plain config field.
 
 export const SLOT_PATTERN = /^[a-z0-9-]{1,60}$/
+/** How long a token that could not be saved stays on screen for copying. */
+export const TOKEN_SHOWN_MS = 5 * 60_000
 
 /**
  * @typedef {{ phase: 'waiting', slot: string, user_code: string, verification_uri?: string, expires_at: number }
- *   | { phase: 'done', slot: string, token: string, address_prefix?: string, saved: 'saving'|'file'|'failed', note: string }
+ *   | { phase: 'done', slot: string, token?: string, address_prefix?: string, saved: 'saving'|'file'|'failed', note: string }
  *   | { phase: 'error', slot: string, message: string }} PairingView
  */
 
@@ -95,17 +100,20 @@ export function createPairingFlow(deps) {
    * @param {{ token: string, address_prefix?: string, hub_url?: string }} r
    */
   async function finish(slot, r) {
-    const base = { phase: /** @type {const} */ ('done'), slot, token: r.token, address_prefix: r.address_prefix }
-    await deps.setView({ ...base, saved: 'saving', note: 'Copia este token ahora: no se vuelve a mostrar. Guardándolo…' })
-    /** @type {PairingView} */
-    let view
+    const gen = generation
+    const base = { phase: /** @type {const} */ ('done'), slot, address_prefix: r.address_prefix }
+    await deps.setView({ ...base, token: r.token, saved: 'saving', note: 'Guardando el token…' })
     try {
       await deps.writeTokenFile(r.token)
-      view = { ...base, saved: 'file', note: `Guardado en ${deps.tokenPath} (permisos 0600).` }
+      await deps.setView({ ...base, saved: 'file', note: `Emparejado. Token guardado en ${deps.tokenPath} (permisos 0600); ya no se muestra.` })
     } catch {
-      view = { ...base, saved: 'failed', note: 'No se pudo guardar en archivo: pégalo en /plugin → sielay-link → link_token. Sirve para esta sesión mientras tanto.' }
+      const note = 'No se pudo guardar en archivo: cópialo ahora y pégalo en /plugin → sielay-link → link_token. Sirve para esta sesión mientras tanto; se oculta en 5 min.'
+      await deps.setView({ ...base, token: r.token, saved: 'failed', note })
+      deps.schedule(TOKEN_SHOWN_MS, () => {
+        if (gen !== generation) return
+        void deps.setView({ ...base, saved: 'failed', note: 'El token ya no se muestra. Si no lo copiaste, corre /link pair otra vez.' })
+      })
     }
-    await deps.setView(view)
     await deps.onToken(r.token, { address_prefix: r.address_prefix, hub_url: r.hub_url })
   }
 

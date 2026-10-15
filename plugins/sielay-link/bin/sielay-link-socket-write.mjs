@@ -1,13 +1,12 @@
 #!/usr/bin/env node
 // sielay-link socket writer. Run by the mod with `$.process.run`, never by hand.
 //
-// Reads ONE JSON line on stdin: {"content": "<framed text>"} (tests may add
-// "socket" and "token"). Writes exactly two NDJSON lines to this session's
-// inbox socket, auth first:
+// Reads ONE JSON line on stdin: {"content": "<framed text>"}. Writes exactly
+// two NDJSON lines to this session's inbox socket, auth first:
 //   {"type":"auth","token":<CLAUDE_CODE_MESSAGING_TOKEN>}
 //   {"type":"user","message":{"role":"user","content":<content>}}
-// The socket and its token come from the environment the session hands its
-// children; the token is never read from argv and never printed. Prints one
+// The socket and its token come only from the environment the session hands
+// its children (never from stdin or argv), and the token is never printed. Prints one
 // JSON status line. Exit codes: 0 written, 1 socket error, 2 no socket,
 // 3 no token, 4 bad input.
 import net from 'node:net'
@@ -31,7 +30,7 @@ process.stdin.on('data', chunk => {
   }
 })
 process.stdin.on('end', () => {
-  /** @type {{ content?: unknown, socket?: unknown, token?: unknown }} */
+  /** @type {{ content?: unknown }} */
   let msg
   try {
     msg = JSON.parse(input.trim())
@@ -41,8 +40,8 @@ process.stdin.on('end', () => {
   if (typeof msg?.content !== 'string' || msg.content === '') {
     return finish(4, { ok: false, code: 'bad_input', err: 'content must be a non-empty string' })
   }
-  const socket = typeof msg.socket === 'string' && msg.socket ? msg.socket : process.env.CLAUDE_CODE_MESSAGING_SOCKET
-  const token = typeof msg.token === 'string' && msg.token ? msg.token : process.env.CLAUDE_CODE_MESSAGING_TOKEN
+  const socket = process.env.CLAUDE_CODE_MESSAGING_SOCKET
+  const token = process.env.CLAUDE_CODE_MESSAGING_TOKEN
   if (!socket) return finish(2, { ok: false, code: 'no_socket', err: 'CLAUDE_CODE_MESSAGING_SOCKET is not set' })
   if (!token) return finish(3, { ok: false, code: 'no_token', err: 'CLAUDE_CODE_MESSAGING_TOKEN is not set' })
 

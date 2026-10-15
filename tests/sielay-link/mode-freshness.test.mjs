@@ -88,3 +88,25 @@ test('an unknown policy falls back to strict (fail closed)', () => {
   const s = modeState({ samples: [bypass(1, 'Stop')], lastStopAt: 1, now: 2, policy: 'whatever' })
   assert.equal(s.fresh, false)
 })
+
+// A turn that ends without a Stop (Esc, API error) must not stay fresh forever.
+import { MODE_FRESH_MAX_MS } from '../../plugins/sielay-link/mod/link-mode-freshness.js'
+
+for (const policy of [IDLE_POLICY_STRICT, IDLE_POLICY_LAST_SEEN]) {
+  test(`[${policy}] a "running" turn with no Stop is capped at 12 h`, () => {
+    const within = modeState({ samples: [bypass(0, 'UserPromptSubmit')], lastStopAt: null, now: MODE_FRESH_MAX_MS, policy })
+    assert.equal(within.fresh, true)
+    const later = modeState({ samples: [bypass(0, 'UserPromptSubmit')], lastStopAt: null, now: 13 * H, policy })
+    assert.equal(later.fresh, false)
+    assert.equal(later.state, 'unknown', 'a turn silent for 12 h is not reported as working')
+  })
+
+  test(`[${policy}] the review probe: a sample after an older Stop, 48 h later, is not fresh`, () => {
+    const s = modeState({ samples: [bypass(10, 'PostToolUse')], lastStopAt: 5, now: 48 * H, policy })
+    assert.equal(s.fresh, false)
+  })
+}
+
+test('the 12 h cap is one constant shared by both branches', () => {
+  assert.equal(MODE_FRESH_MAX_MS, IDLE_FRESH_MAX_MS)
+})

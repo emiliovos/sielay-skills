@@ -5,31 +5,31 @@ import { shouldInject, onStripAccept, onStripReject } from '../../plugins/sielay
 const fresh = { mode: 'bypassPermissions', fresh: true }
 
 test('run=1 with fresh bypass injects', () => {
-  assert.equal(shouldInject({ delivery: { run: 1 }, mode: fresh }), true)
+  assert.equal(shouldInject({ delivery: { run: 1, gate: 'auto' }, mode: fresh }), true)
 })
 
 test('run=1 with stale bypass goes to the strip', () => {
-  assert.equal(shouldInject({ delivery: { run: 1 }, mode: { mode: 'bypassPermissions', fresh: false } }), false)
+  assert.equal(shouldInject({ delivery: { run: 1, gate: 'auto' }, mode: { mode: 'bypassPermissions', fresh: false } }), false)
 })
 
 for (const mode of ['default', 'auto', 'acceptEdits', 'plan', 'unknown']) {
   test(`run=1 in ${mode} goes to the strip`, () => {
-    assert.equal(shouldInject({ delivery: { run: 1 }, mode: { mode, fresh: true } }), false)
+    assert.equal(shouldInject({ delivery: { run: 1, gate: 'auto' }, mode: { mode, fresh: true } }), false)
   })
 }
 
 test('run=0 goes to the strip even in fresh bypass', () => {
-  assert.equal(shouldInject({ delivery: { run: 0 }, mode: fresh }), false)
+  assert.equal(shouldInject({ delivery: { run: 0, gate: 'auto' }, mode: fresh }), false)
 })
 
 test('a truthy run that is not exactly 1 does not inject', () => {
   for (const run of ['1', true, 2, undefined, null]) {
-    assert.equal(shouldInject({ delivery: { run }, mode: fresh }), false, String(run))
+    assert.equal(shouldInject({ delivery: { run, gate: 'auto' }, mode: fresh }), false, String(run))
   }
 })
 
 test('fresh must be exactly true', () => {
-  assert.equal(shouldInject({ delivery: { run: 1 }, mode: { mode: 'bypassPermissions', fresh: 1 } }), false)
+  assert.equal(shouldInject({ delivery: { run: 1, gate: 'auto' }, mode: { mode: 'bypassPermissions', fresh: 1 } }), false)
 })
 
 test('Accept in the strip decides accepted and injects, whatever the mode', () => {
@@ -38,4 +38,10 @@ test('Accept in the strip decides accepted and injects, whatever the mode', () =
 
 test('Reject in the strip decides rejected and never injects', () => {
   assert.deepEqual(onStripReject({ id: 'm1' }), { decide: 'rejected', inject: false })
+})
+
+test('run=1 with any gate other than auto never injects (defence against a hub bug)', () => {
+  for (const gate of ['strip', 'held', 'accepted', 'rejected', undefined]) {
+    assert.equal(shouldInject({ delivery: { run: 1, gate }, mode: fresh }), false, String(gate))
+  }
 })

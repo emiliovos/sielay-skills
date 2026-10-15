@@ -1,6 +1,6 @@
 // The client's run gate. Pure (no `$`).
 //
-// A peer's message runs on its own only when the hub said run=1 AND this
+// A peer's message runs on its own only when the hub said run=1 with gate=auto AND this
 // session is in bypassPermissions with a fresh reading, checked at the moment
 // of injecting (never from a value cached at poll time). Everything else goes
 // to the strip, where only a person's Accept keystroke runs it. A dashboard
@@ -8,11 +8,11 @@
 // decide or release anything.
 
 /**
- * @param {{ delivery: { run?: unknown }, mode: { mode?: unknown, fresh?: unknown } }} input
+ * @param {{ delivery: { run?: unknown, gate?: unknown }, mode: { mode?: unknown, fresh?: unknown } }} input
  * @returns {boolean}
  */
 export function shouldInject({ delivery, mode }) {
-  return delivery.run === 1 && mode.mode === 'bypassPermissions' && mode.fresh === true
+  return delivery.run === 1 && delivery.gate === 'auto' && mode.mode === 'bypassPermissions' && mode.fresh === true
 }
 
 /**

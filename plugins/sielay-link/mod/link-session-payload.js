@@ -33,6 +33,16 @@ export async function recordModeSample($, e, event) {
 }
 
 /**
+ * Stamps the end of a main-loop turn however it ended (answer, Esc, error).
+ * @param {Engine} $
+ * @param {{ agentId?: string }} e the `turn.complete` input
+ */
+export async function recordTurnEnd($, e) {
+  if (e.agentId) return
+  await $.state.set(LAST_STOP_AT, await $.clock.now())
+}
+
+/**
  * @param {Engine} $
  * @param {unknown} title the classic `session_title`
  */

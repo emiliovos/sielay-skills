@@ -32,7 +32,7 @@ export type LinkStatus = {
 
 export type LinkPairingView =
   | { phase: 'waiting'; slot: string; user_code: string; verification_uri?: string; expires_at: number }
-  | { phase: 'done'; slot: string; token: string; address_prefix?: string; saved: 'saving' | 'file' | 'failed'; note: string }
+  | { phase: 'done'; slot: string; token?: string; address_prefix?: string; saved: 'saving' | 'file' | 'failed'; note: string }
   | { phase: 'error'; slot: string; message: string }
 
 declare module 'claude-code' {
@@ -47,6 +47,7 @@ declare module 'claude-code' {
       pairing: LinkPairingView | null
       conversations: Record<string, string>
       notice: string | null
+      selected: string | null
     }
   }
 }

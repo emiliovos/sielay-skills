@@ -3,7 +3,7 @@
 // the work lives in the modules it imports, most of them pure.
 
 import { createRuntime, startLink, sessionPayload } from './link-runtime.js'
-import { recordModeSample, recordSessionTitle } from './link-session-payload.js'
+import { recordModeSample, recordSessionTitle, recordTurnEnd } from './link-session-payload.js'
 import { LINK_TOOL_SPECS, runLinkTool } from './link-tools.js'
 import { runLinkCommand } from './link-commands.js'
 import { PROMPT_FALLBACK_CONTEXT } from './link-inbound-framing.js'
@@ -104,6 +104,12 @@ export function register(on, options) {
     await recordModeSample($, e, 'Stop')
     return next(e)
   }).catch(passThrough)
+  // Every turn end, including Esc and API errors (which raise no classic Stop):
+  // without it an interrupted turn would look like it is still running.
+  on('turn.complete', async ($, e, next) => {
+    await recordTurnEnd($, e)
+    return next(e)
+  }).catch(passThrough)
   on('classic.SessionStart', async ($, e, next) => {
     await recordSessionTitle($, e.session_title)
     return next(e)
@@ -120,8 +126,8 @@ export function register(on, options) {
   on('tool.call', { tool: 'mcp__sielay-link__link_reply' }, ($, e) => callTool($, rt, 'link_reply', e)).catch(toolFailed)
   on('tool.call', { tool: 'mcp__sielay-link__link_peers' }, ($, e) => callTool($, rt, 'link_peers', e)).catch(toolFailed)
 
-  on('command.run', { command: 'link' }, async ($, e) => runLinkCommand($, rt, e.args))
+  on('command.run', { command: 'link' }, async ($, e) => runLinkCommand($, rt, e.args, e.origin))
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => (await renderBand($, e, rt)) ?? next(e))
-  on('ui.render', { component: 'Pane', requestId: 'sielay-link' }, async ($, e) => renderPane($, e))
+  on('ui.render', { component: 'Pane', requestId: 'sielay-link' }, async ($, e) => renderPane($, e, rt))
 }

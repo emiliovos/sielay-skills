@@ -8,16 +8,20 @@
 // - The run gate reads the mode at the moment of injecting.
 // - A delivery that does not run goes to the strip (ack `shown`); only Accept
 //   runs it: `/decide accepted`, inject, ack `injected`.
+// - An accepted message whose delivery failed is kept in the store (key
+//   `accepted.<instance_id>`) and retried on every poll until it lands, so a
+//   reload of the mod (or --resume, same session id) cannot lose it.
+// - The strip keeps arrival order: a newer message never takes the place of
+//   the one on screen.
 
 import { frameInbound } from './link-inbound-framing.js'
 import { shouldInject, onStripAccept, onStripReject } from './link-run-gate.js'
-
-const SEEN_MAX = 500
+import { createInboundStore } from './link-inbound-store.js'
 
 /**
  * @typedef {import('./link-inbound-framing.js').Delivery} Delivery
  * @typedef {{ id: string, outcome: 'injected'|'shown' }} Ack
- * @typedef {{ get: (key: string) => Promise<unknown>, set: (key: string, value: unknown) => Promise<void> }} StoreLike
+ * @typedef {import('./link-inbound-store.js').StoreLike} StoreLike
  */
 
 /**
@@ -48,30 +52,22 @@ export function createInboundHandler({ store, adapter, readMode, onStrip, onConv
   let serverStrip = []
   /** Ids decided at this terminal, hidden even while a stale poll still lists them. */
   const decided = new Set()
-  /** Accepted ids whose injection failed: a retry injects without deciding again. */
-  const acceptedPending = new Set()
+  /** First time each strip id was seen, for a stable arrival order. */
+  /** @type {Map<string, number>} */
+  const arrival = new Map()
+  let arrivals = 0
 
-  /** @param {string} instanceId */
-  const seenKey = instanceId => `seen.${instanceId}`
-
-  /** @param {string} instanceId @returns {Promise<Array<[string, 'injected'|'shown']>>} */
-  async function readSeen(instanceId) {
-    const v = await store.get(seenKey(instanceId))
-    return Array.isArray(v) ? v.filter(e => Array.isArray(e) && typeof e[0] === 'string') : []
-  }
-
-  /** @param {string} instanceId @param {string} id @param {'injected'|'shown'} outcome */
-  async function remember(instanceId, id, outcome) {
-    const seen = (await readSeen(instanceId)).filter(([sid]) => sid !== id)
-    seen.push([id, outcome])
-    await store.set(seenKey(instanceId), seen.slice(-SEEN_MAX))
-  }
+  const { readSeen, remember, readPending, updatePending } = createInboundStore(store)
 
   function currentStrip() {
     /** @type {Map<string, Delivery>} */
     const all = new Map()
-    for (const d of [...serverStrip, ...shownLocally.values()]) if (!decided.has(d.id)) all.set(d.id, d)
-    return [...all.values()]
+    for (const d of [...serverStrip, ...shownLocally.values()]) {
+      if (decided.has(d.id)) continue
+      if (!arrival.has(d.id)) arrival.set(d.id, (arrivals += 1))
+      all.set(d.id, d)
+    }
+    return [...all.values()].sort((a, b) => (arrival.get(a.id) ?? 0) - (arrival.get(b.id) ?? 0))
   }
 
   async function publish() {
@@ -95,6 +91,17 @@ export function createInboundHandler({ store, adapter, readMode, onStrip, onConv
     async handlePoll(instanceId, data) {
       /** @type {Ack[]} */
       const acks = []
+      for (const [id, d] of Object.entries(await readPending(instanceId))) {
+        try {
+          await inject(d)
+        } catch (err) {
+          log(`accepted ${id} still not delivered: ${err instanceof Error ? err.message : String(err)}`)
+          continue
+        }
+        await remember(instanceId, id, 'injected')
+        await updatePending(instanceId, p => void delete p[id])
+        acks.push({ id, outcome: 'injected' })
+      }
       const seen = new Map(await readSeen(instanceId))
       for (const d of (Array.isArray(data.messages) ? data.messages : []).filter(isDelivery)) {
         if (onConversation) await onConversation(d)
@@ -140,7 +147,7 @@ export function createInboundHandler({ store, adapter, readMode, onStrip, onConv
       const seenOutcome = new Map(await readSeen(ctx.instanceId)).get(id)
       if (seenOutcome !== 'injected') {
         const verdict = onStripAccept(d)
-        if (!acceptedPending.has(id)) {
+        if (!(await readPending(ctx.instanceId))[id]) {
           try {
             await ctx.decide(verdict.decide)
           } catch (err) {
@@ -149,16 +156,16 @@ export function createInboundHandler({ store, adapter, readMode, onStrip, onConv
             await publish()
             return { ok: false, error: `el hub no aceptó la decisión: ${err instanceof Error ? err.message : String(err)}` }
           }
-          acceptedPending.add(id)
+          await updatePending(ctx.instanceId, p => void (p[id] = d))
         }
         try {
           await inject(d)
         } catch (err) {
-          return { ok: false, error: `aceptado, pero no se pudo entregar: ${err instanceof Error ? err.message : String(err)}` }
+          return { ok: false, error: `aceptado, pero no se pudo entregar (se reintenta solo): ${err instanceof Error ? err.message : String(err)}` }
         }
         await remember(ctx.instanceId, id, 'injected')
+        await updatePending(ctx.instanceId, p => void delete p[id])
       }
-      acceptedPending.delete(id)
       decided.add(id)
       shownLocally.delete(id)
       await publish()

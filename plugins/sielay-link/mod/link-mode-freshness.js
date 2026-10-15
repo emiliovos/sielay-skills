@@ -16,8 +16,14 @@ export const IDLE_POLICY_LAST_SEEN = 'last-seen'
 /** The policy in force. Switching policies is this one line. */
 export const IDLE_POLICY = IDLE_POLICY_LAST_SEEN
 
-/** How long an idle session keeps its last seen mode under the last-seen policy. */
-export const IDLE_FRESH_MAX_MS = 12 * 60 * 60 * 1000
+/**
+ * The oldest a mode reading may be and still count as fresh, in every branch:
+ * idle under the last-seen policy, and a "running" turn too, since a turn
+ * that ends on Esc or an API error may leave no end mark at all.
+ */
+export const MODE_FRESH_MAX_MS = 12 * 60 * 60 * 1000
+/** The same cap, by the name the idle policy uses. */
+export const IDLE_FRESH_MAX_MS = MODE_FRESH_MAX_MS
 
 /**
  * @typedef {{ mode: string, at: number, event?: string }} ModeSample
@@ -39,8 +45,12 @@ function isSample(s) {
  *
  * - No sample: `unknown`, not fresh.
  * - A live source (none exists today; kept for a future build): fresh.
- * - The newest sample is newer than the last Stop: a turn is running, fresh.
+ * - Older than MODE_FRESH_MAX_MS: never fresh, whatever the branch.
+ * - The newest sample is newer than the last turn end: a turn is running, fresh.
  * - Otherwise the session is idle and the policy decides.
+ *
+ * `lastStopAt` is the last turn end the mod saw: classic Stop and
+ * `turn.complete`, which also fires for an aborted or failed turn.
  *
  * @param {{ samples: readonly unknown[], lastStopAt: number|null|undefined, liveSource?: string, now: number, policy?: string }} input
  * @returns {ModeState}
@@ -59,10 +69,13 @@ export function modeState({ samples, lastStopAt, liveSource, now, policy = IDLE_
 
   const ageMs = Math.max(0, now - latest.at)
   const state = stateOf(latest, lastStopAt)
+  if (ageMs > MODE_FRESH_MAX_MS) {
+    return { mode: latest.mode, fresh: false, state: state === 'working' ? 'unknown' : state, ageMs }
+  }
   if (state === 'working') return { mode: latest.mode, fresh: true, state, ageMs }
 
   const fresh =
-    policy === IDLE_POLICY_LAST_SEEN && latest.mode === 'bypassPermissions' && ageMs <= IDLE_FRESH_MAX_MS
+    policy === IDLE_POLICY_LAST_SEEN && latest.mode === 'bypassPermissions'
   return { mode: latest.mode, fresh, state, ageMs }
 }
 
