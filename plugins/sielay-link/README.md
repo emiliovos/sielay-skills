@@ -14,7 +14,7 @@ La entrada del marketplace va fijada al tag `sielay-link-v1.0.0`. Solo cambia po
 
 **Requisitos:**
 - **Claude Code 2.1.300.** La API de módulos es de acceso anticipado y cambia entre versiones. Antes de actualizar Claude Code, corre el smoke de abajo.
-- **Node 22 o más reciente** en el `PATH`, para el adaptador `socket`. Sin Node, los mensajes entran como prompt (modo de respaldo) y el plugin lo avisa.
+- **Node 20 o más reciente** en el `PATH`, para el adaptador `socket` (probado con v20 y v22; el escritor solo usa `node:net`). El plugin solo revisa que `node --version` corra: sin Node, los mensajes entran como prompt (modo de respaldo) y el plugin lo avisa.
 - **Linux o macOS** para el adaptador `socket`. En Windows no hay socket unix: se usa el modo `prompt`.
 
 ## Emparejar esta máquina
