@@ -10,7 +10,7 @@ Skills de uso diario de [sielay](https://sielay.cloud) para Claude Code. No nece
 claude plugin marketplace add emiliovos/sielay-skills && claude plugin install si@sielay
 ```
 
-Hoy el plugin trae una sola skill: `/si:checkpoint`. Si se agregan otras, se anuncian en la tabla de abajo y en el release correspondiente. Solo te llegan cuando corres `claude plugin update si@sielay`, nunca solas.
+El plugin trae dos skills: `/si:checkpoint` y `/si:build-auto`. Las que se agreguen se anuncian en la tabla de abajo y en el release correspondiente. Solo te llegan cuando corres `claude plugin update si@sielay`, nunca solas.
 
 Las skills quedan como `/si:<skill>`, por ejemplo `/si:checkpoint`. Conviven con cualquier skill local del mismo nombre en `~/.claude/skills/`.
 
@@ -132,5 +132,6 @@ Cada [release](https://github.com/emiliovos/sielay-skills/releases) trae un `.zi
 | Skill | Qué hace |
 |---|---|
 | `/si:checkpoint` | Cierre de sesión: journal, docs, commit, push y handoff para retomar en otra terminal |
+| `/si:build-auto` | Proyecto autónomo en 7 etapas: tú apruebas Frame, Evidencia y Plan; los agentes implementan, prueban, revisan y entregan hasta merge o producción por la compuerta de pruebas del repo. Funciona con PRs o con push directo a main; AgentKit (`/ak:*`) es recomendado, no obligatorio |
 | `si-auto` (plugin aparte) | Nota de sesión automática fuera del repo, entregada a la sesión siguiente |
 | `sielay-link` (plugin aparte) | Mensajes entre sesiones de Claude Code emparejadas por el hub de sielay, con franja para aceptar o rechazar |
