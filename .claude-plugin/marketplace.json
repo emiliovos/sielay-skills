@@ -6,7 +6,7 @@
     {
       "name": "si",
       "source": "./plugins/si",
-      "description": "Hoy trae una sola skill: /si:checkpoint (cierre de sesión con journal, docs, commit, push y handoff). Si se agregan skills, solo te llegan cuando corras claude plugin update si@sielay."
+      "description": "Trae dos skills: /si:checkpoint (cierre de sesión con journal, docs, commit, push y handoff) y /si:build-auto (lleva un proyecto de la idea a merge o producción en 7 etapas con 3 aprobaciones, por la compuerta de pruebas del repo). Las skills nuevas solo te llegan cuando corres claude plugin update si@sielay."
     },
     {
       "name": "si-auto",
