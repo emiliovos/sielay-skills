@@ -50,6 +50,8 @@ Si unos repos se pushean distinto que otros (por ejemplo, el repo del proyecto v
 - Push: rama+PR; pve2-docs, pve2-plans: main directo
 ```
 
+El modo `continuar` no usa el estado ni el push del contrato: no escribe bitácora ni docs, no pushea y siempre entrega el handoff en pantalla.
+
 Si la sesión arranca fuera de un repo (por ejemplo, en el home de un servidor que maneja varios proyectos), la skill lee el `CLAUDE.md` del directorio donde arrancó.
 
 Cada valor que pongas reemplaza al de por defecto, nunca se suma: con `Estado` en una ruta no se crean bitácoras ni `codebase-summary.md`, y el handoff va dentro de ese archivo salvo que pongas `Handoff: <ruta>`. Con `Handoff: estado` o `pantalla` no se crea `HANDOFF.md`. La skill nunca escribe rutas de solo lectura ni corre scripts de publicación o deploy.
@@ -131,7 +133,7 @@ Cada [release](https://github.com/emiliovos/sielay-skills/releases) trae un `.zi
 
 | Skill | Qué hace |
 |---|---|
-| `/si:checkpoint` | Cierre de sesión: journal, docs, commit, push y handoff para retomar en otra terminal |
+| `/si:checkpoint` | Cierre de sesión: journal, docs, commit, push y handoff para retomar en otra terminal. Con `/si:checkpoint continuar` solo hace commit local y deja el handoff en pantalla, para seguir la misma tarea tras `/clear` |
 | `/si:build-auto` | Proyecto autónomo en 7 etapas: tú apruebas Frame, Evidencia y Plan; los agentes implementan, prueban, revisan y entregan hasta merge o producción por la compuerta de pruebas del repo. Funciona con PRs o con push directo a main; AgentKit (`/ak:*`) es recomendado, no obligatorio |
 | `si-auto` (plugin aparte) | Nota de sesión automática fuera del repo, entregada a la sesión siguiente |
 | `sielay-link` (plugin aparte) | Mensajes entre sesiones de Claude Code emparejadas por el hub de sielay, con franja para aceptar o rechazar |
