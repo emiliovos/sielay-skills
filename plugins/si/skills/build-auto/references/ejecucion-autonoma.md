@@ -21,6 +21,7 @@ En `main directo` no hay ramas que mergear, pero el aislamiento por worktree y e
   - qué archivos leer y cuáles puede tocar;
   - los criterios de aceptación y los guardarraíles;
   - qué cifras reportar;
+  - dónde dejar borradores, prototipos y logs: un directorio desechable propio, fuera del repo, que reporta al terminar;
   - "no mergees, no empujes a main";
   - "si el trabajo sale de tus archivos o de los criterios, no lo hagas: descríbelo y termina con `BLOCKED` o `DONE_WITH_CONCERNS`";
   - que termine con `Status: DONE | DONE_WITH_CONCERNS | BLOCKED`.

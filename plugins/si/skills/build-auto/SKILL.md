@@ -11,7 +11,7 @@ metadata:
   deps: "git en el repo destino. Recomendado: AgentKit (skills /ak:*); sin él, cada etapa se hace con subagentes nativos. Opcional: /si:checkpoint para el cierre (--checkpoint)."
   installs: []
   risk: none
-  version: "1.2.0"
+  version: "1.2.1"
 ---
 
 # Build-auto: backbone de proyecto autónomo
@@ -68,7 +68,9 @@ Debajo de la ficha, en una lista de **hallazgos**, anota:
 - los que existen pero no hacen nada (stubs). Una compuerta que es un stub cuenta como "no existe todavía" para el plan;
 - las contradicciones entre lo que el repo declara y su estado real (por ejemplo, dice PRs en GitHub y `origin` es otra cosa). Pregunta cuál vale.
 
-Los reportes y planes van donde el repo los guarde. Si no declara un lugar, usa `plans/` (créalo) y dilo en la ficha.
+Los reportes y planes van donde el repo los guarde. Si no declara un lugar, usa `plans/` (créalo) y dilo en la ficha. Salvo que el repo diga otra cosa, se commitean con la entrega: en `rama+PR`, dentro del mismo PR; en `main directo`, en un commit `docs:` aparte.
+
+Si el objetivo cabe en uno o dos archivos y no tiene fases paralelas, sugiere `--chico` en el Frame.
 
 ## Contrato entre etapas
 Cada etapa recibe y deja este contrato compacto: **Goal · Scope y no-goals · Evidencia y decisiones · Artefactos · Criterios de aceptación · Riesgos abiertos · Autoridad concedida.**
@@ -84,17 +86,18 @@ Cada etapa recibe y deja este contrato compacto: **Goal · Scope y no-goals · E
 | 6 | Revisar | `/ak:code-review` por PR o push | subagente `code-reviewer` | Autónomo; Critical/High se arreglan antes de entregar |
 | 7 | Entregar | el **comando de entrega del plan**; en `rama+PR`, `/ak:ship` sin `--merge` solo sirve para abrir el PR | el comando de entrega del plan | Autónomo hasta el alcance |
 
+- **Cada aprobación cubre el gate que se está mostrando.** Al pedirla, nombra ese gate y el siguiente. Un "sí" o "adelante" a secas aprueba solo ese gate.
 - **"Adelante con todo"** solo junta las aprobaciones 2 y 3 en una. No cambia el alcance ni la autoridad concedida, y nunca convierte `merge` en `produccion`.
 - **Una aprobación cubre lo que se pidió, no lo que se descubre en el camino.** Los arreglos de revisión y las enmiendas técnicas dentro de los archivos y criterios del plan son tuyos. Si el trabajo crece fuera de eso (otro módulo, otro gancho, otro host, algo fuera de la tabla de propiedad de `contracts.md`), dilo en una línea y espera la respuesta antes de hacerlo.
 - **Una ruta por etapa**, en este orden: si el repo fija su propio comando o skill para la etapa, se usa ese; si no, y las skills `/ak:*` de esa etapa aparecen en el catálogo de la sesión, se usa la de la tabla; si falta alguna, la etapa entera va en modo nativo (dilo en la ficha). Nunca mezcles dos rutas en una misma etapa.
-- **Modo nativo:** si no hay skills `/ak:*`, dilo en el Frame en una línea y haz cada etapa con subagentes que dejen los **mismos artefactos** (reportes, `plan.md`, `contracts.md`, fases). Si no hay subagentes con esos nombres, usa los de propósito general con el mismo encargo.
+- **Modo nativo:** si no hay skills `/ak:*`, dilo en el Frame en una línea y haz cada etapa con subagentes que dejen los **mismos artefactos** (reportes, `plan.md`, `contracts.md`, fases). Si no hay subagentes con esos nombres, usa los de propósito general con el mismo encargo. Si un subagente no puede escribir (es de solo lectura, como `Explore`, o el entorno se lo impide), que devuelva el contenido en su respuesta y tú guardas el artefacto en su ruta.
 - Flags verificados contra AgentKit stable 2.19.0. Si un flag no existe en la versión instalada, revisa la ayuda de esa skill, usa el equivalente y repórtalo; no inventes uno.
 
 ## Etapa 3 por dentro: un plan listo para correr solo
 Plan en `plans/{fecha}-{slug}/` (o donde el repo guarde sus planes) con `plan.md`, `contracts.md` y `phase-NN-*.md`.
 - **Fase 0 = spike** corto de los supuestos de mayor riesgo, en un directorio desechable, con **regla de rama**: si falla X → plan B; si falla Y → parar. Un supuesto medible ("< 50 ms con datos realistas") puede ir como criterio de la primera fase, con su regla.
 - **`contracts.md` congelado antes de paralelizar:** tablas, APIs con un JSON de ejemplo, interfaces, constantes compartidas y una **tabla de propiedad de archivos** por fase. Cambios después = "Enmienda {fecha}" al final. Una enmienda técnica la decides tú; una que toque el Goal, los criterios, los no-goals o la autoridad necesita la aprobación del usuario.
-- **Red team del contrato antes de lanzar agentes**, con cuatro lentes: seguridad, modos de falla, supuestos y alcance. Cada hallazgo con archivo:línea. Las correcciones entran como enmienda; después se paraleliza. Tú adjudicas lo técnico; las decisiones de producto las preguntas.
+- **Red team del contrato antes de lanzar agentes**, con cuatro lentes: seguridad, modos de falla, supuestos y alcance. Cada hallazgo con archivo:línea. Las correcciones entran como enmienda; después se paraleliza. Tú adjudicas lo técnico; las decisiones de producto las preguntas. Es técnico lo que no cambia el Goal, los criterios de aceptación, los no-goals ni la autoridad: por ejemplo, cómo tratar una entrada que ningún criterio menciona. Elige la opción más conservadora, anótala en la enmienda y repórtala al cierre.
 - **Un dueño por archivo** por fase. Límite de líneas y nombres: los del repo (*si aplica*).
 - **Orden de entrega = orden de dependencias:** primero lo que los demás necesitan (migración, datos, contrato, la ruta a la que otros enlazan).
 - **Compuerta de pruebas:** confirma la del repo o, si no existe, propón la mínima como fase del plan. Lee `references/compuerta-de-pruebas.md`.
