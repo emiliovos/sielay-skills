@@ -3,15 +3,15 @@ name: build-auto
 description: "Lleva un proyecto de la idea a merge o a producción con un flujo de 7 etapas (Frame → Evidencia → Plan → Implementar → Verificar → Revisar → Entregar): tú apruebas rumbo, evidencia y plan; después los agentes implementan, prueban, revisan y entregan solos, siempre por la compuerta de pruebas del repo. Descubre del repo cómo prueba, entrega y despliega (CLAUDE.md, README, hooks, scripts) y solo pregunta lo que falte. Usa AgentKit (/ak:*) si está instalado y, si no, subagentes que producen los mismos artefactos. Actívalo cuando el usuario diga '/build-auto' o pida explícitamente llevar un proyecto en modo autónomo hasta merge o producción. Produce: contrato aprobado, plan con fases y contrato congelado, PRs o pushes revisados, evidencia de cada criterio y un reporte final."
 user-invocable: true
 when_to_use: "Invoke al arrancar trabajo de varias etapas en un repo (feature, integración, refactor grande) cuando el usuario quiere aprobar solo el rumbo y dejar que los agentes ejecuten hasta un alcance acordado (merge a la rama principal o producción). Sirve para repos con PRs y compuerta de merge y para repos que empujan directo a main y publican en el mismo servidor. No para un cambio de una línea ni para preguntas sueltas."
-argument-hint: "\"<objetivo>\" [--alcance merge|produccion] [--chico] [--checkpoint]"
-keywords: [autonomo, backbone, agentkit, plan, paralelo, compuerta, pruebas, deploy, red-team, workflow]
+argument-hint: "\"<objetivo>\" [--alcance merge|produccion] [--chico] [--terminales [N]] [--checkpoint]"
+keywords: [autonomo, backbone, agentkit, plan, paralelo, terminales, compuerta, pruebas, deploy, red-team, workflow]
 metadata:
   category: workflow
   example: "/build-auto \"exportar reportes a PDF para clientes\" --alcance merge"
   deps: "git en el repo destino. Recomendado: AgentKit (skills /ak:*); sin él, cada etapa se hace con subagentes nativos. Opcional: /si:checkpoint para el cierre (--checkpoint)."
   installs: []
   risk: none
-  version: "1.3.0"
+  version: "1.4.0"
 ---
 
 # Build-auto: backbone de proyecto autónomo
@@ -28,6 +28,7 @@ Tú (el agente) coordinas un proyecto completo en **7 etapas**. El usuario aprue
 | `"<objetivo>"` | Qué quiere el usuario y cómo se ve terminado. Si falta, es la primera pregunta del Frame. |
 | `--alcance merge\|produccion` | Hasta dónde llega la autonomía. `merge` = el cambio queda en la rama principal por la compuerta (merge del PR, o en `main directo` el push a main) y **no se publica**. `produccion` = además se publica. Sin el flag, se pregunta en el Frame; `produccion` nunca se asume. |
 | `--chico` | Variante corta con **dos aprobaciones** (Frame y plan, sin la etapa de Evidencia): plan rápido (`/ak:plan --fast`; en modo nativo, un `planner` con plan de una o dos fases), sin red team ni paralelo, y `/ak:cook --auto` (o un `fullstack-developer`). |
+| `--terminales [N]` | Apagado por defecto. Además de subagentes, reparte fases a **otras sesiones de Claude Code** en la misma máquina: reusa sesiones `idle` y abre nuevas, hasta N (3 si no se da). Necesita mensajes entre sesiones y tmux; si faltan, se dice en la ficha y todo va a subagentes. Con `--chico` se ignora, y se dice en el Frame. Detalle en `references/terminales.md`. |
 | `--checkpoint` | Al cerrar, invoca `/si:checkpoint`. Sin el flag, solo se sugiere. |
 
 ## Paso 0: ficha del proyecto (descubrir, no preguntar)
@@ -103,6 +104,7 @@ Plan en `plans/{fecha}-{slug}/` (o donde el repo guarde sus planes) con `plan.md
 - **Compuerta de pruebas:** confirma la del repo o, si no existe, propón la mínima como fase del plan. Lee `references/compuerta-de-pruebas.md`.
 - **Comando de entrega** en "Autoridad concedida": el comando exacto con el que el coordinador entrega (el script de merge del repo, el push a main por la compuerta o, si el repo no tiene ninguno, la verificación que el plan define antes de `gh pr merge`). Con `produccion`, también el comando de publicación y el de backup. Si no quedan fijados en el plan aprobado, la etapa 7 se detiene antes de entregar.
 - Sección **"Momentos humanos"**: cada 2FA, login, revisión, decisión de producto, instalación en un host o reinstalación en otro, agrupados en las menos sesiones posibles. Antes de preguntar, busca la respuesta en los datos y docs disponibles.
+- Con `--terminales`: tabla de **reparto** (fase → subagente, terminal nueva o terminal reusada, esta última con la sesión y el pane tmux concretos; cada fila con su porqué) y, en "Autoridad concedida", el tope de terminales, el modo de permisos con que se abren (el de tu sesión, nunca uno más amplio) y que solo cierras las que abriste. Criterio y procedimientos en `references/terminales.md`. Sin el flag no hay reparto: las fases van a subagentes, salvo que el usuario pida en la conversación una sesión concreta.
 
 ## Etapas 4–7: ejecución autónoma
 Antes de la etapa 4, lee las referencias que apliquen y síguelas:
@@ -110,6 +112,7 @@ Antes de la etapa 4, lee las referencias que apliquen y síguelas:
 - `references/compuerta-de-pruebas.md`: los tres niveles, las variantes `rama+PR` y `main directo`, y los huecos conocidos.
 - `references/disciplina-de-pruebas.md`: qué es una prueba que sirve, cuánto puede costar y el reporte final.
 - `references/receta-de-deploy.md`: solo con `--alcance produccion`.
+- `references/terminales.md`: solo con `--terminales`.
 
 Reglas que nunca se rompen:
 - **Un solo coordinador entrega** (mergea o empuja a main), en orden y solo con el comando de entrega del plan. Nunca con el botón del hosting, ni con `gh pr merge` / `gh api .../merge` / `/ak:ship --merge` si el repo tiene su propio script de merge.
@@ -117,7 +120,7 @@ Reglas que nunca se rompen:
 - Nunca publicar sin `--alcance produccion`. Nunca editar archivos en el checkout que sirve producción; en él solo corre el comando de publicación del plan.
 - Una prueba saltada cuenta como roja. Nunca debilitar una prueba ni un criterio para que pase.
 - Si tras el tope de revisión queda algún Critical/High, no entregues: para y reporta.
-- Cada agente detiene solo sus procesos y no toca la config de Claude Code ni sesiones ajenas.
+- Cada agente detiene solo sus procesos y no toca la config de Claude Code ni sesiones ajenas. Con `--terminales`, el coordinador solo opera las sesiones que el reparto le asigna, como dice `references/terminales.md`.
 - Si una tarea parece cruzar un guardarraíl del repo: para y pregunta.
 
 ## Cierre
@@ -128,4 +131,4 @@ Reglas que nunca se rompen:
 
 ## Notas
 - **Instalación:** `claude plugin marketplace add emiliovos/sielay-skills && claude plugin install si@sielay` (se invoca como `/si:build-auto`). Actualizar: `claude plugin update si@sielay`.
-- **Variantes:** dos caminos de diseño reales → `/ak:plan --two`; alto riesgo → `--hard` o `--deep`. Varias terminales (si el runtime permite mensajes entre sesiones): una coordina (plan, contrato, entregas, deploy) y reparte fases a las otras.
+- **Variantes:** dos caminos de diseño reales → `/ak:plan --two`; alto riesgo → `--hard` o `--deep`. Varias terminales: `--terminales`.
