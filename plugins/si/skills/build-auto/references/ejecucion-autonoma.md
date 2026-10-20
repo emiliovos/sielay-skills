@@ -31,6 +31,7 @@ En `main directo` no hay ramas que mergear, pero el aislamiento por worktree y e
 ## Durante
 - **Un solo coordinador entrega** (mergea o empuja a main), en orden y siempre por la compuerta. Nadie más entrega.
 - **Revisión adversarial antes de cada entrega** (`/ak:code-review` o un `code-reviewer`). Los detalles técnicos los decides tú y reportas qué decidiste; las decisiones de producto se preguntan.
+- **Los revisores reportan solo lo que afecta la corrección, la seguridad o los requisitos.** El resto va como opcional: no bloquea la entrega ni se convierte en pruebas nuevas por defecto. Perseguir cada hallazgo lleva a pruebas para casos que no pueden ocurrir. Pon esta regla en el encargo de cada revisor.
 - **Tope de revisión por PR o push:**
   - una revisión a fondo;
   - corrige **en lote** todo lo Critical y High;

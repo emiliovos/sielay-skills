@@ -11,7 +11,7 @@ metadata:
   deps: "git en el repo destino. Recomendado: AgentKit (skills /ak:*); sin él, cada etapa se hace con subagentes nativos. Opcional: /si:checkpoint para el cierre (--checkpoint)."
   installs: []
   risk: none
-  version: "1.2.2"
+  version: "1.3.0"
 ---
 
 # Build-auto: backbone de proyecto autónomo
@@ -106,9 +106,9 @@ Plan en `plans/{fecha}-{slug}/` (o donde el repo guarde sus planes) con `plan.md
 
 ## Etapas 4–7: ejecución autónoma
 Antes de la etapa 4, lee las referencias que apliquen y síguelas:
-- `references/ejecucion-autonoma.md`: antes de paralelizar, quién ejecuta, encargos, reglas durante la ejecución y el tope de revisiones.
+- `references/ejecucion-autonoma.md`: antes de paralelizar, quién ejecuta, encargos, reglas durante la ejecución, qué reportan los revisores y el tope de revisiones.
 - `references/compuerta-de-pruebas.md`: los tres niveles, las variantes `rama+PR` y `main directo`, y los huecos conocidos.
-- `references/disciplina-de-pruebas.md`: qué es una prueba que sirve y el reporte final.
+- `references/disciplina-de-pruebas.md`: qué es una prueba que sirve, cuánto puede costar y el reporte final.
 - `references/receta-de-deploy.md`: solo con `--alcance produccion`.
 
 Reglas que nunca se rompen:
