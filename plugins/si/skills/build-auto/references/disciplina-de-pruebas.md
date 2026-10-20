@@ -9,6 +9,14 @@ Una prueba demuestra que la app no se rompe, no que el código hace lo que se ac
 4. ¿Cuál es la capa más baja y confiable para verificarlo (unitaria, integración, servidor real, E2E)?
 5. ¿De verdad hace falta otra prueba?
 
+## Costo de las pruebas
+Una suite puede crecer mucho más rápido que el código. El tiempo se va sobre todo en las pruebas que levantan la app y en las esperas.
+- **Una sola prueba de servidor real por flujo de punta a punta.** Los casos límite, las ramas de error y las validaciones van como pruebas unitarias puras: funciones o módulos, sin levantar la app ni lanzar subprocesos.
+- **Nada de esperas fijas** (`sleep` o `setTimeout` de segundos). Inyecta el reloj o agrega un ajuste solo para pruebas, por ejemplo una variable de entorno que acorta un intervalo de sondeo y que la app solo respeta con `NODE_ENV=test`.
+- **Una prueba nueva que tarde más de 5 s se justifica en el PR** (o en el commit, en `main directo`).
+- **Sin meta de cobertura fija si el repo tiene selector o carriles.** Verifica con las pruebas afectadas y deja la suite completa a la compuerta de entrega y a la corrida nocturna (`compuerta-de-pruebas.md`). Si las pruebas pesadas ya van en un carril aparte, la prueba nueva de servidor real va en ese carril.
+- Lo que un revisor marca como opcional no se convierte en una prueba nueva por defecto (`ejecucion-autonoma.md`, "Durante").
+
 ## Prohibido (trampas para poner CI en verde)
 - Pruebas tautológicas (`true == true`, afirmar exactamente lo que el código acaba de devolver, mocks que prueban al mock).
 - Reescribir una prueba que falla para que sea trivialmente cierta.
