@@ -14,7 +14,7 @@ En `main directo` no hay ramas que mergear, pero el aislamiento por worktree y e
 
 ## Quién ejecuta
 - **Subagentes por tipo:** `fullstack-developer` (código), `docs-manager` (docs), `code-reviewer` (revisión y red team), `researcher` / `Explore` (evidencia), `tester` (verificación). Si no existen con esos nombres, usa los de propósito general con el mismo encargo. Los subagentes de una sesión comparten scratchpad: nombres de archivo únicos.
-- **Otra sesión de Claude Code** (otra terminal), si el runtime permite mensajes entre sesiones: para una fase de backend autocontenida que aguanta varias rondas de corrección. Si no, un subagente.
+- **Otra sesión de Claude Code** (otra terminal): con `--terminales`, según la tabla de reparto del plan y `terminales.md`. Sin el flag, solo si el usuario pide una sesión concreta en la conversación; si no, un subagente.
 - **Todo encargo es autocontenido:**
   - la tarea;
   - las rutas absolutas del contrato y del plan;
