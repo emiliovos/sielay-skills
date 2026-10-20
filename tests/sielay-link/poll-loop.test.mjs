@@ -221,3 +221,26 @@ test('429 too_many_sessions is reported as the session quota and retried at a st
   assert.equal(h.statuses.at(-1), 'backoff')
   assert.equal(h.loop.isStopped, false)
 })
+
+test('onPolled gets the session a poll carried, only once the poll went through; its failure never stops the loop', async () => {
+  const timers = []
+  const polled = []
+  let fail = true
+  const loop = createPollLoop({
+    schedule: (ms, fn) => timers.push(fn),
+    getClient: () => ({ poll: async () => { if (fail) throw new HubError('network', 'down'); return ok() } }),
+    buildSession: async () => ({ name: 'api', instance_id: 'i1', build: { build_id: 'b-1', status: 'done' } }),
+    handler: { handlePoll: async () => [] },
+    isOff: async () => false,
+    onPolled: s => { polled.push(s); throw new Error('bookkeeping failed') },
+  })
+  const step = async () => { timers.shift()(); await new Promise(r => setImmediate(r)); await new Promise(r => setImmediate(r)) }
+  loop.start()
+  await step()
+  assert.deepEqual(polled, [], 'a failed poll calls nothing')
+  fail = false
+  await step()
+  assert.deepEqual(polled.map(s => s.build), [{ build_id: 'b-1', status: 'done' }])
+  assert.equal(timers.length, 1, 'the loop goes on')
+  loop.stop()
+})

@@ -10,7 +10,7 @@ Conecta sesiones de Claude Code a través de un hub de [sielay](https://sielay.c
 claude plugin marketplace add emiliovos/sielay-skills && claude plugin install sielay-link@sielay
 ```
 
-La entrada del marketplace va fijada al tag `sielay-link-v1.0.0`. Solo cambia por un PR revisado.
+La entrada del marketplace va fijada al tag `sielay-link-v1.1.0`. Solo cambia por un PR revisado.
 
 **Requisitos:**
 - **Claude Code 2.1.300.** La API de módulos es de acceso anticipado y cambia entre versiones. Antes de actualizar Claude Code, corre el smoke de abajo.
@@ -58,12 +58,13 @@ Si otra carpeta ya usa ese nombre y está en línea, el hub te asigna `nombre-2`
 | `/link pair <slot>` | Empareja la máquina |
 | `/link show <id>` | Abre en el panel el mensaje completo de la franja con ese id |
 | `/link accept <id>` / `reject <id>` | Acepta o rechaza ese mensaje. Solo cuenta si lo tecleas tú en el prompt |
-| `link_send`, `link_reply`, `link_peers` | Las herramientas del modelo. **No existe ninguna para aceptar, rechazar ni liberar** |
+| `link_send`, `link_reply`, `link_peers` | Las herramientas del modelo para hablar con otras sesiones. **No existe ninguna para aceptar, rechazar ni liberar** |
+| `link_build_stage` | Le dice al hub en qué va el build de `/si:build-auto` de esta sesión. Solo informa: no controla nada (ver «Reporte del build») |
 
 Para que el modelo las use sin preguntarte cada vez, agrégalas a `permissions.allow` en `~/.claude/settings.json`:
 
 ```json
-{ "permissions": { "allow": ["mcp__sielay-link__link_send", "mcp__sielay-link__link_reply", "mcp__sielay-link__link_peers"] } }
+{ "permissions": { "allow": ["mcp__sielay-link__link_send", "mcp__sielay-link__link_reply", "mcp__sielay-link__link_peers", "mcp__sielay-link__link_build_stage"] } }
 ```
 
 ## Cuándo se ejecuta solo un mensaje
@@ -118,6 +119,23 @@ El encabezado es:
   - El ack `injected` significa «escrito en el socket».
 - **`crossSessionInbound`** (en `/config`: «Messages from your other sessions»). En `hold` o `refuse`, Claude Code retiene o descarta los mensajes de otras sesiones. Déjalo sin valor o en `accept`; si no, usa el modo `prompt`, sin Node.
 - **Adaptador `prompt`, el de respaldo.** Usa `$.prompt.submit`, nunca como si lo escribieras tú. El plugin agrega un contexto fijo que dice que el texto viene de otra sesión.
+
+## Reporte del build
+
+Desde la 1.1.0, `/si:build-auto` llama a `link_build_stage` en cada cambio de etapa, de estado o de entrega. El plugin guarda el build en el estado de la sesión y lo manda como `session.build` en cada poll, así que el hub lo ve en 25 s o menos. El visor de builds de sielay lo muestra.
+
+- **Solo informa.** La herramienta no aprueba etapas, no mergea y no dispara nada. Si la sesión no está emparejada o sielay-link está apagado, guarda el build igual y responde `{ "ok": true, "reported": false }`.
+- **Qué pone el plugin:**
+  - **`started_at`**, al declarar el build. **`stage_since`**, al cambiar de etapa, si la skill no la manda.
+  - **Los subagentes vivos.** El alta llega con `SubagentStart`, que trae el tipo, y la descripción con el resultado de `agent.spawn`; los dos se emparejan por el id del agente. La baja llega con `SubagentStop` o con el `turn.complete` del subagente. Un subagente sin señal durante 30 min sale de la lista.
+  - **`subagents_peak`**, el pico de subagentes vivos a la vez.
+  - **`usage`**, la suma de `turn.complete.usage` de todos los turnos de la sesión (hilo principal y subagentes) mientras hay un build. Un turno sin `usage` (por Esc o un error de API) no suma nada. Si nunca hubo uso, va `null`, no cero. `model` es el del último turno del hilo principal y nunca se inventa.
+- **Validación antes de mandar.** El plugin aplica las mismas reglas y topes que el hub: campos obligatorios, etapa de 1 a 7, fechas que no vayan más de 5 min en el futuro, textos con los secretos quitados antes de recortarlos y 8 KB como máximo. Los links solo pueden ser rutas relativas o `https:`; los demás se descartan. Si el build no es válido, no se manda y el log dice qué campo falló, sin su contenido. Si es demasiado grande, primero se quitan las descripciones de los subagentes y luego los más viejos.
+- **Ciclo de vida.**
+  - `/clear` conserva el build.
+  - Un `build_id` nuevo empieza otro build.
+  - Después de mandar `done`, el plugin borra su build, porque en el hub un build cerrado no se puede cambiar. Una segunda corrida sobre el mismo plan usa un `build_id` con sufijo `-r2`.
+- **En la franja** aparece una línea `build: etapa N/7 · nombre` mientras hay un build.
 
 ## Seguridad
 

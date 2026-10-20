@@ -7,16 +7,19 @@
 // arrows and Enter) or with a click; `/link accept <id>` is the typed way.
 // Each button carries the id drawn beside it, and the strip keeps arrival
 // order, so the message accepted is the one on screen. Yields to a survey.
+// With a build declared it adds one line: "build: etapa N/7 · nombre".
 
 import { sanitizeText, neutralizeBody } from './link-inbound-framing.js'
 import { decisionContext } from './link-runtime.js'
 import { shortId } from './link-strip-selection.js'
 import { PANE_ID } from './link-state-refs.js'
+import { BUILD_STAGES } from './link-build-validate.js'
 
 // $.state references: literal plugin/key, declared in each file that uses them.
 const STRIP = /** @type {const} */ ({ plugin: 'sielay-link', key: 'strip' })
 const NOTICE = /** @type {const} */ ({ plugin: 'sielay-link', key: 'notice' })
 const SELECTED = /** @type {const} */ ({ plugin: 'sielay-link', key: 'selected' })
+const BUILD = /** @type {const} */ ({ plugin: 'sielay-link', key: 'build' })
 
 /** @typedef {import('claude-code').EngineInterface} Engine */
 /** @typedef {import('./link-runtime.js').Runtime} Runtime */
@@ -66,6 +69,19 @@ export function oneLine(text, max) {
 }
 
 /**
+ * The build line, or null without a build: "build: etapa 4/7 · implementar",
+ * plus the status when it is not running.
+ * @param {import('../types/index.js').LinkBuildState | null} build
+ */
+export function buildLine(build) {
+  const stage = build?.declared.stage
+  if (typeof stage !== 'number' || !Number.isInteger(stage) || stage < 1 || stage > BUILD_STAGES.length) return null
+  const status = build?.declared.status
+  const extra = typeof status === 'string' && status !== 'running' ? ` · ${status}` : ''
+  return `build: etapa ${stage}/${BUILD_STAGES.length} · ${BUILD_STAGES[stage - 1]}${extra}`
+}
+
+/**
  * @param {Engine} $
  * @param {import('claude-code').RenderInput<'AbovePrompt'>} e
  * @param {Runtime} rt
@@ -73,8 +89,13 @@ export function oneLine(text, max) {
  */
 export async function renderBand($, e, rt) {
   if (e.props.hasSurvey) return null
-  const [{ value: strip = [] }, { value: notice = null }] = await Promise.all([$.state.get(STRIP), $.state.get(NOTICE)])
-  if (strip.length === 0 && !notice) return null
+  const [{ value: strip = [] }, { value: notice = null }, { value: build = null }] = await Promise.all([
+    $.state.get(STRIP),
+    $.state.get(NOTICE),
+    $.state.get(BUILD),
+  ])
+  const progress = buildLine(build)
+  if (strip.length === 0 && !notice && !progress) return null
   const { Box, Text, Button } = $.ui.resolve(e)
   const first = strip[0]
   const width = Math.max(20, (e.props.bodyColumns || 80) - 4)
@@ -82,6 +103,7 @@ export async function renderBand($, e, rt) {
   return (
     <Box flexDirection="column">
       {notice ? <Text color="red">{oneLine(notice, width)}</Text> : null}
+      {progress ? <Text dimColor>{oneLine(progress, width)}</Text> : null}
       {first ? (
         <Box flexDirection="column">
           <Text>

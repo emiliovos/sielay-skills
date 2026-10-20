@@ -36,7 +36,8 @@ bin/sielay-link-socket-write.mjs types types/index.d.ts README.md tests tests/si
 mod mod/sielay-link-mod.js mod/link-band.jsx mod/link-pane.jsx mod/link-commands.js mod/link-delivery-adapter.js
 mod/link-hub-client.js mod/link-inbound-framing.js mod/link-inbound-handler.js mod/link-mode-freshness.js
 mod/link-pairing.js mod/link-poll-loop.js mod/link-run-gate.js mod/link-runtime.js mod/link-session-name-resolution.js
-mod/link-session-payload.js mod/link-state-refs.js mod/link-tools.js mod/link-inbound-store.js mod/link-strip-selection.js mod/link-instance-identity.js"
+mod/link-session-payload.js mod/link-state-refs.js mod/link-tools.js mod/link-inbound-store.js mod/link-strip-selection.js mod/link-instance-identity.js
+mod/link-build-tool.js mod/link-build-state.js mod/link-build-hooks.js mod/link-build-validate.js mod/link-build-fields.js mod/link-secret-scrub.js"
 while IFS= read -r -d '' p; do
   rel="${p#"$root"/}"
   case "$rel" in .claude-plugin/types|.claude-plugin/types/*|tsconfig.json) continue ;; esac
@@ -170,38 +171,106 @@ if hits=$(grep -rniE -B3 -A3 'store\.set' "$src/mod" | grep -iE 'token' | grep -
 fi
 
 # --- Engine call list (--engine): the exact `$` calls, and who makes them.
+# The engine caps that note near 1000 characters, and most of it is the "via"
+# function names, so on the plugin as written the cut can hide `$` names. The
+# names are read instead from a scratch copy where every function the module
+# declares has a short name (renamed everywhere alike, so the call graph is the
+# same); the check compares only the `$.noun.event` names, mapping the via
+# names back for the three calls bound to one function. If even that note is
+# cut, the gate fails closed.
 if [ "$engine" -eq 1 ]; then
   command -v claude >/dev/null 2>&1 || { echo "ERROR: --engine needs claude on the PATH" >&2; exit 1; }
-  if ! report="$(claude plugin validate --json "$root" 2>/dev/null)"; then err "claude plugin validate failed"; fi
+  if ! claude plugin validate --json "$root" >"$src/report.json" 2>/dev/null; then err "claude plugin validate failed"; fi
+  short="$src/short"
+  cp -R "$root" "$short"; rm -rf "$short/.claude-plugin/types" "$short/tsconfig.json"
+  if ! python3 - "$short" "$src/names.json" <<'PY'
+import json, pathlib, re, sys
+root, out = pathlib.Path(sys.argv[1]), sys.argv[2]
+files = sorted(p for p in (root / "mod").rglob("*") if p.suffix in (".js", ".jsx"))
+code = {p: p.read_text(encoding="utf-8") for p in files}
+
+def code_spans(text):
+    """(is_code, chunk) pieces: strings, template text and comments are never code."""
+    spans, buf, i, n = [], [], 0, len(text)
+    stack, depth = ["code"], [0]
+    def flush(kind):
+        if buf: spans.append((kind, "".join(buf))); buf.clear()
+    while i < n:
+        c, nxt, mode = text[i], text[i + 1] if i + 1 < n else "", stack[-1]
+        if mode == "code":
+            if c == "/" and nxt in "/*":
+                j = text.find("\n" if nxt == "/" else "*/", i + 2)
+                j = n if j < 0 else (j if nxt == "/" else j + 2)
+                flush(True); spans.append((False, text[i:j])); i = j; continue
+            if c in "'\"`":
+                flush(True); stack.append(c); depth.append(0); buf.append(c); i += 1; continue
+            if c == "{": depth[-1] += 1
+            elif c == "}":
+                if depth[-1] == 0 and len(stack) > 1:
+                    flush(True); stack.pop(); depth.pop(); buf.append(c); i += 1; continue
+                depth[-1] -= 1
+            buf.append(c); i += 1; continue
+        if c == "\\":
+            buf.append(text[i:i + 2]); i += 2; continue
+        if mode == "`" and c == "$" and nxt == "{":
+            buf.append("${"); flush(False); stack.append("code"); depth.append(0); i += 2; continue
+        buf.append(c); i += 1
+        if c == mode or (c == "\n" and mode in "'\""):
+            flush(False); stack.pop(); depth.pop()
+    flush(stack[-1] == "code")
+    return spans
+
+pieces = {p: code_spans(t) for p, t in code.items()}
+code_only = "\n".join(chunk for sp in pieces.values() for is_code, chunk in sp if is_code)
+everything = "\n".join(code.values())
+declared = set(re.findall(r"\bfunction\s*\*?\s*([A-Za-z_$][\w$]*)", code_only))
+declared |= set(re.findall(r"\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s+)?(?:\([^()]*\)|[A-Za-z_$][\w$]*)\s*=>", code_only))
+engine_words = {w for pair in re.findall(r"\$\.(\w+)(?:\.(\w+))?", everything) for w in pair if w}
+names = sorted(n for n in declared - engine_words - {"register"} if len(n) > 3)
+mapping = {}
+for i, n in enumerate(names):
+    alias = f"Zq{i}"
+    assert not re.search(rf"\b{alias}\b", everything), alias
+    mapping[n] = alias
+if mapping:
+    rx = re.compile(r"(?<![\w$])(" + "|".join(map(re.escape, sorted(mapping, key=len, reverse=True))) + r")(?![\w$])")
+    for p, sp in pieces.items():
+        p.write_text("".join(rx.sub(lambda m: mapping[m.group(1)], c) if k else c for k, c in sp), encoding="utf-8")
+json.dump({v: k for k, v in mapping.items()}, open(out, "w"))
+PY
+  then err "could not prepare the engine call list"; fi
+  if ! report="$(claude plugin validate --json "$short" 2>/dev/null)"; then err "claude plugin validate failed on the scratch copy"; fi
   if out=$(python3 -c '
 import json, re, sys
 report = json.loads(sys.stdin.read())
+back = json.load(open(sys.argv[1]))
+original = json.load(open(sys.argv[2]))
+# The renaming must not change what the engine sees: every other note (hooks,
+# state and env reads and writes) is the same as on the plugin as written.
+others = lambda r: [n for c in r.get("contents", []) for n in c.get("notes", []) if " calls: " not in n]
+if others(report) != others(original):
+    print("the scratch copy reads differently from the plugin: cannot trust its call list"); sys.exit()
 notes = [n for c in report.get("contents", []) for n in c.get("notes", []) if " calls: " in n]
 if len(notes) != 1:
     print("expected exactly one calls: note from the engine"); sys.exit()
 text = notes[0].split(" calls: ", 1)[1]
+if "…" in text:
+    print("the engine call list is cut even with short names: cannot check it whole"); sys.exit()
 allowed = {
     "$.clock.after", "$.clock.now", "$.command.register", "$.env.get", "$.fs.exists", "$.fs.read",
     "$.session.cwd", "$.session.id", "$.state.get", "$.state.set", "$.store.get", "$.store.set",
-    "$.tool.register", "$.ui.log", "$.ui.open", "$.ui.toast",
+    "$.tool.register", "$.ui.log", "$.ui.open", "$.ui.resolve", "$.ui.toast",
 }
 only_via = {"$.http.fetch": {"createHubClient"}, "$.process.run": {"createDeliveryAdapter"}, "$.prompt.submit": {"createDeliveryAdapter"}}
-truncated = "…" in text
-out = []
+calls = {}
 for noun, via in re.findall(r"(\$\.[a-z]+\.[a-z]+)(?: \(via ([^)]*)\))?", text):
-    vias = {v.strip() for v in via.split(",") if v.strip()}
-    if noun in only_via:
-        if vias != only_via[noun]: out.append(f"{noun} must be called only via {sorted(only_via[noun])} (got {sorted(vias)})")
-    elif noun not in allowed:
-        out.append(f"{noun} is not on the allow-list of $ calls")
-for noun in only_via:
-    if noun not in text: out.append(f"{noun} missing from the engine call list")
-if truncated:
-    visible = text.split("…", 1)[0]
-    last = re.findall(r"\$\.([a-z]+)\.", visible)
-    if not last or last[-1] < "store": out.append("the engine call list is cut before $.store: cannot check it whole")
+    calls[noun] = {back.get(v.strip(), v.strip()) for v in via.split(",") if v.strip()}
+out = [f"{n} is not on the allow-list of $ calls" for n in sorted(set(calls) - allowed - set(only_via))]
+for noun, vias in only_via.items():
+    if noun not in calls: out.append(f"{noun} missing from the engine call list")
+    elif calls[noun] != vias: out.append(f"{noun} must be called only via {sorted(vias)} (got {sorted(calls[noun])})")
 print("\n".join(out))
-' <<<"$report"); then :; else err "engine call check could not run"; fi
+' "$src/names.json" "$src/report.json" <<<"$report"); then :; else err "engine call check could not run"; fi
   if [ -n "$out" ]; then echo "$out" | sed 's/^/ERROR: /' >&2; fail=1; fi
 fi
 

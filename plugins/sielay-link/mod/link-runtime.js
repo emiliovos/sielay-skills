@@ -8,6 +8,7 @@ import { createPollLoop } from './link-poll-loop.js'
 import { createPairingFlow } from './link-pairing.js'
 import { buildSessionPayload, readMode } from './link-session-payload.js'
 import { PANE_ID } from './link-state-refs.js'
+import { afterPoll } from './link-build-hooks.js'
 
 // $.state references: literal plugin/key, declared in each file that uses them.
 const STRIP = /** @type {const} */ ({ plugin: 'sielay-link', key: 'strip' })
@@ -17,7 +18,7 @@ const PAIRING = /** @type {const} */ ({ plugin: 'sielay-link', key: 'pairing' })
 const CONVERSATIONS = /** @type {const} */ ({ plugin: 'sielay-link', key: 'conversations' })
 const NOTICE = /** @type {const} */ ({ plugin: 'sielay-link', key: 'notice' })
 
-export const CLIENT_VERSION = '1.0.0'
+export const CLIENT_VERSION = '1.1.0'
 
 /** @typedef {import('claude-code').EngineInterface} Engine */
 /** @typedef {import('../types/index.js').LinkStatus} LinkStatus */
@@ -39,6 +40,10 @@ export function createRuntime(options) {
     loop: /** @type {ReturnType<typeof createPollLoop>|null} */ (null),
     pairing: /** @type {ReturnType<typeof createPairingFlow>|null} */ (null),
     tmux: /** @type {{ name?: string, at: number }} */ ({ at: -Infinity }),
+    /** The build held across a /clear (link-build-hooks.js). */
+    buildCarry: /** @type {import('../types/index.js').LinkBuildState|null} */ (null),
+    /** The last invalid build field logged, so it is logged once. */
+    buildError: /** @type {string|null} */ (null),
   }
 }
 
@@ -138,10 +143,11 @@ export async function startLink($, rt) {
     schedule: (ms, fn) => void $.clock.after(ms, fn),
     getClient: () => rt.client,
     buildSession: async () => {
-      const built = await buildSessionPayload($, rt)
+      const built = await buildSessionPayload($, rt, { withBuild: true })
       await patchStatus($, { name: built.session.name, nameSource: built.nameSource })
       return built.session
     },
+    onPolled: session => afterPoll($, rt, session),
     handler: rt.handler,
     isOff: () => isOff($),
     onStatus: (loop, detail) => patchStatus($, { loop, detail }),

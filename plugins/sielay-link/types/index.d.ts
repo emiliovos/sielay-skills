@@ -35,6 +35,26 @@ export type LinkPairingView =
   | { phase: 'done'; slot: string; token?: string; address_prefix?: string; saved: 'saving' | 'file' | 'failed'; note: string }
   | { phase: 'error'; slot: string; message: string }
 
+export type LinkBuildSubagent = { id: string; type?: string; description?: string; started_at: string; seen: number }
+
+export type LinkBuildUsage = {
+  input_tokens: number
+  output_tokens: number
+  cache_read_input_tokens: number
+  cache_creation_input_tokens: number
+  turns: number
+  model?: string
+}
+
+/** The build this session reports (mod/link-build-state.js); null when none. */
+export type LinkBuildState = {
+  declared: Record<string, unknown>
+  started_at: string
+  subagents: Record<string, LinkBuildSubagent>
+  peak: number
+  usage: LinkBuildUsage | null
+}
+
 declare module 'claude-code' {
   interface PluginState {
     'sielay-link': {
@@ -48,6 +68,7 @@ declare module 'claude-code' {
       conversations: Record<string, string>
       notice: string | null
       selected: string | null
+      build: LinkBuildState | null
     }
   }
 }

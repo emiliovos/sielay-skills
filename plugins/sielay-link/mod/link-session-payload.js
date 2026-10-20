@@ -1,9 +1,11 @@
 // Builds what the hub sees of this session on every poll and send: name,
-// instance_id, cwd_hash, mode (+ freshness and age) and state. Reads `$`.
+// instance_id, cwd_hash, mode (+ freshness and age) and state, plus, on a poll
+// with a build declared and valid, `build` (link-build-hooks.js). Reads `$`.
 
 import { modeState } from './link-mode-freshness.js'
 import { resolveSessionName, cwdHash } from './link-session-name-resolution.js'
 import { claimInstanceId, instanceKey } from './link-instance-identity.js'
+import { pollBuild } from './link-build-hooks.js'
 
 // $.state references: literal plugin/key, declared in each file that uses them.
 const MODE_SAMPLES = /** @type {const} */ ({ plugin: 'sielay-link', key: 'modeSamples' })
@@ -103,14 +105,30 @@ async function instanceIdFor($, hash, name, sessionId, now) {
 }
 
 /**
- * @typedef {{ adapter: { tmuxSessionName: (env: string|undefined) => Promise<string|undefined> } | null, tmux: { name?: string, at: number } }} PayloadRuntime
+ * The poll's build; a failure while reading it never stops the poll: the poll
+ * goes without `build` and the log names the error's kind, never its text.
+ * @param {Engine} $ @param {import('./link-build-hooks.js').BuildRuntime} rt
+ */
+async function safePollBuild($, rt) {
+  try {
+    return await pollBuild($, rt)
+  } catch (err) {
+    $.ui.log(`sielay-link: build no enviado, falló al leerlo (${err instanceof Error ? err.name : typeof err})`)
+    return undefined
+  }
+}
+
+/**
+ * @typedef {{ adapter: { tmuxSessionName: (env: string|undefined) => Promise<string|undefined> } | null, tmux: { name?: string, at: number } }
+ *   & import('./link-build-hooks.js').BuildRuntime} PayloadRuntime
  */
 
 /**
  * @param {Engine} $
  * @param {PayloadRuntime} rt
+ * @param {{ withBuild?: boolean }} [options] withBuild: the poll's payload, which carries the build
  */
-export async function buildSessionPayload($, rt) {
+export async function buildSessionPayload($, rt, { withBuild = false } = {}) {
   const [sessionId, cwd, now] = await Promise.all([$.session.id(), $.session.cwd(), $.clock.now()])
   const hash = await cwdHash(cwd)
   if (rt.adapter && now - rt.tmux.at > TMUX_TTL_MS) {
@@ -132,6 +150,7 @@ export async function buildSessionPayload($, rt) {
     cwd,
   })
   const instanceId = await instanceIdFor($, hash, resolved.name, sessionId, now)
+  const build = withBuild ? await safePollBuild($, rt) : undefined
   return {
     session: {
       name: resolved.name,
@@ -142,6 +161,7 @@ export async function buildSessionPayload($, rt) {
       mode_age_s: mode.ageMs === null ? null : Math.floor(mode.ageMs / 1000),
       state: mode.state,
       ...(project.project ? { project: project.project } : {}),
+      ...(build ? { build } : {}),
     },
     nameSource: resolved.source,
     mode,

@@ -231,3 +231,89 @@ test('the instance_id survives /clear (new session id, same live process) so the
   expect(new Set(ids).size).toBe(1)
   expect(ids[0]).not.toBe('sess-before-clear')
 })
+
+// --- Build reporting (link_build_stage → session.build in the poll).
+
+const pollHub = (on: any) => fakeHub(on, path => (path === '/api/link/poll' ? { session: { id: 's' }, messages: [], strip: [], poll_after_ms: 60_000 } : {}))
+const polls = (sent: Sent[]) => sent.filter(s => s.url.endsWith('/api/link/poll'))
+const buildArgs = { build_id: 'sielay-261020-builds-viewer', role: 'coordinator', stage: 4, status: 'running', summary: 'Fases 1 y 5 en paralelo' }
+
+function fakeAgents(on: any) {
+  for (const ev of ['classic.SubagentStart', 'classic.SubagentStop']) on(ev, () => ({}))
+  on('session.end', ($: any, e: any) => ({ sessionId: e.sessionId }))
+  let n = 0
+  on('agent.spawn', () => ({ model: 'claude-test', agentId: `agent-${++n}` }))
+}
+
+test('link_build_stage: the build rides the next poll with its subagents (paired by agentId), peak and usage', { options: { link_token: 'test-token' } }, async ($, on) => {
+  const clock = mock.clock(on, { now: Date.parse('2026-10-20T23:00:00.000Z') })
+  mock.store(on)
+  mock.env(on, { HOME: '/nowhere' })
+  fakeHost(on)
+  fakeAgents(on)
+  on('turn.complete', () => ({ text: '' }))
+  const sent = pollHub(on)
+  await $.session.start({ cwd: '/srv/p', surface: 'terminal', isInteractive: true })
+  const r: any = await $.tool.call({ tool: 'mcp__sielay-link__link_build_stage', ...buildArgs } as any)
+  expect(JSON.parse(r.result)).toEqual({ ok: true, reported: true })
+
+  const a: any = await $.agent.spawn({ prompt: 'x', description: 'Fase 1: hub', subagentType: 'fullstack-developer' } as any)
+  await $.classic.SubagentStart({ agent_id: a.agentId, agent_type: 'fullstack-developer' } as any)
+  await $.classic.SubagentStart({ agent_id: 'agent-2', agent_type: 'tester' } as any)
+  await $.agent.spawn({ prompt: 'y', description: 'Fase 5: mod', subagentType: 'tester' } as any)
+  await $.turn.complete({ answer: '', durationMs: 5, isAborted: false, turnId: 't1', reason: 'answer', usage: { input_tokens: 10, output_tokens: 2, cache_read_input_tokens: 3, cache_creation_input_tokens: 4, model: 'claude-test' } } as any)
+  await $.turn.complete({ answer: '', durationMs: 5, isAborted: true, turnId: 't2', reason: 'aborted' } as any)
+  await $.turn.complete({ answer: 'ok', durationMs: 5, isAborted: false, turnId: 't3', reason: 'answer', agentId: 'agent-1', usage: { input_tokens: 1, output_tokens: 1, cache_read_input_tokens: 1, cache_creation_input_tokens: 1, model: 'sub' } } as any)
+  await clock.advance(61_000)
+  await clock.settle()
+
+  const build = polls(sent).at(-1)!.body.session.build
+  expect(build).toMatchObject({ ...buildArgs, subagents_peak: 2, started_at: '2026-10-20T23:00:00.000Z' })
+  expect(build.subagents.map((s: any) => [s.id, s.type, s.description])).toEqual([['agent-2', 'tester', 'Fase 5: mod']])
+  expect(build.usage).toEqual({ input_tokens: 11, output_tokens: 3, cache_read_input_tokens: 4, cache_creation_input_tokens: 5, turns: 2, model: 'claude-test' })
+  expect(logs.filter(l => l.includes('build'))).toEqual([])
+})
+
+test('link_build_stage unpaired: ok with reported false, nothing on the network', async ($, on) => {
+  mock.clock(on, { now: 1_000 })
+  mock.store(on)
+  mock.env(on, { HOME: '/nowhere' })
+  fakeHost(on)
+  const sent = fakeHub(on, () => ({}))
+  await $.session.start({ cwd: '/srv/p', surface: 'terminal', isInteractive: true })
+  const r: any = await $.tool.call({ tool: 'mcp__sielay-link__link_build_stage', ...buildArgs } as any)
+  expect(JSON.parse(r.result)).toEqual({ ok: true, reported: false })
+  const bad: any = await $.tool.call({ tool: 'mcp__sielay-link__link_build_stage', ...buildArgs, stage: 8 } as any)
+  expect(String(bad.deny)).toContain('stage')
+  expect(sent.length).toBe(0)
+})
+
+test('the band shows the build line; /clear keeps the build; after done went out it is forgotten', { options: { link_token: 'test-token' } }, async ($, on) => {
+  const clock = mock.clock(on, { now: Date.parse('2026-10-20T23:00:00.000Z') })
+  mock.store(on)
+  mock.env(on, { HOME: '/nowhere' })
+  fakeHost(on)
+  fakeAgents(on)
+  const sent = pollHub(on)
+  await $.session.start({ cwd: '/srv/p', surface: 'terminal', isInteractive: true })
+  await $.tool.call({ tool: 'mcp__sielay-link__link_build_stage', ...buildArgs } as any)
+  const ui = await $.ui.mount({
+    plugin: 'sielay-link', surface: 'terminal', component: 'AbovePrompt',
+    props: { hasSurvey: false, isWorking: false, maxRows: 6, bodyColumns: 80, scroll: { top: 0, height: 0, viewport: 0 } as any, view: {} as any },
+  })
+  expect(await ui.find({ text: /build: etapa 4\/7 · implementar/ })).toBeDefined()
+  await ui.unmount()
+
+  await $.session.end({ reason: 'clear', sessionId: 'sess-1', resume: {} } as any)
+  await clock.advance(61_000)
+  await clock.settle()
+  expect(polls(sent).at(-1)!.body.session.build).toMatchObject({ build_id: buildArgs.build_id })
+
+  await $.tool.call({ tool: 'mcp__sielay-link__link_build_stage', ...buildArgs, stage: 7, status: 'done', outcome: 'delivered' } as any)
+  await clock.advance(61_000)
+  await clock.settle()
+  expect(polls(sent).at(-1)!.body.session.build).toMatchObject({ status: 'done', outcome: 'delivered' })
+  await clock.advance(61_000)
+  await clock.settle()
+  expect(polls(sent).at(-1)!.body.session.build).toBeUndefined()
+})

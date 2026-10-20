@@ -19,8 +19,8 @@ function deps({ client = {}, conversations = {} } = {}) {
   }
 }
 
-test('exactly three tools, none to decide or release, all loaded up front', () => {
-  assert.deepEqual(LINK_TOOL_SPECS.map(s => s.name), ['link_send', 'link_reply', 'link_peers'])
+test('four tools, none to decide or release, all loaded up front', () => {
+  assert.deepEqual(LINK_TOOL_SPECS.map(s => s.name), ['link_send', 'link_reply', 'link_peers', 'link_build_stage'])
   for (const s of LINK_TOOL_SPECS) {
     assert.equal(s.isDeferred, false)
     assert.equal(s.inputSchema.type, 'object')
@@ -105,4 +105,30 @@ test('an unknown tool name is denied', async () => {
 
 test('too_many_sessions explains the session quota', async () => {
   assert.match(describeHubError(new HubError('rate_limited', 'x', { status: 429, code: 'too_many_sessions' })), /16 sesiones/)
+})
+
+const buildInput = { build_id: 'sielay-plan', role: 'coordinator', stage: 2, status: 'running' }
+
+test('link_build_stage says it only reports and controls nothing', () => {
+  const spec = LINK_TOOL_SPECS.find(s => s.name === 'link_build_stage')
+  assert.match(spec.description, /Solo informa/)
+  assert.match(spec.description, /no controla nada/)
+  assert.deepEqual(spec.inputSchema.required, ['build_id', 'role', 'stage', 'status'])
+  for (const own of ['subagents', 'subagents_peak', 'usage', 'started_at']) assert.equal(own in spec.inputSchema.properties, false, own)
+  assert.deepEqual(spec.inputSchema.properties.gate.required, ['stage'])
+})
+
+test('link_build_stage unpaired: stores and answers ok with reported false, never a pairing denial', async () => {
+  const declared = []
+  const build = { declare: async i => (declared.push(i), {}), canReport: async () => false }
+  const r = await runLinkTool('link_build_stage', buildInput, { ...deps().d, client: null, build })
+  assert.deepEqual(JSON.parse(r.result), { ok: true, reported: false })
+  assert.deepEqual(declared, [buildInput])
+})
+
+test('link_build_stage paired: reported true; an invalid field is denied by name', async () => {
+  const ok = { declare: async () => ({}), canReport: async () => true }
+  assert.deepEqual(JSON.parse((await runLinkTool('link_build_stage', buildInput, { ...deps().d, build: ok })).result), { ok: true, reported: true })
+  const bad = { declare: async () => ({ error: 'stage' }), canReport: async () => true }
+  assert.match((await runLinkTool('link_build_stage', { ...buildInput, stage: 9 }, { ...deps().d, build: bad })).deny, /campo stage/)
 })

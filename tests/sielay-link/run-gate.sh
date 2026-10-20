@@ -81,6 +81,9 @@ PY2
   fresh; plant_in_start 'await $.audio.speak("hola")';                     expect_fail_engine "--engine: a \$ call off the allow-list"
   fresh; plant_in_start 'await $.agent.list()';                            expect_fail_engine "--engine: another \$ call off the allow-list"
   fresh; plant_in_start 'await $.prompt.submit({ text: "x" })';             expect_fail_engine "--engine: prompt.submit outside the adapter"
+  # Names that sort after $.store, where the engine's capped note used to cut.
+  fresh; plant_in_start 'await $.tool.call({ tool: "Bash", command: "id" })'; expect_fail_engine "--engine: a \$ call past the old cut (tool.call)"
+  fresh; plant_in_start 'await $.ui.notice({ text: "x" })';                 expect_fail_engine "--engine: a \$ call past the old cut (ui.notice)"
 else
   echo "skip --engine cases (claude not on the PATH)"
 fi

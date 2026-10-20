@@ -2,13 +2,16 @@
 // sielay hub. Entry module (hooks/hooks.json). Every hook is registered here;
 // the work lives in the modules it imports, most of them pure.
 
-import { createRuntime, startLink, sessionPayload } from './link-runtime.js'
+import { createRuntime, startLink, sessionPayload, isOff } from './link-runtime.js'
 import { recordModeSample, recordSessionTitle, recordTurnEnd } from './link-session-payload.js'
 import { LINK_TOOL_SPECS, runLinkTool } from './link-tools.js'
 import { runLinkCommand } from './link-commands.js'
 import { PROMPT_FALLBACK_CONTEXT } from './link-inbound-framing.js'
 import { renderBand } from './link-band.jsx'
 import { renderPane } from './link-pane.jsx'
+import {
+  declareFromTool, noteSubagentStart, noteSubagentSpawn, noteSubagentStop, noteToolUse, noteTurnComplete, carryOnClear,
+} from './link-build-hooks.js'
 
 // $.state reference: literal plugin/key, declared in each file that uses it.
 const CONVERSATIONS = /** @type {const} */ ({ plugin: 'sielay-link', key: 'conversations' })
@@ -36,7 +39,8 @@ async function setUp($, rt) {
  * @param {Engine} $ @param {Runtime} rt @param {string} name @param {Record<string, unknown>} input
  */
 async function callTool($, rt, name, input) {
-  if ((await $.env.get('SIELAY_LINK_OFF')) === '1') return { deny: 'sielay-link está apagado (SIELAY_LINK_OFF=1).' }
+  // link_build_stage never refuses for being off or unpaired: it stores and answers reported:false.
+  if (name !== 'link_build_stage' && (await $.env.get('SIELAY_LINK_OFF')) === '1') return { deny: 'sielay-link está apagado (SIELAY_LINK_OFF=1).' }
   const answer = await runLinkTool(name, input, {
     client: rt.client,
     sessionFrom: async () => {
@@ -49,6 +53,10 @@ async function callTool($, rt, name, input) {
       await $.state.set(CONVERSATIONS, { ...value, [id]: address })
     },
     newId: () => crypto.randomUUID(),
+    build: {
+      declare: fields => declareFromTool($, rt, fields),
+      canReport: async () => rt.client !== null && !(await isOff($)),
+    },
   })
   return answer.deny !== undefined ? { deny: answer.deny } : { result: answer.result }
 }
@@ -94,6 +102,7 @@ export function register(on, options) {
   }).catch(passThrough)
   on('classic.PostToolUse', async ($, e, next) => {
     await recordModeSample($, e, 'PostToolUse')
+    await noteToolUse($, rt, e)
     return next(e)
   }).catch(passThrough)
   on('classic.PostToolBatch', async ($, e, next) => {
@@ -105,9 +114,32 @@ export function register(on, options) {
     return next(e)
   }).catch(passThrough)
   // Every turn end, including Esc and API errors (which raise no classic Stop):
-  // without it an interrupted turn would look like it is still running.
+  // without it an interrupted turn would look like it is still running. It
+  // also feeds the build: the turn's usage, and a subagent's run ending.
   on('turn.complete', async ($, e, next) => {
     await recordTurnEnd($, e)
+    await noteTurnComplete($, rt, e)
+    return next(e)
+  }).catch(passThrough)
+
+  // The build's live subagents (link-build-hooks.js). agent.spawn observes
+  // only: the description from its input, the agentId from what next resolved.
+  on('classic.SubagentStart', async ($, e, next) => {
+    await noteSubagentStart($, rt, e)
+    return next(e)
+  }).catch(passThrough)
+  on('classic.SubagentStop', async ($, e, next) => {
+    await noteSubagentStop($, rt, e)
+    return next(e)
+  }).catch(passThrough)
+  on('agent.spawn', async ($, e, next) => {
+    const spawned = await next(e)
+    await noteSubagentSpawn($, rt, e, spawned)
+    return spawned
+  }).catch(passThrough)
+  // /clear keeps the build (the rest of the session state is the host's).
+  on('session.end', async ($, e, next) => {
+    await carryOnClear($, rt, e)
     return next(e)
   }).catch(passThrough)
   on('classic.SessionStart', async ($, e, next) => {
@@ -125,6 +157,7 @@ export function register(on, options) {
   on('tool.call', { tool: 'mcp__sielay-link__link_send' }, ($, e) => callTool($, rt, 'link_send', e)).catch(toolFailed)
   on('tool.call', { tool: 'mcp__sielay-link__link_reply' }, ($, e) => callTool($, rt, 'link_reply', e)).catch(toolFailed)
   on('tool.call', { tool: 'mcp__sielay-link__link_peers' }, ($, e) => callTool($, rt, 'link_peers', e)).catch(toolFailed)
+  on('tool.call', { tool: 'mcp__sielay-link__link_build_stage' }, ($, e) => callTool($, rt, 'link_build_stage', e)).catch(toolFailed)
 
   on('command.run', { command: 'link' }, async ($, e) => runLinkCommand($, rt, e.args, e.origin))
 
