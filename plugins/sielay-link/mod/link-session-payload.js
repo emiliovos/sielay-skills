@@ -105,6 +105,20 @@ async function instanceIdFor($, hash, name, sessionId, now) {
 }
 
 /**
+ * The poll's build; a failure while reading it never stops the poll: the poll
+ * goes without `build` and the log names the error's kind, never its text.
+ * @param {Engine} $ @param {import('./link-build-hooks.js').BuildRuntime} rt
+ */
+async function safePollBuild($, rt) {
+  try {
+    return await pollBuild($, rt)
+  } catch (err) {
+    $.ui.log(`sielay-link: build no enviado, falló al leerlo (${err instanceof Error ? err.name : typeof err})`)
+    return undefined
+  }
+}
+
+/**
  * @typedef {{ adapter: { tmuxSessionName: (env: string|undefined) => Promise<string|undefined> } | null, tmux: { name?: string, at: number } }
  *   & import('./link-build-hooks.js').BuildRuntime} PayloadRuntime
  */
@@ -136,7 +150,7 @@ export async function buildSessionPayload($, rt, { withBuild = false } = {}) {
     cwd,
   })
   const instanceId = await instanceIdFor($, hash, resolved.name, sessionId, now)
-  const build = withBuild ? await pollBuild($, rt) : undefined
+  const build = withBuild ? await safePollBuild($, rt) : undefined
   return {
     session: {
       name: resolved.name,

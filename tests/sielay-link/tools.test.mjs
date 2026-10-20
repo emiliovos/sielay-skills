@@ -115,6 +115,7 @@ test('link_build_stage says it only reports and controls nothing', () => {
   assert.match(spec.description, /no controla nada/)
   assert.deepEqual(spec.inputSchema.required, ['build_id', 'role', 'stage', 'status'])
   for (const own of ['subagents', 'subagents_peak', 'usage', 'started_at']) assert.equal(own in spec.inputSchema.properties, false, own)
+  assert.deepEqual(spec.inputSchema.properties.gate.required, ['stage'])
 })
 
 test('link_build_stage unpaired: stores and answers ok with reported false, never a pairing denial', async () => {

@@ -37,7 +37,7 @@ export const BUILD_TOOL_SPEC = Object.freeze({
       },
       phase: str('Fase en curso (worker o coordinador)'),
       gate: {
-        type: 'object', additionalProperties: false,
+        type: 'object', additionalProperties: false, required: ['stage'],
         properties: { stage: { type: 'integer', minimum: 1, maximum: BUILD_STAGES.length }, approved_by: str('Quién aprobó'), approved_at: str('ISO 8601') },
       },
       summary: str('Resumen corto de la etapa (máximo 600); nunca secretos'),

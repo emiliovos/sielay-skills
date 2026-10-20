@@ -141,3 +141,21 @@ test('outcome: kept only with status done; unknown values refused; unknown field
   assert.equal(validateBuild({ ...validMin(), status: 'done', outcome: 'won' }, NOW).error, 'outcome')
   assert.equal(validateBuild({ ...validMin(), extra: 'x', html: '<b>' }, NOW).build.extra, undefined)
 })
+
+test('gate: stage is required, as the hub requires it', () => {
+  assert.equal(validateBuild({ ...validMin(), gate: { approved_by: 'emilio', approved_at: '2026-10-20T22:30:00.000Z' } }, NOW).error, 'gate.stage')
+  assert.equal(validateBuild({ ...validMin(), gate: { stage: 3 } }, NOW).error, undefined)
+})
+
+test('dates carry at most milliseconds (3 decimals), as the hub reads them', () => {
+  assert.equal(validateBuild({ ...validMin(), started_at: '2026-10-20T23:00:00.123456Z' }, NOW).error, 'started_at')
+  assert.equal(validateBuild({ ...validMin(), started_at: '2026-10-20T23:00:00.123Z' }, NOW).error, undefined)
+})
+
+test('integers must be safe; ids that carry a credential are refused; a DEL in an href drops the link', () => {
+  assert.equal(validateBuild({ ...validMin(), pr: 2 ** 53 }, NOW).error, 'pr')
+  assert.equal(validateBuild({ ...validMin(), plan_progress: { done: 2 ** 53, total: 1 } }, NOW).error, 'plan_progress')
+  assert.equal(validateBuild({ ...validMin(), build_id: 'sk-' + 'a'.repeat(24) }, NOW).error, 'build_id')
+  assert.equal(validateBuild({ ...validMin(), subagents: [{ id: 'slk_' + 'b'.repeat(20) }] }, NOW).error, 'subagents.id')
+  assert.deepEqual(validateBuild({ ...validMin(), links: [{ href: 'plans/a\x7fb.md' }, { href: 'plans/ok.md' }] }, NOW).build.links, [{ href: 'plans/ok.md' }])
+})
