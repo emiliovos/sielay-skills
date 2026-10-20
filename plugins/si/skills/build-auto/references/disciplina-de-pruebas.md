@@ -20,6 +20,9 @@ Investiga la causa y repórtala. Nunca debilites una garantía existente, nunca 
 
 ## Cada prueba nueva debe morder
 Rompe la implementación a propósito y demuestra que la prueba falla; si no falla, la prueba no sirve. Anota en el PR o en el commit qué mutaciones probaste y qué prueba atrapó cada una.
+- Describe cada mutación por el texto o el símbolo que cambia (función, condición, constante) y por su reemplazo, nunca por número de línea: las enmiendas y los arreglos de revisión mueven las líneas.
+- Si una mutación no se puede aplicar (el texto ya no está o aparece más de una vez), repórtala como **no aplicada**. Una mutación no aplicada no cuenta como atrapada ni como fallida.
+- Después de cada enmienda, revisa la lista de mutaciones: quita las del comportamiento retirado y agrega las del comportamiento nuevo.
 
 ## Un reloj por comparación
 Si producción compara contra el reloj de la base de datos, la prueba siembra y lee con SQL; si compara contra el reloj de la app, siembra desde la app. No mezcles tiempo real (mtime, fechas externas) con el reloj de la app.
