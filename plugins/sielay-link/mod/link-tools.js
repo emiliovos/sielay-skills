@@ -1,10 +1,12 @@
-// The three tools the model gets: link_send, link_reply, link_peers. There is
-// deliberately no tool to decide, accept or release a message: only a person
-// at the terminal (strip) or an admin with 2FA (dashboard) can.
+// The tools the model gets: link_send, link_reply, link_peers, and
+// link_build_stage, which only reports a build's progress (link-build-tool.js).
+// There is deliberately no tool to decide, accept or release a message: only a
+// person at the terminal (strip) or an admin with 2FA (dashboard) can.
 // Pure (no `$`): the mod passes the hub client and session readers in.
 
 import { normalizeName } from './link-session-name-resolution.js'
 import { neutralizeBody } from './link-inbound-framing.js'
+import { BUILD_TOOL_SPEC, runBuildTool } from './link-build-tool.js'
 
 const MAX_BODY_BYTES = 16 * 1024
 
@@ -51,6 +53,7 @@ export const LINK_TOOL_SPECS = Object.freeze([
     inputSchema: { type: 'object', additionalProperties: false, properties: {} },
     isDeferred: false,
   },
+  BUILD_TOOL_SPEC,
 ])
 
 /** @type {Record<string, string>} */
@@ -117,6 +120,7 @@ function noteFor(sent) {
  *   conversationPeer: (id: string) => Promise<string|undefined>,
  *   rememberConversation: (id: string, address: string) => Promise<void>,
  *   newId: () => string,
+ *   build?: import('./link-build-tool.js').BuildToolDeps,
  * }} ToolDeps
  * @typedef {{ deny: string, result?: undefined } | { result: string, deny?: undefined }} ToolAnswer
  */
@@ -137,6 +141,10 @@ function asText(value) {
  * @returns {Promise<ToolAnswer>}
  */
 export async function runLinkTool(name, input, deps) {
+  if (name === 'link_build_stage') {
+    if (!deps.build) return { deny: 'link_build_stage no está disponible en esta sesión.' }
+    return runBuildTool(input, deps.build)
+  }
   if (!['link_send', 'link_reply', 'link_peers'].includes(name)) return { deny: `herramienta desconocida: ${name}` }
   if (!deps.client) return { deny: 'sielay-link no está emparejado en esta máquina: corre /link pair <slot> (el slot lo crea un admin).' }
   try {

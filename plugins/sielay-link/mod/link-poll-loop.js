@@ -34,10 +34,11 @@ export const BUSY_RETRY_MS = 250
  *   isOff: () => Promise<boolean>,
  *   onStatus?: (status: LoopStatus, detail?: string) => Promise<void> | void,
  *   onSession?: (session: { id?: string, address?: string, name_assigned?: string }) => Promise<void> | void,
+ *   onPolled?: (sent: { instance_id: string } & Record<string, unknown>) => Promise<void> | void,
  *   now?: () => number | Promise<number>,
  * }} deps
  */
-export function createPollLoop({ schedule, getClient, buildSession, handler, isOff, onStatus = () => {}, onSession = () => {}, now = () => Date.now() }) {
+export function createPollLoop({ schedule, getClient, buildSession, handler, isOff, onStatus = () => {}, onSession = () => {}, onPolled = () => {}, now = () => Date.now() }) {
   /** @type {Ack[]} */
   let pendingAcks = []
   let failures = 0
@@ -87,6 +88,11 @@ export function createPollLoop({ schedule, getClient, buildSession, handler, isO
       failures = 0
       if (data?.session) await onSession(data.session)
       pendingAcks.push(...(await handler.handlePoll(session.instance_id, data ?? {})))
+      try {
+        await onPolled(session)
+      } catch {
+        // after-poll bookkeeping (the build's cleanup) retries on the next poll
+      }
       await onStatus('online')
       const after = Number(data?.poll_after_ms)
       delay = pendingAcks.length ? 0 : Number.isFinite(after) ? Math.min(MAX_DELAY_MS, Math.max(0, after)) : 0
