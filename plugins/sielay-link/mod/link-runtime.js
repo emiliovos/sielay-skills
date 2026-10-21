@@ -18,7 +18,7 @@ const PAIRING = /** @type {const} */ ({ plugin: 'sielay-link', key: 'pairing' })
 const CONVERSATIONS = /** @type {const} */ ({ plugin: 'sielay-link', key: 'conversations' })
 const NOTICE = /** @type {const} */ ({ plugin: 'sielay-link', key: 'notice' })
 
-export const CLIENT_VERSION = '1.1.1'
+export const CLIENT_VERSION = '1.2.0'
 
 /** @typedef {import('claude-code').EngineInterface} Engine */
 /** @typedef {import('../types/index.js').LinkStatus} LinkStatus */
@@ -44,6 +44,10 @@ export function createRuntime(options) {
     buildCarry: /** @type {import('../types/index.js').LinkBuildState|null} */ (null),
     /** The last invalid build field logged, so it is logged once. */
     buildError: /** @type {string|null} */ (null),
+    /** The discovery line went into this conversation (link-discovery-context.js); memory only, reset on session.end. */
+    discoveryAnnounced: false,
+    /** `self.address_prefix` from the last peers answer that carried it; memory only. */
+    addressPrefix: /** @type {string|null} */ (null),
   }
 }
 

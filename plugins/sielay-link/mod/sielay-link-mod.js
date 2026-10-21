@@ -7,6 +7,7 @@ import { recordModeSample, recordSessionTitle, recordTurnEnd } from './link-sess
 import { LINK_TOOL_SPECS, runLinkTool } from './link-tools.js'
 import { runLinkCommand } from './link-commands.js'
 import { PROMPT_FALLBACK_CONTEXT } from './link-inbound-framing.js'
+import { discoveryFor } from './link-discovery-context.js'
 import { renderBand } from './link-band.jsx'
 import { renderPane } from './link-pane.jsx'
 import {
@@ -15,6 +16,7 @@ import {
 
 // $.state reference: literal plugin/key, declared in each file that uses it.
 const CONVERSATIONS = /** @type {const} */ ({ plugin: 'sielay-link', key: 'conversations' })
+const STATUS = /** @type {const} */ ({ plugin: 'sielay-link', key: 'status' })
 
 /** @typedef {import('claude-code').EngineInterface} Engine */
 /** @typedef {import('./link-runtime.js').Runtime} Runtime */
@@ -53,6 +55,8 @@ async function callTool($, rt, name, input) {
       await $.state.set(CONVERSATIONS, { ...value, [id]: address })
     },
     newId: () => crypto.randomUUID(),
+    selfAddress: async () => (await $.state.get(STATUS)).value?.address,
+    notePrefix: prefix => void (rt.addressPrefix = prefix),
     build: {
       declare: fields => declareFromTool($, rt, fields),
       canReport: async () => rt.client !== null && !(await isOff($)),
@@ -139,6 +143,7 @@ export function register(on, options) {
   }).catch(passThrough)
   // /clear keeps the build (the rest of the session state is the host's).
   on('session.end', async ($, e, next) => {
+    rt.discoveryAnnounced = false
     await carryOnClear($, rt, e)
     return next(e)
   }).catch(passThrough)
@@ -147,12 +152,25 @@ export function register(on, options) {
     return next(e)
   }).catch(passThrough)
 
-  // The fallback adapter's own prompts carry a fixed context naming who sent them.
-  on('prompt.submit', ($, e, next) =>
-    e.origin.kind === 'plugin' && e.origin.name === $.plugin.name
-      ? next({ ...e, context: [...(e.context ?? []), PROMPT_FALLBACK_CONTEXT] })
-      : next(e),
-  ).catch(passThrough)
+  // The fallback adapter's own prompts carry a fixed context naming who sent
+  // them; any other prompt may carry the once-per-conversation discovery line.
+  // One hook: the engine refuses a second prompt.submit without a matcher.
+  on('prompt.submit', async ($, e, next) => {
+    const ownPrompt = e.origin?.kind === 'plugin' && e.origin.name === $.plugin.name
+    if (ownPrompt) return next({ ...e, context: [...(e.context ?? []), PROMPT_FALLBACK_CONTEXT] })
+    const text = discoveryFor({
+      announced: rt.discoveryAnnounced,
+      connected: rt.client !== null,
+      off: await isOff($),
+      ownPrompt,
+      command: e.command !== undefined,
+      address: (await $.state.get(STATUS)).value?.address,
+      addressPrefix: rt.addressPrefix,
+    })
+    if (text === null) return next(e)
+    rt.discoveryAnnounced = true
+    return next({ ...e, context: [...(e.context ?? []), text] })
+  }).catch(passThrough)
 
   on('tool.call', { tool: 'mcp__sielay-link__link_send' }, ($, e) => callTool($, rt, 'link_send', e)).catch(toolFailed)
   on('tool.call', { tool: 'mcp__sielay-link__link_reply' }, ($, e) => callTool($, rt, 'link_reply', e)).catch(toolFailed)

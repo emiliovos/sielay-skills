@@ -7,6 +7,7 @@
 import { normalizeName } from './link-session-name-resolution.js'
 import { neutralizeBody } from './link-inbound-framing.js'
 import { BUILD_TOOL_SPEC, runBuildTool } from './link-build-tool.js'
+import { ownAddress, selfPrefixOf } from './link-discovery-context.js'
 
 const MAX_BODY_BYTES = 16 * 1024
 
@@ -49,7 +50,9 @@ export const LINK_TOOL_SPECS = Object.freeze([
   },
   {
     name: 'link_peers',
-    description: 'Lista las sesiones con las que esta sesión puede hablar por sielay-link (solo pares), con su modo y si están en línea.',
+    description:
+      'Lista las sesiones de Claude Code con las que esta sesión puede hablar por sielay-link (las de tus máquinas y las de ' +
+      'máquinas conectadas) y tu propia dirección. Úsala antes de link_send cuando te pidan escribirle a otra sesión.',
     inputSchema: { type: 'object', additionalProperties: false, properties: {} },
     isDeferred: false,
   },
@@ -120,6 +123,8 @@ function noteFor(sent) {
  *   conversationPeer: (id: string) => Promise<string|undefined>,
  *   rememberConversation: (id: string, address: string) => Promise<void>,
  *   newId: () => string,
+ *   selfAddress: () => Promise<unknown>,
+ *   notePrefix?: (prefix: string) => void,
  *   build?: import('./link-build-tool.js').BuildToolDeps,
  * }} ToolDeps
  * @typedef {{ deny: string, result?: undefined } | { result: string, deny?: undefined }} ToolAnswer
@@ -151,9 +156,16 @@ export async function runLinkTool(name, input, deps) {
     if (name === 'link_peers') {
       const answer = await deps.client.peers()
       const peers = Array.isArray(answer?.peers) ? answer.peers : []
+      const prefix = selfPrefixOf(answer)
+      if (prefix) deps.notePrefix?.(prefix)
+      const tu_direccion = await ownAddress({
+        address: await deps.selfAddress(),
+        addressPrefix: prefix,
+        sessionName: async () => (await deps.sessionFrom()).name,
+      })
       /** @param {Record<string, unknown>} p */
       const clean = p => Object.fromEntries(Object.entries(p).map(([k, v]) => [k, typeof v === 'string' ? neutralizeBody(v).slice(0, 200) : v]))
-      return { result: asText({ peers: peers.map(clean) }) }
+      return { result: asText({ tu_direccion, peers: peers.map(clean) }) }
     }
 
     const textError = checkText(input.text)

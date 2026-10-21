@@ -317,3 +317,82 @@ test('the band shows the build line; /clear keeps the build; after done went out
   await clock.settle()
   expect(polls(sent).at(-1)!.body.session.build).toBeUndefined()
 })
+
+// --- Discovery: the once-per-conversation line telling the model its address.
+
+test('discovery: one context line per conversation once the address is known; again after /clear', { options: { link_token: 'test-token' } }, async ($, on) => {
+  const clock = mock.clock(on, { now: 6_000_000 })
+  mock.store(on)
+  mock.env(on, { HOME: '/nowhere' })
+  fakeHost(on)
+  on('session.end', ($: any, e: any) => ({ sessionId: e.sessionId }))
+  const seen: any[] = []
+  on('prompt.submit', ($: any, e: any) => (seen.push(e), { text: e.text, context: e.context, origin: e.origin }))
+  fakeHub(on, path => (path === '/api/link/poll' ? { session: { id: 's', address: 'eva/box/p' }, messages: [], strip: [], poll_after_ms: 60_000 } : {}))
+  await $.session.start({ cwd: '/srv/p', surface: 'terminal', isInteractive: true })
+  await $.prompt.submit({ text: 'antes del primer poll' } as any)
+  await clock.advance(10)
+  await clock.settle()
+  await $.command.run({ command: 'link', args: 'off' } as any)
+  await $.prompt.submit({ text: 'apagado' } as any)
+  await $.command.run({ command: 'link', args: 'on' } as any)
+  await $.prompt.submit({ text: 'uno' } as any)
+  await $.prompt.submit({ text: 'dos' } as any)
+  await $.session.end({ reason: 'clear', sessionId: 'sess-1', resume: {} } as any)
+  await $.prompt.submit({ text: 'tres' } as any)
+  const line = '[sielay-link] Esta sesión está conectada a sielay-link y su dirección es eva/box/p. Si te piden hablar con otra sesión de Claude Code (otra máquina u otra terminal), usa link_peers para ver a quién puedes escribir y link_send para escribirle.'
+  expect(seen.map(e => [e.text, e.context ?? null])).toEqual([
+    ['antes del primer poll', null],
+    ['apagado', null],
+    ['uno', [line]],
+    ['dos', null],
+    ['tres', [line]],
+  ])
+})
+
+test('discovery: without a token no context is added and nothing reaches the network', async ($, on) => {
+  mock.clock(on, { now: 1 })
+  mock.store(on)
+  mock.env(on, { HOME: '/nowhere' })
+  fakeHost(on)
+  const seen: any[] = []
+  on('prompt.submit', ($: any, e: any) => (seen.push(e), { text: e.text, context: e.context }))
+  const sent = fakeHub(on, () => ({}))
+  await $.session.start({ cwd: '/srv/p', surface: 'terminal', isInteractive: true })
+  await $.prompt.submit({ text: 'hola' } as any)
+  expect(seen.map(e => e.context ?? null)).toEqual([null])
+  expect(sent.length).toBe(0)
+})
+
+test('/link peers shows the own address: from self before the first poll, and with an old hub without self', { options: { link_token: 'test-token' } }, async ($, on) => {
+  mock.clock(on, { now: 8_000_000 })
+  mock.store(on)
+  mock.env(on, { HOME: '/nowhere' })
+  fakeHost(on)
+  let withSelf = true
+  fakeHub(on, path => (path === '/api/link/peers'
+    ? { ...(withSelf ? { self: { address_prefix: 'eva/box' } } : {}), peers: [{ address: 'ana/laptop/api', online: true, mode: 'default', state: 'idle' }] }
+    : {}))
+  await $.session.start({ cwd: '/srv/proyecto', surface: 'terminal', isInteractive: true })
+  const fresh: any = await $.command.run({ command: 'link', args: 'peers' } as any)
+  expect(String(fresh.text).split('\n')).toEqual(['Tu dirección: eva/box/proyecto', '● ana/laptop/api  default · idle'])
+  withSelf = false
+  const old: any = await $.command.run({ command: 'link', args: 'peers' } as any)
+  expect(String(old.text).split('\n')).toEqual(['Tu dirección: (sin asignar)', '● ana/laptop/api  default · idle'])
+})
+
+test('link_peers gives the address the last poll assigned, even from an old hub without self', { options: { link_token: 'test-token' } }, async ($, on) => {
+  const clock = mock.clock(on, { now: 9_500_000 })
+  mock.store(on)
+  mock.env(on, { HOME: '/nowhere' })
+  fakeHost(on)
+  const peers = [{ address: 'ana/laptop/api', online: true }]
+  fakeHub(on, path => (path === '/api/link/poll'
+    ? { session: { id: 's', address: 'eva/box/p' }, messages: [], strip: [], poll_after_ms: 60_000 }
+    : { peers }))
+  await $.session.start({ cwd: '/srv/p', surface: 'terminal', isInteractive: true })
+  await clock.advance(10)
+  await clock.settle()
+  const r: any = await $.tool.call({ tool: 'mcp__sielay-link__link_peers' } as any)
+  expect(JSON.parse(r.result)).toEqual({ tu_direccion: 'eva/box/p', peers })
+})
