@@ -47,9 +47,9 @@ test('discoveryFor: null without a client, off, already announced, own prompt or
   assert.equal(discoveryFor({ ...base, command: true }), null)
 })
 
-test('discoveryFor: null while neither the address nor its prefix is known (retried on the next prompt)', () => {
-  assert.equal(discoveryFor({ ...base, address: undefined }), null)
-  assert.equal(discoveryFor({ ...base, address: 'not an address' }), null)
+test('discoveryFor: connected with neither the address nor its prefix gives the text without the address clause', () => {
+  assert.equal(discoveryFor({ ...base, address: undefined }), discoveryContext({}))
+  assert.equal(discoveryFor({ ...base, address: 'not an address' }), discoveryContext({}))
 })
 
 test('selfPrefixOf reads self.address_prefix; an old hub without self gives null', () => {

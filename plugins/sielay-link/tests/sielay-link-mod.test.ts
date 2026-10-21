@@ -320,7 +320,7 @@ test('the band shows the build line; /clear keeps the build; after done went out
 
 // --- Discovery: the once-per-conversation line telling the model its address.
 
-test('discovery: one context line per conversation once the address is known; again after /clear', { options: { link_token: 'test-token' } }, async ($, on) => {
+test('discovery: one context line per conversation (without the address before the first poll); again after /clear', { options: { link_token: 'test-token' } }, async ($, on) => {
   const clock = mock.clock(on, { now: 6_000_000 })
   mock.store(on)
   mock.env(on, { HOME: '/nowhere' })
@@ -330,24 +330,44 @@ test('discovery: one context line per conversation once the address is known; ag
   on('prompt.submit', ($: any, e: any) => (seen.push(e), { text: e.text, context: e.context, origin: e.origin }))
   fakeHub(on, path => (path === '/api/link/poll' ? { session: { id: 's', address: 'eva/box/p' }, messages: [], strip: [], poll_after_ms: 60_000 } : {}))
   await $.session.start({ cwd: '/srv/p', surface: 'terminal', isInteractive: true })
-  await $.prompt.submit({ text: 'antes del primer poll' } as any)
-  await clock.advance(10)
-  await clock.settle()
   await $.command.run({ command: 'link', args: 'off' } as any)
   await $.prompt.submit({ text: 'apagado' } as any)
   await $.command.run({ command: 'link', args: 'on' } as any)
+  await $.prompt.submit({ text: 'antes del primer poll' } as any)
   await $.prompt.submit({ text: 'uno' } as any)
-  await $.prompt.submit({ text: 'dos' } as any)
+  await clock.advance(10)
+  await clock.settle()
   await $.session.end({ reason: 'clear', sessionId: 'sess-1', resume: {} } as any)
   await $.prompt.submit({ text: 'tres' } as any)
-  const line = '[sielay-link] Esta sesión está conectada a sielay-link y su dirección es eva/box/p. Si te piden hablar con otra sesión de Claude Code (otra máquina u otra terminal), usa link_peers para ver a quién puedes escribir y link_send para escribirle.'
+  await $.prompt.submit({ text: 'cuatro' } as any)
+  const tail = 'Si te piden hablar con otra sesión de Claude Code (otra máquina u otra terminal), usa link_peers para ver a quién puedes escribir y link_send para escribirle.'
   expect(seen.map(e => [e.text, e.context ?? null])).toEqual([
-    ['antes del primer poll', null],
     ['apagado', null],
-    ['uno', [line]],
-    ['dos', null],
-    ['tres', [line]],
+    ['antes del primer poll', [`[sielay-link] Esta sesión está conectada a sielay-link. ${tail}`]],
+    ['uno', null],
+    ['tres', [`[sielay-link] Esta sesión está conectada a sielay-link y su dirección es eva/box/p. ${tail}`]],
+    ['cuatro', null],
   ])
+})
+
+test('discovery: a prompt another hook drops does not use up the line; the next prompt gets it', { options: { link_token: 'test-token' } }, async ($, on) => {
+  const clock = mock.clock(on, { now: 6_500_000 })
+  mock.store(on)
+  mock.env(on, { HOME: '/nowhere' })
+  fakeHost(on)
+  const seen: any[] = []
+  on('prompt.submit', ($: any, e: any) => {
+    seen.push(e)
+    return e.text === 'bloqueado' ? { drop: 'otro hook lo bloqueó' } : { text: e.text, context: e.context }
+  })
+  fakeHub(on, path => (path === '/api/link/poll' ? { session: { id: 's', address: 'eva/box/p' }, messages: [], strip: [], poll_after_ms: 60_000 } : {}))
+  await $.session.start({ cwd: '/srv/p', surface: 'terminal', isInteractive: true })
+  await clock.advance(10)
+  await clock.settle()
+  await $.prompt.submit({ text: 'bloqueado' } as any)
+  await $.prompt.submit({ text: 'entra' } as any)
+  await $.prompt.submit({ text: 'otro' } as any)
+  expect(seen.map(e => [e.text, (e.context ?? []).length])).toEqual([['bloqueado', 1], ['entra', 1], ['otro', 0]])
 })
 
 test('discovery: without a token no context is added and nothing reaches the network', async ($, on) => {

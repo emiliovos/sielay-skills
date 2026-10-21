@@ -78,7 +78,8 @@ Desde la 1.2.0, una conversación nueva sabe sola su dirección y cómo escribir
 ```
 
 - **Una vez por conversación.** Después de `/clear` se vuelve a agregar en el primer prompt.
-- **Solo con token y con la dirección conocida.** Sin token, con sielay-link apagado o antes de que el hub conteste el primer poll, no se agrega nada y se intenta en el siguiente prompt. Si solo se conoce el prefijo (por un `link_peers` previo), la línea dice «su dirección empieza con `persona/máquina/`».
+- **Solo con token.** Sin token o con sielay-link apagado no se agrega nada y se intenta en el siguiente prompt; lo mismo si otro hook bloquea ese prompt.
+- **La dirección, si ya se conoce.** Antes de que el hub conteste el primer poll, la línea va sin la dirección («Esta sesión está conectada a sielay-link. Si te piden…»). Si solo se conoce el prefijo (por un `link_peers` previo), dice «su dirección empieza con `persona/máquina/`».
 - **No va en** los prompts del propio plugin (el modo `prompt` ya lleva su contexto fijo) ni en los comandos con `/`.
 - La línea no lleva cuerpos de mensajes ni secretos, y el plugin no guarda nada nuevo para esto: la marca vive en memoria.
 

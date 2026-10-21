@@ -155,9 +155,12 @@ export function register(on, options) {
   // The fallback adapter's own prompts carry a fixed context naming who sent
   // them; any other prompt may carry the once-per-conversation discovery line.
   // One hook: the engine refuses a second prompt.submit without a matcher.
+  // The conversation is marked only once the prompt entered with the line: a
+  // prompt another hook drops (or that fails) leaves it for the next one.
   on('prompt.submit', async ($, e, next) => {
     const ownPrompt = e.origin?.kind === 'plugin' && e.origin.name === $.plugin.name
     if (ownPrompt) return next({ ...e, context: [...(e.context ?? []), PROMPT_FALLBACK_CONTEXT] })
+    if (rt.discoveryAnnounced) return next(e)
     const text = discoveryFor({
       announced: rt.discoveryAnnounced,
       connected: rt.client !== null,
@@ -168,8 +171,9 @@ export function register(on, options) {
       addressPrefix: rt.addressPrefix,
     })
     if (text === null) return next(e)
-    rt.discoveryAnnounced = true
-    return next({ ...e, context: [...(e.context ?? []), text] })
+    const entered = await next({ ...e, context: [...(e.context ?? []), text] })
+    if (entered.drop === undefined) rt.discoveryAnnounced = true
+    return entered
   }).catch(passThrough)
 
   on('tool.call', { tool: 'mcp__sielay-link__link_send' }, ($, e) => callTool($, rt, 'link_send', e)).catch(toolFailed)
