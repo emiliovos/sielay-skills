@@ -7,6 +7,7 @@ import { PANE_ID } from './link-state-refs.js'
 import { isOff } from './link-runtime.js'
 import { resolveStripId, isPersonOrigin, shortId } from './link-strip-selection.js'
 import { decideStripItem, showStripItem, oneLine } from './link-band.jsx'
+import { ownAddress, selfPrefixOf } from './link-discovery-context.js'
 
 // $.state references: literal plugin/key, declared in each file that uses them.
 const OFF = /** @type {const} */ ({ plugin: 'sielay-link', key: 'off' })
@@ -83,11 +84,20 @@ export async function runLinkCommand($, rt, args, origin) {
   if (sub === 'peers') {
     if (!rt.client) return { text: 'Sin emparejar: corre /link pair <slot>.' }
     try {
-      const { peers = [] } = await rt.client.peers()
-      if (!peers.length) return { text: 'No tienes pares todavía. Un admin los crea en el dashboard.' }
+      const answer = await rt.client.peers()
+      const peers = Array.isArray(answer?.peers) ? answer.peers : []
+      const prefix = selfPrefixOf(answer)
+      if (prefix) rt.addressPrefix = prefix
+      const own = await ownAddress({
+        address: (await $.state.get(STATUS)).value?.address,
+        addressPrefix: prefix,
+        sessionName: async () => (await buildSessionPayload($, rt)).session.name,
+      })
+      const head = `Tu dirección: ${own ?? '(sin asignar)'}`
+      if (!peers.length) return { text: `${head}\nNo tienes pares todavía. Un admin los crea en el dashboard.` }
       /** @param {{ address: string, online?: boolean, mode?: string, state?: string, project?: string|null }} p */
       const line = p => `${p.online ? '●' : '○'} ${oneLine(p.address, 120)}  ${oneLine(p.mode ?? '?', 30)} · ${oneLine(p.state ?? '?', 20)}${p.project ? ` · ${oneLine(p.project, 80)}` : ''}`
-      return { text: peers.map(line).join('\n') }
+      return { text: [head, ...peers.map(line)].join('\n') }
     } catch (err) {
       return { text: describeHubError(err) }
     }

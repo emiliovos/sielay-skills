@@ -54,18 +54,34 @@ Si otra carpeta ya usa ese nombre y está en línea, el hub te asigna `nombre-2`
 | `/link` | Estado: hub, dirección, modo y si está fresco, adaptador y mensajes en franja. Abre el panel |
 | `/link name <x>` | Fija el nombre de la sesión para esta carpeta |
 | `/link off` / `on` | Apaga o enciende la recepción en esta sesión. `SIELAY_LINK_OFF=1 claude` lo apaga del todo, sin herramientas |
-| `/link peers` | Sesiones con las que puedes hablar (solo pares) |
+| `/link peers` | Tu dirección y las sesiones con las que puedes hablar (solo pares) |
 | `/link pair <slot>` | Empareja la máquina |
 | `/link show <id>` | Abre en el panel el mensaje completo de la franja con ese id |
 | `/link accept <id>` / `reject <id>` | Acepta o rechaza ese mensaje. Solo cuenta si lo tecleas tú en el prompt |
 | `link_send`, `link_reply`, `link_peers` | Las herramientas del modelo para hablar con otras sesiones. **No existe ninguna para aceptar, rechazar ni liberar** |
 | `link_build_stage` | Le dice al hub en qué va el build de `/si:build-auto` de esta sesión. Solo informa: no controla nada (ver «Reporte del build») |
 
+`link_peers` devuelve `{ "tu_direccion": …, "peers": [ … ] }`. `tu_direccion` sale de la dirección que el hub asignó en el último poll; si todavía no hay poll, del prefijo `persona/máquina` que manda el hub (`self.address_prefix`) más el nombre de la sesión; si el hub es anterior y no lo manda, va `null`. `peers` no cambia.
+
 Para que el modelo las use sin preguntarte cada vez, agrégalas a `permissions.allow` en `~/.claude/settings.json`:
 
 ```json
 { "permissions": { "allow": ["mcp__sielay-link__link_send", "mcp__sielay-link__link_reply", "mcp__sielay-link__link_peers", "mcp__sielay-link__link_build_stage"] } }
 ```
+
+## Descubrimiento
+
+Desde la 1.2.0, una conversación nueva sabe sola su dirección y cómo escribirle a otra sesión. En el primer prompt de la conversación, el plugin agrega al contexto del modelo, sin mostrártelo, una sola línea:
+
+```
+[sielay-link] Esta sesión está conectada a sielay-link y su dirección es persona/máquina/sesión. Si te piden hablar con otra sesión de Claude Code (otra máquina u otra terminal), usa link_peers para ver a quién puedes escribir y link_send para escribirle.
+```
+
+- **Una vez por conversación.** Después de `/clear` se vuelve a agregar en el primer prompt.
+- **Solo con token.** Sin token o con sielay-link apagado no se agrega nada y se intenta en el siguiente prompt; lo mismo si otro hook bloquea ese prompt.
+- **La dirección, si ya se conoce.** Antes de que el hub conteste el primer poll, la línea va sin la dirección («Esta sesión está conectada a sielay-link. Si te piden…»). Si solo se conoce el prefijo (por un `link_peers` previo), dice «su dirección empieza con `persona/máquina/`».
+- **No va en** los prompts del propio plugin (el modo `prompt` ya lleva su contexto fijo) ni en los comandos con `/`.
+- La línea no lleva cuerpos de mensajes ni secretos, y el plugin no guarda nada nuevo para esto: la marca vive en memoria.
 
 ## Cuándo se ejecuta solo un mensaje
 

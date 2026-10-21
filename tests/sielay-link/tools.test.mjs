@@ -5,16 +5,20 @@ import { HubError } from '../../plugins/sielay-link/mod/link-hub-client.js'
 
 const from = { name: 'api', instance_id: 'i1', cwd_hash: 'h', mode: 'bypassPermissions', mode_fresh: 1 }
 
-function deps({ client = {}, conversations = {} } = {}) {
+function deps({ client = {}, conversations = {}, address } = {}) {
   const remembered = []
+  const prefixes = []
   return {
     remembered,
+    prefixes,
     d: {
       client,
       sessionFrom: async () => from,
       conversationPeer: async id => conversations[id],
       rememberConversation: async (id, address) => void remembered.push([id, address]),
       newId: () => 'cmid-1',
+      selfAddress: async () => address,
+      notePrefix: p => void prefixes.push(p),
     },
   }
 }
@@ -73,10 +77,35 @@ test('link_reply: an unknown conversation is denied', async () => {
   assert.match(r.deny, /link_send/)
 })
 
-test('link_peers lists the hub answer', async () => {
+test('link_peers lists the hub answer with this session\'s own address from the last poll', async () => {
   const peers = [{ address: 'eva/box/web', project: null, mode: 'default', state: 'idle', online: true, last_seen_at: 'x' }]
-  const { d } = deps({ client: { peers: async () => ({ peers }) } })
-  assert.deepEqual(JSON.parse((await runLinkTool('link_peers', {}, d)).result), { peers })
+  const { d } = deps({ address: 'eva/box/api', client: { peers: async () => ({ self: { address_prefix: 'eva/box' }, peers }) } })
+  assert.deepEqual(JSON.parse((await runLinkTool('link_peers', {}, d)).result), { tu_direccion: 'eva/box/api', peers })
+})
+
+test('link_peers before the first poll: the hub prefix plus the session name, and the prefix is kept', async () => {
+  const { d, prefixes } = deps({ client: { peers: async () => ({ self: { address_prefix: 'emilio/vps-sielay' }, peers: [] }) } })
+  const out = JSON.parse((await runLinkTool('link_peers', {}, d)).result)
+  assert.equal(out.tu_direccion, `emilio/vps-sielay/${from.name}`)
+  assert.deepEqual(prefixes, ['emilio/vps-sielay'])
+})
+
+test('link_peers against an old hub without self: peers as before, own address only if polled', async () => {
+  const peers = [{ address: 'eva/box/web', online: false }]
+  const { d, prefixes } = deps({ client: { peers: async () => ({ peers }) } })
+  assert.deepEqual(JSON.parse((await runLinkTool('link_peers', {}, d)).result), { tu_direccion: null, peers })
+  assert.deepEqual(prefixes, [])
+  const polled = deps({ address: 'eva/box/api', client: { peers: async () => ({ peers }) } })
+  assert.equal(JSON.parse((await runLinkTool('link_peers', {}, polled.d)).result).tu_direccion, 'eva/box/api')
+})
+
+test('link_peers description names the own address and sends the model there before link_send', () => {
+  const spec = LINK_TOOL_SPECS.find(s => s.name === 'link_peers')
+  assert.equal(
+    spec.description,
+    'Lista las sesiones de Claude Code con las que esta sesión puede hablar por sielay-link (las de tus máquinas y las de ' +
+      'máquinas conectadas) y tu propia dirección. Úsala antes de link_send cuando te pidan escribirle a otra sesión.',
+  )
 })
 
 test('link_peers text a peer controls is sanitized before the model reads it', async () => {
