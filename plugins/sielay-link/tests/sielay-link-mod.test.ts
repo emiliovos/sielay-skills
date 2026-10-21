@@ -270,7 +270,7 @@ test('link_build_stage: the build rides the next poll with its subagents (paired
   const build = polls(sent).at(-1)!.body.session.build
   expect(build).toMatchObject({ ...buildArgs, subagents_peak: 2, started_at: '2026-10-20T23:00:00.000Z' })
   expect(build.subagents.map((s: any) => [s.id, s.type, s.description])).toEqual([['agent-2', 'tester', 'Fase 5: mod']])
-  expect(build.usage).toEqual({ input_tokens: 11, output_tokens: 3, cache_read_input_tokens: 4, cache_creation_input_tokens: 5, turns: 2, model: 'claude-test' })
+  expect(build.usage).toEqual({ input_tokens: 11, output_tokens: 3, cache_read_input_tokens: 4, cache_creation_input_tokens: 5, turns: 2, model: 'claude-test', active_ms: 15 })
   expect(logs.filter(l => l.includes('build'))).toEqual([])
 })
 

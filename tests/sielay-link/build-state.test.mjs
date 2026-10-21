@@ -3,7 +3,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  declareBuild, subagentUp, subagentSeen, subagentDown, addUsage, forgetIfDone, buildReport, pruneExpired, SUBAGENT_EXPIRY_MS,
+  declareBuild, subagentUp, subagentSeen, subagentDown, addUsage, addActiveTime, forgetIfDone, buildReport, pruneExpired, SUBAGENT_EXPIRY_MS,
 } from '../../plugins/sielay-link/mod/link-build-state.js'
 
 const T0 = Date.parse('2026-10-20T23:00:00.000Z')
@@ -103,6 +103,27 @@ test('usage: no model is made up when the main loop never reported one', () => {
   let s = declareBuild(null, min, T0)
   s = addUsage(s, usage(1, 'sub-model'), false)
   assert.equal('model' in buildReport(s, T0).build.usage, false)
+})
+
+test('active time: turn durations add up into usage.active_ms; a missing or bad duration adds nothing', () => {
+  let s = declareBuild(null, min, T0)
+  s = addUsage(s, usage(1), true)
+  s = addActiveTime(s, 1500.7)
+  s = addActiveTime(s, 2500)
+  for (const bad of [undefined, null, 0, -5, NaN, Infinity, '900']) assert.equal(addActiveTime(s, bad), s, String(bad))
+  assert.equal(buildReport(s, T0).build.usage.active_ms, 4000)
+  assert.equal(buildReport(s, T0).build.usage.turns, 1, 'the duration never counts a turn')
+  assert.equal(addActiveTime(null, 1000), null, 'nothing is tracked without a build')
+})
+
+test('active time: an aborted turn (duration, no usage) still counts; a new build_id starts from zero', () => {
+  let s = addActiveTime(declareBuild(null, min, T0), 800)
+  assert.deepEqual(buildReport(s, T0).build.usage, {
+    input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0, turns: 0, active_ms: 800,
+  })
+  s = addUsage(s, usage(2), true)
+  assert.equal(s.usage.active_ms, 800, 'usage keeps the time already counted')
+  assert.equal(declareBuild(s, { ...min, build_id: 'sielay-otro-build' }, T0).usage, null)
 })
 
 test('report: a too-big build sheds descriptions, then the oldest subagents, and still goes', () => {

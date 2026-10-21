@@ -73,6 +73,29 @@ test('a full session: declared fields, subagents paired by agentId, usage of mai
   assert.deepEqual(build.usage, { input_tokens: 110, output_tokens: 11, cache_read_input_tokens: 22, cache_creation_input_tokens: 33, turns: 2, model: 'main' })
 })
 
+test('turn durations of main and subagents add up in usage.active_ms; a turn without durationMs adds nothing', async () => {
+  const h = engine()
+  await declareFromTool(h.$, h.rt, min)
+  await noteSubagentStart(h.$, h.rt, { agent_id: 'a1', agent_type: 'tester' })
+  await noteTurnComplete(h.$, h.rt, { durationMs: 40_000, usage: { input_tokens: 5, output_tokens: 1, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 } })
+  await noteTurnComplete(h.$, h.rt, { agentId: 'a1', durationMs: 25_000 })
+  await noteTurnComplete(h.$, h.rt, { usage: { input_tokens: 1, output_tokens: 1, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 } })
+  const build = await pollBuild(h.$, h.rt)
+  assert.equal(build.usage.active_ms, 65_000)
+  assert.equal(build.usage.turns, 2)
+  assert.deepEqual(build.subagents, [], 'the subagent turn still ends its run')
+})
+
+test('/clear keeps usage.active_ms like the rest of usage', async () => {
+  const h = engine()
+  await declareFromTool(h.$, h.rt, min)
+  await noteTurnComplete(h.$, h.rt, { durationMs: 30_000 })
+  await carryOnClear(h.$, h.rt, { reason: 'clear' })
+  h.wipe()
+  await noteTurnComplete(h.$, h.rt, { durationMs: 12_000 })
+  assert.equal((await pollBuild(h.$, h.rt)).usage.active_ms, 42_000)
+})
+
 test('descriptions land on their own subagent while both are live', async () => {
   const h = engine()
   await declareFromTool(h.$, h.rt, min)

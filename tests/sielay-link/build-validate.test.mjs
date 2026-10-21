@@ -130,6 +130,10 @@ test('pr, delivery, usage and plan_progress shapes', () => {
   assert.equal(validateBuild({ ...validMin(), usage: { input_tokens: -1, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0, turns: 0 } }, NOW).error, 'usage.input_tokens')
   assert.equal(validateBuild({ ...validMin(), usage: { input_tokens: 1, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0, turns: 1.5 } }, NOW).error, 'usage.turns')
   assert.equal(validateBuild({ ...validMin(), usage: null }, NOW).build.usage, null)
+  const counts = { input_tokens: 1, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0, turns: 1 }
+  assert.equal(validateBuild({ ...validMin(), usage: { ...counts, active_ms: 90_000 } }, NOW).build.usage.active_ms, 90_000)
+  assert.equal('active_ms' in validateBuild({ ...validMin(), usage: counts }, NOW).build.usage, false, 'optional: absent stays absent')
+  for (const bad of [-1, 1.5, '9', 2 ** 53, null]) assert.equal(validateBuild({ ...validMin(), usage: { ...counts, active_ms: bad } }, NOW).error, 'usage.active_ms', String(bad))
   const withModel = validateBuild({ ...validMin(), usage: { input_tokens: 1, output_tokens: 2, cache_read_input_tokens: 3, cache_creation_input_tokens: 4, turns: 1, model: null } }, NOW)
   assert.equal(withModel.build.usage.model, null)
   assert.equal(validateBuild({ ...validMin(), plan_progress: { done: -1, total: 7 } }, NOW).error, 'plan_progress')
