@@ -7,7 +7,7 @@
 // `session.end` (reason `clear`) and put back on the next write if the state
 // came back empty, so a /clear never drops the build.
 
-import { declareBuild, subagentUp, subagentSeen, subagentDown, addUsage, forgetIfDone, buildReport, pruneExpired } from './link-build-state.js'
+import { declareBuild, subagentUp, subagentSeen, subagentDown, addUsage, addActiveTime, forgetIfDone, buildReport, pruneExpired } from './link-build-state.js'
 
 // $.state reference: literal plugin/key, declared in each file that uses it.
 const BUILD = /** @type {const} */ ({ plugin: 'sielay-link', key: 'build' })
@@ -84,13 +84,13 @@ export async function noteToolUse($, rt, e) {
 }
 
 /**
- * Every turn end: its usage counts (main loop or subagent), and a subagent's
- * run ending is its stop when no SubagentStop came.
- * @param {Engine} $ @param {BuildRuntime} rt @param {{ agentId?: string, usage?: unknown }} e turn.complete
+ * Every turn end: its usage and its duration count (main loop or subagent),
+ * and a subagent's run ending is its stop when no SubagentStop came.
+ * @param {Engine} $ @param {BuildRuntime} rt @param {{ agentId?: string, usage?: unknown, durationMs?: unknown }} e turn.complete
  */
 export async function noteTurnComplete($, rt, e) {
   await update($, rt, s => {
-    const counted = addUsage(s, e.usage, !e.agentId)
+    const counted = addActiveTime(addUsage(s, e.usage, !e.agentId), e.durationMs)
     return e.agentId ? subagentDown(counted, e.agentId) : counted
   })
 }

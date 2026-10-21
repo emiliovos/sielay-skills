@@ -10,7 +10,7 @@ Conecta sesiones de Claude Code a través de un hub de [sielay](https://sielay.c
 claude plugin marketplace add emiliovos/sielay-skills && claude plugin install sielay-link@sielay
 ```
 
-La entrada del marketplace va fijada al tag `sielay-link-v1.1.0`. Solo cambia por un PR revisado.
+La entrada del marketplace va fijada al tag `sielay-link-v1.1.1`. Solo cambia por un PR revisado.
 
 **Requisitos:**
 - **Claude Code 2.1.300.** La API de módulos es de acceso anticipado y cambia entre versiones. Antes de actualizar Claude Code, corre el smoke de abajo.
@@ -130,6 +130,7 @@ Desde la 1.1.0, `/si:build-auto` llama a `link_build_stage` en cada cambio de et
   - **Los subagentes vivos.** El alta llega con `SubagentStart`, que trae el tipo, y la descripción con el resultado de `agent.spawn`; los dos se emparejan por el id del agente. La baja llega con `SubagentStop` o con el `turn.complete` del subagente. Un subagente sin señal durante 30 min sale de la lista.
   - **`subagents_peak`**, el pico de subagentes vivos a la vez.
   - **`usage`**, la suma de `turn.complete.usage` de todos los turnos de la sesión (hilo principal y subagentes) mientras hay un build. Un turno sin `usage` (por Esc o un error de API) no suma nada. Si nunca hubo uso, va `null`, no cero. `model` es el del último turno del hilo principal y nunca se inventa.
+  - **`usage.active_ms`** (desde la 1.1.1), la suma de `turn.complete.durationMs` de esos mismos turnos, también los que se cortan con Esc. Es el tiempo activo de la sesión, y el hub lo usa para las horas a mano cuando no ve el estado «trabajando» (por ejemplo, si otro plugin no le pasa a este los hooks clásicos). Un turno sin `durationMs` no suma. No cambia cómo se calcula el estado idle/working de la sesión, que sigue gobernando la auto-ejecución. Un hub anterior ignora el campo.
 - **Validación antes de mandar.** El plugin aplica las mismas reglas y topes que el hub: campos obligatorios, etapa de 1 a 7, fechas que no vayan más de 5 min en el futuro, textos con los secretos quitados antes de recortarlos y 8 KB como máximo. Los links solo pueden ser rutas relativas o `https:`; los demás se descartan. Si el build no es válido, no se manda y el log dice qué campo falló, sin su contenido. Si es demasiado grande, primero se quitan las descripciones de los subagentes y luego los más viejos.
 - **Ciclo de vida.**
   - `/clear` conserva el build.

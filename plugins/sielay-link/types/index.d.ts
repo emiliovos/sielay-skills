@@ -44,6 +44,8 @@ export type LinkBuildUsage = {
   cache_creation_input_tokens: number
   turns: number
   model?: string
+  /** Σ turn.complete.durationMs of the session's turns (main loop and subagents) while the build is active. */
+  active_ms?: number
 }
 
 /** The build this session reports (mod/link-build-state.js); null when none. */

@@ -50,6 +50,11 @@ function usage(v) {
     if (!isCount(v[k])) throw new Invalid(`usage.${k}`)
     out[k] = v[k]
   }
+  // Σ turn durations (1.1.1). Optional: an older hub ignores it.
+  if (v.active_ms !== undefined) {
+    if (!isCount(v.active_ms)) throw new Invalid('usage.active_ms')
+    out.active_ms = v.active_ms
+  }
   if (v.model === null) out.model = null
   else if (v.model !== undefined) out.model = text(v.model, SHORT_TEXT_MAX, 'usage.model') ?? null
   return out

@@ -2,7 +2,7 @@
 // keeps it in `$.state` (link-build-hooks.js). Three sources merge into it:
 // what /si:build-auto declares through link_build_stage, the subagents seen
 // live (classic SubagentStart/Stop, agent.spawn, turn.complete) and the token
-// usage of every turn of the session. Nothing is tracked while no build is
+// usage and duration (usage.active_ms) of every turn of the session. Nothing is tracked while no build is
 // declared. Every transition returns the same object when nothing changed, so
 // the caller can skip the write.
 
@@ -18,6 +18,7 @@ export const DECLARED_KEYS = Object.freeze([
   'plan_progress', 'phase', 'gate', 'summary', 'delivery', 'linear', 'links', 'stage_since',
 ])
 const COUNTS = /** @type {const} */ (['input_tokens', 'output_tokens', 'cache_read_input_tokens', 'cache_creation_input_tokens'])
+const ZERO_USAGE = Object.freeze({ input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0, turns: 0 })
 
 /**
  * @typedef {import('../types/index.js').LinkBuildState} BuildState
@@ -123,12 +124,29 @@ export function addUsage(state, usage, isMain) {
   if (!state || !isObj(usage)) return state
   /** @param {unknown} n */
   const count = n => (typeof n === 'number' && Number.isFinite(n) && n > 0 ? Math.floor(n) : 0)
-  const prev = state.usage ?? { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0, turns: 0 }
+  const prev = state.usage ?? { ...ZERO_USAGE }
   /** @type {NonNullable<BuildState['usage']>} */
   const next = { ...prev, turns: prev.turns + 1 }
   for (const k of COUNTS) next[k] = prev[k] + count(usage[k])
   if (isMain && typeof usage.model === 'string' && usage.model) next.model = usage.model
   return { ...state, usage: next }
+}
+
+/**
+ * Adds one turn's `turn.complete.durationMs` to `usage.active_ms`, main loop or
+ * subagent alike, so the hub has the session's active time even when the
+ * classic hooks never reach this plugin (then the idle/working state stays
+ * unknown and the hub's working_ms is 0). A missing or non-positive duration
+ * adds nothing. Separate from addUsage on purpose: an aborted turn has a
+ * duration but no usage. It never touches the idle/working state.
+ * @param {BuildState|null} state @param {unknown} durationMs
+ * @returns {BuildState|null}
+ */
+export function addActiveTime(state, durationMs) {
+  if (!state || typeof durationMs !== 'number' || !Number.isFinite(durationMs) || durationMs < 1) return state
+  const prev = state.usage ?? { ...ZERO_USAGE }
+  const active = Math.min(Number.MAX_SAFE_INTEGER, (prev.active_ms ?? 0) + Math.floor(durationMs))
+  return { ...state, usage: { ...prev, active_ms: active } }
 }
 
 /**
