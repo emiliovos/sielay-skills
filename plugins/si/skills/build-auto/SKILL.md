@@ -11,7 +11,7 @@ metadata:
   deps: "git en el repo destino. Recomendado: AgentKit (skills /ak:*); sin él, cada etapa se hace con subagentes nativos. Opcional: /si:checkpoint para el cierre (--checkpoint)."
   installs: []
   risk: none
-  version: "1.4.0"
+  version: "1.5.0"
 ---
 
 # Build-auto: backbone de proyecto autónomo
@@ -75,6 +75,9 @@ Si el objetivo cabe en uno o dos archivos y no tiene fases paralelas, sugiere `-
 
 ## Contrato entre etapas
 Cada etapa recibe y deja este contrato compacto: **Goal · Scope y no-goals · Evidencia y decisiones · Artefactos · Criterios de aceptación · Riesgos abiertos · Autoridad concedida.**
+
+## Reporte a sielay
+Si la sesión tiene la herramienta `link_build_stage` (plugin `sielay-link`), lee `references/reporte-sielay.md` antes del Frame y reporta en sus momentos: entrada a cada etapa, aprobaciones, cierre de cada fase, entrega y fin con `outcome`. Al cerrar cada etapa va un `summary` de 1 a 3 frases. El `build_id` es `<repo>-<carpeta-del-plan>` (con `-r2`, `-r3`… en una corrida nueva sobre la misma carpeta). Si la herramienta no existe o no reporta, la skill sigue igual, sin error ni pregunta.
 
 ## Las 7 etapas
 | # | Etapa | Con AgentKit | Sin AgentKit (modo nativo) | Gate |
