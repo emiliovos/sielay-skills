@@ -77,7 +77,11 @@ const CODE_MESSAGES = {
  * @returns {string}
  */
 export function describeHubError(err) {
-  const e = /** @type {{ kind?: string, code?: string, message?: string }} */ (err ?? {})
+  const e = /** @type {{ kind?: string, code?: string, field?: string, message?: string }} */ (err ?? {})
+  if (e.code === 'invalid' && e.field === 'conversation_id') {
+    return 'Esa conversación no es de esta sesión (el hub te ve como otra). Contesta con link_send a la dirección de la otra sesión, sin conversation.'
+  }
+  if (e.code === 'invalid' && e.field) return `El hub rechazó el campo ${e.field} por formato inválido.`
   const known = e.code ? CODE_MESSAGES[e.code] : undefined
   if (known) return known
   if (e.kind === 'paused') return 'sielay-link está apagado en el hub ahora mismo.'
