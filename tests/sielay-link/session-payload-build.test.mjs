@@ -1,14 +1,15 @@
-// The poll's session payload with a build: a failure while reading the build
-// never stops the poll; it goes without `build`, and the log names only the
-// error's kind.
+// The poll's session payload: a failure while reading the build never stops
+// the poll (it goes without `build`, and the log names only the error's kind),
+// and the identity comes from the project root, not the live cwd.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { buildSessionPayload } from '../../plugins/sielay-link/mod/link-session-payload.js'
+import { buildSessionPayload, sessionDir } from '../../plugins/sielay-link/mod/link-session-payload.js'
+import { cwdHash } from '../../plugins/sielay-link/mod/link-session-name-resolution.js'
 
-function engine({ buildThrows }) {
+function engine({ buildThrows, root }) {
   const logs = []
   const $ = {
-    session: { id: async () => 'sess-1', cwd: async () => '/srv/p' },
+    session: { id: async () => 'sess-1', cwd: async () => '/srv/p', root: root ?? (async () => { throw new TypeError('$.session.root is not a function') }) },
     clock: { now: async () => 1_000_000 },
     env: { get: async () => undefined },
     store: { get: async () => undefined, set: async () => {} },
@@ -38,4 +39,17 @@ test('no build declared: no build key and nothing logged', async () => {
   const { session } = await buildSessionPayload(h.$, h.rt, { withBuild: true })
   assert.equal('build' in session, false)
   assert.deepEqual(h.logs, [])
+})
+
+test('identity follows the project root, not the live cwd: a shell cd into another project keeps the name and hash', async () => {
+  const h = engine({ root: async () => '/home/ft' })
+  const { session } = await buildSessionPayload(h.$, h.rt)
+  assert.equal(session.name, 'ft')
+  assert.equal(session.cwd_hash, await cwdHash('/home/ft'))
+  assert.equal(await sessionDir(h.$), '/home/ft')
+})
+
+test('without root(), or when root() fails, the live cwd is the identity', async () => {
+  assert.equal(await sessionDir(engine({}).$), '/srv/p')
+  assert.equal(await sessionDir(engine({ root: async () => { throw new Error('no') } }).$), '/srv/p')
 })

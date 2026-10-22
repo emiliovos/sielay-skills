@@ -1,5 +1,6 @@
 // Builds what the hub sees of this session on every poll and send: name,
-// instance_id, cwd_hash, mode (+ freshness and age) and state, plus, on a poll
+// instance_id, cwd_hash (of the project root, see sessionDir), mode
+// (+ freshness and age) and state, plus, on a poll
 // with a build declared and valid, `build` (link-build-hooks.js). Reads `$`.
 
 import { modeState } from './link-mode-freshness.js'
@@ -67,6 +68,25 @@ export async function readMode($) {
 }
 
 /**
+ * The folder this session's identity is computed from: its project root
+ * (`$.session.root()`), where it started or where `/cd` or a worktree took it.
+ * A shell `cd` does not move it, so a terminal that works inside another
+ * project's folder never turns into that project's session (which took over
+ * the other terminal's session and its strip). Falls back to the live cwd on
+ * a Claude Code without `root()`.
+ * @param {Engine} $
+ * @returns {Promise<string>}
+ */
+export async function sessionDir($) {
+  try {
+    return await $.session.root()
+  } catch {
+    // an engine without root(), or one that does not answer it: the live cwd
+    return $.session.cwd()
+  }
+}
+
+/**
  * @param {Engine} $
  * @param {string} cwd
  * @returns {Promise<{ name?: string, project?: string }>}
@@ -129,7 +149,7 @@ async function safePollBuild($, rt) {
  * @param {{ withBuild?: boolean }} [options] withBuild: the poll's payload, which carries the build
  */
 export async function buildSessionPayload($, rt, { withBuild = false } = {}) {
-  const [sessionId, cwd, now] = await Promise.all([$.session.id(), $.session.cwd(), $.clock.now()])
+  const [sessionId, cwd, now] = await Promise.all([$.session.id(), sessionDir($), $.clock.now()])
   const hash = await cwdHash(cwd)
   if (rt.adapter && now - rt.tmux.at > TMUX_TTL_MS) {
     rt.tmux = { name: await rt.adapter.tmuxSessionName(await $.env.get('TMUX')), at: now }

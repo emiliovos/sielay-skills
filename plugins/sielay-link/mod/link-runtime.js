@@ -18,7 +18,7 @@ const PAIRING = /** @type {const} */ ({ plugin: 'sielay-link', key: 'pairing' })
 const CONVERSATIONS = /** @type {const} */ ({ plugin: 'sielay-link', key: 'conversations' })
 const NOTICE = /** @type {const} */ ({ plugin: 'sielay-link', key: 'notice' })
 
-export const CLIENT_VERSION = '1.2.0'
+export const CLIENT_VERSION = '1.2.1'
 
 /** @typedef {import('claude-code').EngineInterface} Engine */
 /** @typedef {import('../types/index.js').LinkStatus} LinkStatus */

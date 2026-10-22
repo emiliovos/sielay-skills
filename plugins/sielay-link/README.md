@@ -42,6 +42,8 @@ Tu dirección es `persona/máquina/sesión`. La persona y la máquina las fija e
 
 Si otra carpeta ya usa ese nombre y está en línea, el hub te asigna `nombre-2`.
 
+**«Carpeta» es la raíz del proyecto de la sesión:** donde arrancó Claude Code, o adonde la llevó `/cd` o un worktree. Un `cd` en la terminal no la cambia, así que una sesión que trabaja dentro de la carpeta de otro proyecto sigue siendo ella misma y nunca toma la sesión de la terminal de ese proyecto. Con un Claude Code sin `$.session.root()` se usa la carpeta actual.
+
 **La misma sesión sigue siendo la misma.** El plugin guarda en `$.store` la identidad de la instancia, por carpeta y nombre.
 
 - Si recargas el plugin, haces `/clear`, usas `--resume` o reinicias en la misma carpeta, el hub te ve como la misma instancia y no pasas a `nombre-2`.
