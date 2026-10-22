@@ -150,6 +150,22 @@ Desde la 1.1.0, `/si:build-auto` llama a `link_build_stage` en cada cambio de et
   - **`usage`**, la suma de `turn.complete.usage` de todos los turnos de la sesión (hilo principal y subagentes) mientras hay un build. Un turno sin `usage` (por Esc o un error de API) no suma nada. Si nunca hubo uso, va `null`, no cero. `model` es el del último turno del hilo principal y nunca se inventa.
   - **`usage.active_ms`** (desde la 1.1.1), la suma de `turn.complete.durationMs` de esos mismos turnos, también los que se cortan con Esc. Es el tiempo activo de la sesión, y el hub lo usa para las horas a mano cuando no ve el estado «trabajando» (por ejemplo, si otro plugin no le pasa a este los hooks clásicos). Un turno sin `durationMs` no suma. No cambia cómo se calcula el estado idle/working de la sesión, que sigue gobernando la auto-ejecución. Un hub anterior ignora el campo.
 - **Validación antes de mandar.** El plugin aplica las mismas reglas y topes que el hub: campos obligatorios, etapa de 1 a 7, fechas que no vayan más de 5 min en el futuro, textos con los secretos quitados antes de recortarlos y 8 KB como máximo. Los links solo pueden ser rutas relativas o `https:`; los demás se descartan. Si el build no es válido, no se manda y el log dice qué campo falló, sin su contenido. Si es demasiado grande, primero se quitan las descripciones de los subagentes y luego los más viejos.
+- **Estimado** (desde la 1.3.0). El coordinador manda en `estimate` las horas de reloj que espera, el desglose por fase, el supuesto del que dependen y, al reestimar, el motivo. El visor de builds lo usa para decir si el build va a tiempo, demorado o adelantado. Un hub anterior lo ignora, igual que el hub lo ignora en un worker.
+
+  ```json
+  {
+    "estimate": {
+      "total_h": 7,
+      "phases": [{ "name": "Hub y API", "h": 1.5 }, { "name": "Visor", "h": 1.5 }],
+      "assumption": "El VPS queda libre para merge-pr después de las 16:30",
+      "reason": "revisión pidió otra vuelta"
+    }
+  }
+  ```
+
+  - Cada envío trae el estimado **completo** y reemplaza al anterior; no se mezcla. `estimate: null` o ausente lo deja como estaba.
+  - Las horas se redondean a 0,1 y después se validan: `total_h` mayor que 0 y hasta 999; cada fase con `name` (hasta 80, no vacío después de quitar secretos) y `h` de 0 a 999; hasta 20 fases. `assumption` se recorta a 200 y `reason` a 120. El estimado serializado no pasa de 2 KB.
+  - Un estimado inválido lo rechaza la herramienta al llamarla, con el campo que falló (`estimate`, `estimate.total_h`, `estimate.phases`, `estimate.assumption` o `estimate.reason`), y no se guarda nada. También rechaza la llamada si el build ya mezclado no cabe en los 8 KB.
 - **Ciclo de vida.**
   - `/clear` conserva el build.
   - Un `build_id` nuevo empieza otro build.

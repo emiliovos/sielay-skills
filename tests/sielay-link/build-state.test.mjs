@@ -40,6 +40,17 @@ test('declare: a new build_id starts over (usage, peak) but keeps the subagents 
   assert.equal(s.peak, 1)
 })
 
+test('declare: a new estimate replaces the old one whole; null or absent leaves it', () => {
+  const first = { total_h: 7, phases: [{ name: 'Hub', h: 2 }], assumption: 'VPS libre' }
+  let s = declareBuild(null, { ...min, estimate: first }, T0)
+  s = declareBuild(s, { build_id: min.build_id, estimate: null, summary: 'x' }, T0 + 1)
+  assert.deepEqual(s.declared.estimate, first)
+  s = declareBuild(s, { build_id: min.build_id, summary: 'y' }, T0 + 2)
+  assert.deepEqual(s.declared.estimate, first)
+  s = declareBuild(s, { build_id: min.build_id, estimate: { total_h: 9.5, reason: 'otra vuelta' } }, T0 + 3)
+  assert.deepEqual(buildReport(s, T0 + 3).build.estimate, { total_h: 9.5, phases: [], assumption: null, reason: 'otra vuelta' })
+})
+
 test('nothing is tracked without a declared build', () => {
   assert.equal(subagentUp(null, { id: 'a1', type: 'x' }, T0), null)
   assert.equal(addUsage(null, usage(5), true), null)

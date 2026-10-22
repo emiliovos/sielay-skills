@@ -3,7 +3,8 @@
 // and starts nothing. Pure (no `$`): the mod passes in how to store the build
 // and whether this session reports to a hub right now.
 
-import { BUILD_STAGES, BUILD_STATUSES, BUILD_ROLES } from './link-build-validate.js'
+import { BUILD_STAGES, BUILD_STATUSES, BUILD_ROLES, BUILD_TEXT_MAX } from './link-build-validate.js'
+import { BUILD_ESTIMATE_PHASES_MAX, BUILD_ESTIMATE_H_MAX } from './link-build-fields.js'
 
 const str = (/** @type {string} */ description) => ({ type: 'string', description })
 
@@ -55,6 +56,22 @@ export const BUILD_TOOL_SPEC = Object.freeze({
         items: { type: 'object', additionalProperties: false, required: ['href'], properties: { label: { type: 'string' }, href: str('Ruta relativa o URL https:') } },
       },
       stage_since: str('ISO 8601; si falta, el plugin la pone al cambiar de etapa'),
+      estimate: {
+        type: ['object', 'null'], additionalProperties: false, required: ['total_h'],
+        description: 'Estimado completo en horas de reloj (solo el coordinador): reemplaza al anterior entero; null o ausente lo deja como estaba',
+        properties: {
+          total_h: { type: 'number', exclusiveMinimum: 0, maximum: BUILD_ESTIMATE_H_MAX, description: 'Horas totales; se redondea a 0,1' },
+          phases: {
+            type: 'array', maxItems: BUILD_ESTIMATE_PHASES_MAX, description: 'Desglose por fase',
+            items: {
+              type: 'object', additionalProperties: false, required: ['name', 'h'],
+              properties: { name: str(`Nombre de la fase (máximo ${BUILD_TEXT_MAX.phase})`), h: { type: 'number', minimum: 0, maximum: BUILD_ESTIMATE_H_MAX, description: 'Horas; se redondea a 0,1' } },
+            },
+          },
+          assumption: str(`Supuesto del que depende el estimado (máximo ${BUILD_TEXT_MAX.assumption})`),
+          reason: str(`Motivo de la reestimación (máximo ${BUILD_TEXT_MAX.reason})`),
+        },
+      },
     },
   },
   isDeferred: /** @type {const} */ (false),

@@ -4,12 +4,14 @@
 // refuse. Pure. Unknown fields are left out; texts are scrubbed, then trimmed,
 // then capped; a bad link is dropped, never fatal; anything else bad refuses
 // the whole build, naming the first field that failed. The field checks and
-// the limits live in link-build-fields.js.
+// the limits live in link-build-fields.js, the estimate's in
+// link-build-estimate.js.
 
 import {
   BUILD_STAGES, BUILD_STATUSES, BUILD_ROLES, BUILD_OUTCOMES, BUILD_MAX_BYTES, BUILD_TEXT_MAX, BUILD_SUBAGENTS_MAX, SHORT_TEXT_MAX,
   Invalid, isObj, isCount, absent, hasSecret, text, date, stage, gate, delivery, links,
 } from './link-build-fields.js'
+import { estimate } from './link-build-estimate.js'
 
 export { BUILD_STAGES, BUILD_STATUSES, BUILD_ROLES, BUILD_MAX_BYTES, BUILD_TEXT_MAX, BUILD_SUBAGENTS_MAX }
 export { BUILD_LINKS_MAX, BUILD_FUTURE_SKEW_MS } from './link-build-fields.js'
@@ -105,6 +107,7 @@ export function validateBuild(input, now) {
       delivery: delivery(input.delivery),
       linear: text(input.linear, BUILD_TEXT_MAX.linear, 'linear'),
       links: links(input.links),
+      estimate: estimate(input.estimate),
       outcome: input.status === 'done' && !absent(input.outcome) ? input.outcome : undefined,
       stage_since: date(input.stage_since, now, 'stage_since'),
       started_at: date(input.started_at, now, 'started_at'),
