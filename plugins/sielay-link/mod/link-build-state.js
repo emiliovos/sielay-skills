@@ -15,7 +15,7 @@ export const SEEN_REFRESH_MS = 60_000
 /** What link_build_stage may set: the contract minus what the mod itself fills. */
 export const DECLARED_KEYS = Object.freeze([
   'build_id', 'role', 'stage', 'status', 'outcome', 'title', 'repo', 'plan', 'branch', 'pr', 'flags',
-  'plan_progress', 'phase', 'gate', 'summary', 'delivery', 'linear', 'links', 'stage_since',
+  'plan_progress', 'phase', 'gate', 'summary', 'delivery', 'linear', 'links', 'stage_since', 'estimate',
 ])
 const COUNTS = /** @type {const} */ (['input_tokens', 'output_tokens', 'cache_read_input_tokens', 'cache_creation_input_tokens'])
 const ZERO_USAGE = Object.freeze({ input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0, turns: 0 })
@@ -38,15 +38,16 @@ function liveCount(subs, now) {
 /**
  * Merges a link_build_stage call. A new build_id starts a new build (usage and
  * peak from zero, the subagents still running carried over); the same one
- * merges field by field, `delivery` one level deep. A stage change with no
- * `stage_since` stamps it now.
+ * merges field by field, `delivery` one level deep. A new `estimate` replaces
+ * the old one whole; `estimate: null` leaves it as it was. A stage change with
+ * no `stage_since` stamps it now.
  * @param {BuildState|null} state @param {Record<string, unknown>} input @param {number} now
  * @returns {BuildState}
  */
 export function declareBuild(state, input, now) {
   /** @type {Record<string, unknown>} */
   const picked = {}
-  for (const k of DECLARED_KEYS) if (input[k] !== undefined) picked[k] = input[k]
+  for (const k of DECLARED_KEYS) if (input[k] !== undefined && !(k === 'estimate' && input[k] === null)) picked[k] = input[k]
   const same = state !== null && state.declared.build_id === picked.build_id
   const prev = same ? state.declared : {}
   const declared = { ...prev, ...picked }

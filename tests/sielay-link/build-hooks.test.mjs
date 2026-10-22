@@ -127,6 +127,23 @@ test('the tool refuses an invalid call and keeps the previous build', async () =
   assert.equal((await pollBuild(h.$, h.rt)).status, 'running')
 })
 
+test('the tool refuses a bad estimate, or one that makes the merged build too big, and keeps the previous build', async () => {
+  const h = engine()
+  const est = { total_h: 7, phases: [{ name: 'Hub', h: 2 }] }
+  await declareFromTool(h.$, h.rt, { ...min, estimate: est })
+  assert.deepEqual(await declareFromTool(h.$, h.rt, { ...min, estimate: { total_h: 0.04 } }), { error: 'estimate.total_h' })
+  const big = { title: 't'.repeat(120), plan: 'p'.repeat(200), branch: 'b'.repeat(120), phase: 'f'.repeat(80), summary: 's'.repeat(600), links: Array.from({ length: 10 }, (_, i) => ({ label: 'l'.repeat(80), href: `p/${i}/` + 'x'.repeat(290) })), flags: Array.from({ length: 20 }, (_, i) => `--f${i}`.padEnd(80, 'x')) }
+  const wide = { total_h: 9, phases: Array.from({ length: 12 }, (_, i) => ({ name: `f${i}`.padEnd(80, 'x'), h: 1 })), assumption: 'a'.repeat(200) }
+  for (const alone of [{ estimate: wide }, big]) {
+    const other = engine()
+    assert.deepEqual(await declareFromTool(other.$, other.rt, { ...min, ...alone }), {}, 'each part alone fits')
+  }
+  assert.deepEqual(await declareFromTool(h.$, h.rt, { ...min, ...big, estimate: wide }), { error: 'too_big' })
+  const sent = await pollBuild(h.$, h.rt)
+  assert.deepEqual(sent.estimate, { total_h: 7, phases: [{ name: 'Hub', h: 2 }], assumption: null, reason: null })
+  assert.equal(sent.summary, undefined, 'nothing of the refused call was stored')
+})
+
 test('/clear keeps the build even if the host hands back an empty state', async () => {
   const h = engine()
   await declareFromTool(h.$, h.rt, min)

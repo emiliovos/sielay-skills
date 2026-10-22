@@ -10,9 +10,13 @@ export const BUILD_STATUSES = Object.freeze(['running', 'waiting_approval', 'blo
 export const BUILD_ROLES = Object.freeze(['coordinator', 'worker'])
 export const BUILD_OUTCOMES = Object.freeze(['delivered', 'stopped', 'failed'])
 export const BUILD_MAX_BYTES = 8192
-export const BUILD_TEXT_MAX = Object.freeze({ title: 120, summary: 600, description: 160, phase: 80, plan: 200, repo: 100, branch: 120, linear: 20, link: 300 })
+export const BUILD_TEXT_MAX = Object.freeze({ title: 120, summary: 600, description: 160, phase: 80, plan: 200, repo: 100, branch: 120, linear: 20, link: 300, assumption: 200, reason: 120 })
 export const BUILD_SUBAGENTS_MAX = 50
 export const BUILD_LINKS_MAX = 10
+/** The estimate of a build (contracts §1): its phases, its hours and its serialized size. */
+export const BUILD_ESTIMATE_PHASES_MAX = 20
+export const BUILD_ESTIMATE_H_MAX = 999
+export const BUILD_ESTIMATE_MAX_BYTES = 2048
 /** How far ahead of this clock a date may be. */
 export const BUILD_FUTURE_SKEW_MS = 5 * 60_000
 /** The hub's cap for the texts §1 leaves unnamed (a flag, an agent type, a person, a model, a link label). */

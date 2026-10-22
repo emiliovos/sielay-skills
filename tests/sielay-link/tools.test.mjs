@@ -148,6 +148,13 @@ test('link_build_stage says it only reports and controls nothing', () => {
   assert.deepEqual(spec.inputSchema.required, ['build_id', 'role', 'stage', 'status'])
   for (const own of ['subagents', 'subagents_peak', 'usage', 'started_at']) assert.equal(own in spec.inputSchema.properties, false, own)
   assert.deepEqual(spec.inputSchema.properties.gate.required, ['stage'])
+  const est = spec.inputSchema.properties.estimate
+  assert.deepEqual(est.type, ['object', 'null'])
+  assert.deepEqual(est.required, ['total_h'])
+  assert.deepEqual(Object.keys(est.properties), ['total_h', 'phases', 'assumption', 'reason'])
+  assert.equal(est.properties.phases.maxItems, 20)
+  assert.deepEqual(est.properties.phases.items.required, ['name', 'h'])
+  assert.match(est.description, /reemplaza al anterior/)
 })
 
 test('link_build_stage unpaired: stores and answers ok with reported false, never a pairing denial', async () => {
@@ -163,4 +170,6 @@ test('link_build_stage paired: reported true; an invalid field is denied by name
   assert.deepEqual(JSON.parse((await runLinkTool('link_build_stage', buildInput, { ...deps().d, build: ok })).result), { ok: true, reported: true })
   const bad = { declare: async () => ({ error: 'stage' }), canReport: async () => true }
   assert.match((await runLinkTool('link_build_stage', { ...buildInput, stage: 9 }, { ...deps().d, build: bad })).deny, /campo stage/)
+  const badEst = { declare: async () => ({ error: 'estimate.phases' }), canReport: async () => true }
+  assert.match((await runLinkTool('link_build_stage', { ...buildInput, estimate: { total_h: 1, phases: 'x' } }, { ...deps().d, build: badEst })).deny, /campo estimate\.phases no es válido; no se guardó/)
 })
