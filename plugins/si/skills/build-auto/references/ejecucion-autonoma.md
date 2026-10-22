@@ -54,5 +54,6 @@ En `main directo` no hay ramas que mergear, pero el aislamiento por worktree y e
 ## Al cerrar cada fase
 - Actualiza el estado en `plan.md` y en el tracker (*si aplica*).
 - Si reportas a sielay (`reporte-sielay.md`): `link_build_stage` con `plan_progress` (`done` + 1) y la `phase` que sigue en curso.
+- Compara las horas reales de la fase contra su estimado. Si el total previsto se movió más que la tolerancia (±max(0,5 h, 10 % del programado)) o la fase se pasó, reestima con un motivo corto: en el contrato y, si reportas a sielay, con `estimate` completo y `reason` (`reporte-sielay.md`). No pide aprobación salvo que cambie el Goal, los criterios, los no-goals o la autoridad.
 - Reporta al usuario en una línea.
 - Borra los worktrees y ramas locales de lo ya entregado; nunca una rama cuya entrega no confirmaste.
