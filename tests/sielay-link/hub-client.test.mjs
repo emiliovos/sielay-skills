@@ -128,6 +128,11 @@ test('409 send errors keep the hub code', async () => {
   await assert.rejects(client.send({}), err => err.kind === 'http' && err.code === 'pair_budget' && err.status === 409)
 })
 
+test('422 invalid keeps the field the hub names', async () => {
+  const client = createHubClient({ hubUrl: undefined, token: TOKEN, http: fakeFetch(() => ({ status: 422, json: { error: 'invalid', code: 'invalid', field: 'conversation_id' } })) })
+  await assert.rejects(client.send({}), err => err.code === 'invalid' && err.field === 'conversation_id' && err.status === 422)
+})
+
 test('network failure and non-JSON bodies are typed errors', async () => {
   const down = createHubClient({ hubUrl: undefined, token: TOKEN, http: { fetch: async () => { throw new Error("ECONNREFUSED") } } })
   await assert.rejects(down.poll({}), err => err.kind === 'network')

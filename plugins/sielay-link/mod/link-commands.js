@@ -2,7 +2,7 @@
 
 import { normalizeName, cwdHash } from './link-session-name-resolution.js'
 import { describeHubError } from './link-tools.js'
-import { buildSessionPayload } from './link-session-payload.js'
+import { buildSessionPayload, sessionDir } from './link-session-payload.js'
 import { PANE_ID } from './link-state-refs.js'
 import { isOff } from './link-runtime.js'
 import { resolveStripId, isPersonOrigin, shortId } from './link-strip-selection.js'
@@ -74,7 +74,7 @@ export async function runLinkCommand($, rt, args, origin) {
   if (sub === 'name') {
     const name = normalizeName(arg)
     if (!name) return { text: 'Uso: /link name <nombre> (minúsculas, números y guiones, hasta 40).' }
-    await $.store.set(`name.${await cwdHash(await $.session.cwd())}`, name)
+    await $.store.set(`name.${await cwdHash(await sessionDir($))}`, name)
     return { text: `Nombre de la sesión para esta carpeta: ${name}. El hub lo toma en el siguiente poll.` }
   }
   if (sub === 'off' || sub === 'on') {

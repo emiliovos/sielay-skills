@@ -259,7 +259,7 @@ if "…" in text:
     print("the engine call list is cut even with short names: cannot check it whole"); sys.exit()
 allowed = {
     "$.clock.after", "$.clock.now", "$.command.register", "$.env.get", "$.fs.exists", "$.fs.read",
-    "$.session.cwd", "$.session.id", "$.state.get", "$.state.set", "$.store.get", "$.store.set",
+    "$.session.cwd", "$.session.id", "$.session.root", "$.state.get", "$.state.set", "$.store.get", "$.store.set",
     "$.tool.register", "$.ui.log", "$.ui.open", "$.ui.resolve", "$.ui.toast",
 }
 only_via = {"$.http.fetch": {"createHubClient"}, "$.process.run": {"createDeliveryAdapter"}, "$.prompt.submit": {"createDeliveryAdapter"}}

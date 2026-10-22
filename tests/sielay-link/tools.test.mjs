@@ -126,6 +126,9 @@ test('hub errors become clear Spanish messages', async () => {
   assert.match(describeHubError(new HubError('paused', 'x', { status: 503 })), /apagado/)
   assert.match(describeHubError(new HubError('unauthorized', 'x', { status: 401 })), /\/link pair/)
   assert.match(describeHubError(new Error('weird')), /weird/)
+  assert.match(describeHubError(new HubError('http', 'x', { status: 422, code: 'invalid', field: 'conversation_id' })), /no es de esta sesión/)
+  assert.match(describeHubError(new HubError('http', 'x', { status: 422, code: 'invalid', field: 'to' })), /campo to/)
+  assert.match(describeHubError(new HubError('http', 'x', { status: 422, code: 'invalid' })), /formato inválido/)
 })
 
 test('an unknown tool name is denied', async () => {
