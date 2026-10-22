@@ -78,9 +78,9 @@ market_jq='if type != "object" then "marketplace.json is not a JSON object" else
      ((keys - ["name","source","description"])[] | "marketplace.json: plugin key not allowed: \(.)"),
      (if .name != $want[0] then "marketplace.json: plugin \($i + 1) name must be \"\($want[0])\"" else empty end),
      (if $want[1] != null then (if .source != $want[1] then "marketplace.json: plugin \($i + 1) source must be \"\($want[1])\"" else empty end)
-      elif ((.source | type) != "object" or ((.source | del(.ref)) != {"source":"git-subdir","url":"emiliovos/sielay-skills","path":"plugins/sielay-link"})
+      elif ((.source | type) != "object" or ((.source | del(.ref)) != {"source":"git-subdir","url":"https://github.com/emiliovos/sielay-skills.git","path":"plugins/sielay-link"})
             or ((.source.ref // "") | test("^sielay-link-v[0-9]+[.][0-9]+[.][0-9]+$") | not))
-      then "marketplace.json: sielay-link must be a git-subdir of emiliovos/sielay-skills pinned to a sielay-link-vX.Y.Z tag" else empty end)
+      then "marketplace.json: sielay-link must be a git-subdir of https://github.com/emiliovos/sielay-skills.git pinned to a sielay-link-vX.Y.Z tag" else empty end)
    end end) end'
 read -r -d '' check_py <<'PY' || true
 import json, sys
@@ -124,9 +124,9 @@ else:
                 else:
                     import re
                     pinned = isinstance(src, dict) and {k: v for k, v in src.items() if k != "ref"} == {
-                        "source": "git-subdir", "url": "emiliovos/sielay-skills", "path": "plugins/sielay-link"}
+                        "source": "git-subdir", "url": "https://github.com/emiliovos/sielay-skills.git", "path": "plugins/sielay-link"}
                     if not (pinned and re.fullmatch(r"sielay-link-v\d+\.\d+\.\d+", str(src.get("ref", "")))):
-                        out.append("marketplace.json: sielay-link must be a git-subdir of emiliovos/sielay-skills pinned to a sielay-link-vX.Y.Z tag")
+                        out.append("marketplace.json: sielay-link must be a git-subdir of https://github.com/emiliovos/sielay-skills.git pinned to a sielay-link-vX.Y.Z tag")
 print("\n".join(out))
 PY
 check_json() { # kind file jq-program

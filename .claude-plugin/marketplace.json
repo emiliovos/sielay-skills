@@ -17,7 +17,7 @@
       "name": "sielay-link",
       "source": {
         "source": "git-subdir",
-        "url": "emiliovos/sielay-skills",
+        "url": "https://github.com/emiliovos/sielay-skills.git",
         "path": "plugins/sielay-link",
         "ref": "sielay-link-v1.2.0"
       },
