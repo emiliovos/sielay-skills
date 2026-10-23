@@ -8,10 +8,10 @@ keywords: [autonomo, backbone, agentkit, plan, paralelo, terminales, compuerta, 
 metadata:
   category: workflow
   example: "/build-auto \"exportar reportes a PDF para clientes\" --alcance merge"
-  deps: "git en el repo destino. Recomendado: AgentKit (skills /ak:*); sin él, cada etapa se hace con subagentes nativos. Opcional: /si:checkpoint para el cierre (--checkpoint)."
+  deps: "git en el repo destino. Recomendado: AgentKit (skills /ak:*); sin él, cada etapa se hace con subagentes nativos. Opcional: /si:checkpoint para el cierre (--checkpoint) y red a context7.com (o su MCP) para consultar la doc de dependencias en las etapas 2 y 3."
   installs: []
   risk: none
-  version: "1.6.0"
+  version: "1.7.0"
 ---
 
 # Build-auto: backbone de proyecto autónomo
@@ -57,6 +57,7 @@ Arma esta ficha:
 | Reglas del repo | límite de líneas por archivo, convención de nombres, formato de commits | las del lenguaje |
 | Alcance | `merge` o `produccion` | preguntar |
 | AgentKit | ¿hay skills `/ak:*` en el catálogo de esta sesión? | modo nativo (abajo) |
+| Context7 | `docs-seeker` (ruta AgentKit con `/ak:docs-seeker`), `MCP` (`resolve-library-id` y `query-docs` en la sesión), `REST con key` o `REST sin key` (`curl` a context7.com; la key se comprueba solo como dice `references/puntos-ciegos-y-context7.md`) | `ninguno`: se avisa con el comando de alta para el usuario y se sigue con la doc oficial |
 
 Si el push o el merge a main publica solo, `merge` equivale a producción: necesitas `--alcance produccion` o te detienes antes de entregar.
 
@@ -85,8 +86,8 @@ Si la sesión tiene la herramienta `link_build_stage` (plugin `sielay-link`), le
 | # | Etapa | Con AgentKit | Sin AgentKit (modo nativo) | Gate |
 |---|---|---|---|---|
 | 1 | Frame | `/ak:brainstorm "<objetivo>"`, con la ficha como contexto | tú, con la ficha y preguntas cortas | **Aprobación** del contrato completo (los 8 campos; "Scope y no-goals" incluye guardarraíles y reglas del repo; criterios medibles). Reporte en `plans/reports/brainstorm-{AAMMDD}-{slug}.md` |
-| 2 | Evidencia | `/ak:research` (docs oficiales vía `/ak:docs-seeker`) + `/ak:scout` | subagentes `researcher` y `Explore` en paralelo | **Aprobación**: reporte con archivo:línea y los supuestos que cargan el diseño |
-| 3 | Plan | `/ak:plan "<contrato>" --parallel --tdd`, luego `/ak:plan red-team <plan>` | subagente `planner` + red team con `code-reviewer` | **Aprobación (la última)**: plan validado (`ak plan validate <ruta>` si existe) |
+| 2 | Evidencia | `/ak:research` (docs oficiales vía `/ak:docs-seeker`) + `/ak:scout`, con el pase de `references/puntos-ciegos-y-context7.md` | subagentes `researcher` y `Explore` en paralelo, con el mismo pase | **Aprobación**: reporte con archivo:línea, los supuestos que cargan el diseño y la tabla de puntos ciegos |
+| 3 | Plan | `/ak:plan "<contrato>" --parallel --tdd`, luego `/ak:plan red-team <plan>`, con el pase de `references/puntos-ciegos-y-context7.md` | subagente `planner` + red team con `code-reviewer`, con el mismo pase | **Aprobación (la última)**: plan validado (`ak plan validate <ruta>` si existe), con pre-mortem y los «sí» de la tabla en la fase 0 |
 | 4 | Implementar | `/ak:cook <plan> --parallel --auto` | subagentes `fullstack-developer` por fase | Autónomo |
 | 5 | Verificar | `/ak:test` (y `/ak:test ui <url>` si hay UI) | subagente `tester` con evidencia real | Autónomo |
 | 6 | Revisar | `/ak:code-review` por PR o push | subagente `code-reviewer` | Autónomo; Critical/High se arreglan antes de entregar |
@@ -95,13 +96,15 @@ Si la sesión tiene la herramienta `link_build_stage` (plugin `sielay-link`), le
 - **Cada aprobación cubre el gate que se está mostrando.** Al pedirla, nombra ese gate y el siguiente. Un "sí" o "adelante" a secas aprueba solo ese gate.
 - **"Adelante con todo"** solo junta las aprobaciones 2 y 3 en una. No cambia el alcance ni la autoridad concedida, y nunca convierte `merge` en `produccion`.
 - **Una aprobación cubre lo que se pidió, no lo que se descubre en el camino.** Los arreglos de revisión y las enmiendas técnicas dentro de los archivos y criterios del plan son tuyos. Si el trabajo crece fuera de eso (otro módulo, otro gancho, otro host, algo fuera de la tabla de propiedad de `contracts.md`), dilo en una línea y espera la respuesta antes de hacerlo.
+- **Puntos ciegos y Context7** (etapas 2 y 3): es un pase obligatorio de la etapa en las dos rutas, no otra ruta. Lo hace quien corre la etapa, con el canal de Context7 de la ficha; detalle en `references/puntos-ciegos-y-context7.md`.
 - **Una ruta por etapa**, en este orden: si el repo fija su propio comando o skill para la etapa, se usa ese; si no, y las skills `/ak:*` de esa etapa aparecen en el catálogo de la sesión, se usa la de la tabla; si falta alguna, la etapa entera va en modo nativo (dilo en la ficha). Nunca mezcles dos rutas en una misma etapa.
 - **Modo nativo:** si no hay skills `/ak:*`, dilo en el Frame en una línea y haz cada etapa con subagentes que dejen los **mismos artefactos** (reportes, `plan.md`, `contracts.md`, fases). Si no hay subagentes con esos nombres, usa los de propósito general con el mismo encargo. Si un subagente no puede escribir (es de solo lectura, como `Explore`, o el entorno se lo impide), que devuelva el contenido en su respuesta y tú guardas el artefacto en su ruta.
 - Flags verificados contra AgentKit stable 2.19.0. Si un flag no existe en la versión instalada, revisa la ayuda de esa skill, usa el equivalente y repórtalo; no inventes uno.
 
 ## Etapa 3 por dentro: un plan listo para correr solo
 Plan en `plans/{fecha}-{slug}/` (o donde el repo guarde sus planes) con `plan.md`, `contracts.md` y `phase-NN-*.md`.
-- **Fase 0 = spike** corto de los supuestos de mayor riesgo, en un directorio desechable, con **regla de rama**: si falla X → plan B; si falla Y → parar. Un supuesto medible ("< 50 ms con datos realistas") puede ir como criterio de la primera fase, con su regla.
+- **Pre-mortem** del plan («el plan ya falló, ¿por qué?») en `plan.md`, como dice `references/puntos-ciegos-y-context7.md`.
+- **Fase 0 = spike** corto de los supuestos de mayor riesgo (entre ellos, todos los puntos ciegos con «Spike: sí»), en un directorio desechable, con **regla de rama**: si falla X → plan B; si falla Y → parar. Un supuesto medible ("< 50 ms con datos realistas") puede ir como criterio de la primera fase, con su regla.
 - **`contracts.md` congelado antes de paralelizar:** tablas, APIs con un JSON de ejemplo, interfaces, constantes compartidas y una **tabla de propiedad de archivos** por fase. Cambios después = "Enmienda {fecha}" al final. Una enmienda técnica la decides tú; una que toque el Goal, los criterios, los no-goals o la autoridad necesita la aprobación del usuario.
 - **Red team del contrato antes de lanzar agentes**, con cuatro lentes: seguridad, modos de falla, supuestos y alcance. Cada hallazgo con archivo:línea. Las correcciones entran como enmienda; después se paraleliza. Tú adjudicas lo técnico; las decisiones de producto las preguntas. Es técnico lo que no cambia el Goal, los criterios de aceptación, los no-goals ni la autoridad: por ejemplo, cómo tratar una entrada que ningún criterio menciona. Elige la opción más conservadora, anótala en la enmienda y repórtala al cierre.
 - **Estimado por fase** en `plan.md`: horas de reloj de cada fase (incluidas verificación, revisión y entrega), el total y el supuesto. Es el programado contra el que se mide el build.
@@ -118,6 +121,7 @@ Antes de la etapa 4, lee las referencias que apliquen y síguelas:
 - `references/compuerta-de-pruebas.md`: los tres niveles, las variantes `rama+PR` y `main directo`, y los huecos conocidos.
 - `references/disciplina-de-pruebas.md`: qué es una prueba que sirve, cuánto puede costar y el reporte final.
 - `references/receta-de-deploy.md`: solo con `--alcance produccion`.
+- `references/puntos-ciegos-y-context7.md`: ya se usó en las etapas 2 y 3; vuelve a ella si una fase necesita consultar la doc de una dependencia.
 - `references/terminales.md`: solo con `--terminales`.
 
 Reglas que nunca se rompen:

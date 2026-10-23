@@ -4,7 +4,8 @@ Si la sesión tiene la herramienta `link_build_stage` (la publica el plugin `sie
 
 ## Cuándo no aplica
 - **Sin la herramienta** (no está `sielay-link` o la sesión no la expone): no la llames ni la menciones. El flujo sigue igual, sin error y sin preguntar.
-- **`reported: false`** (la sesión no está emparejada o el plugin está apagado): sigue igual; no reintentes ni avises.
+- **`reported: false`**: sigue igual; no reintentes ni avises. Desde sielay-link 1.4.0 trae `reason`: `pending` (todavía no hay poll), `too_many_sessions`, `paused`, `unauthorized`, `unpaired`, `off` o `unreachable`. Con `too_many_sessions` (el dispositivo llegó al tope de sesiones), anótalo una vez en la ficha y sigue.
+- **`reported: true`** significa que el hub acepta los polls de esta sesión, no que registró el build: puede ignorarlo (por ejemplo, por su tope de builds, un build ya cerrado o el visor apagado).
 - **Rechazo por un campo** (`el campo <x> no es válido`): corrige u omite ese campo una vez y sigue. Un reporte nunca detiene ni cambia el build.
 - **Plugin anterior a sielay-link 1.3.0** (no conoce `estimate`): si rechaza la llamada por ese campo, repítela sin `estimate` y no lo vuelvas a mandar en ese build; si la acepta, el campo se descarta sin aviso y el visor no muestra horario. En los dos casos el estimado queda solo en el contrato.
 
