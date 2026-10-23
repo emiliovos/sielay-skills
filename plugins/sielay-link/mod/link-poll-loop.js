@@ -3,8 +3,9 @@
 // injected. The session (and its instance_id, see link-instance-identity.js) is re-read
 // on every round, so /clear and --resume are picked up.
 //
-// Errors: 503 pauses (60 s), 401 stops until restart(), 429 waits
-// retry-after or backs off, anything else backs off 1 s → 60 s.
+// Errors: 503 pauses (60 s), 401 first asks onUnauthorized (a newer token on
+// disk, e.g. written by /up, restarts the loop with it) and otherwise stops
+// until restart(), 429 waits retry-after or backs off, anything else backs off 1 s → 60 s.
 //
 // Every status goes out with a stable code (onStatus's third argument), the
 // one link_build_stage answers `reason` with: the status itself when the hub
@@ -41,13 +42,14 @@ export const BUSY_RETRY_MS = 250
  *   buildSession: () => Promise<{ instance_id: string } & Record<string, unknown>>,
  *   handler: { handlePoll: (instanceId: string, data: any) => Promise<Ack[]> },
  *   isOff: () => Promise<boolean>,
+ *   onUnauthorized?: () => Promise<boolean>,
  *   onStatus?: (status: LoopStatus, detail: string|undefined, code: LoopCode) => Promise<void> | void,
  *   onSession?: (session: { id?: string, address?: string, name_assigned?: string }) => Promise<void> | void,
  *   onPolled?: (sent: { instance_id: string } & Record<string, unknown>) => Promise<void> | void,
  *   now?: () => number | Promise<number>,
  * }} deps
  */
-export function createPollLoop({ schedule, getClient, buildSession, handler, isOff, onStatus = () => {}, onSession = () => {}, onPolled = () => {}, now = () => Date.now() }) {
+export function createPollLoop({ schedule, getClient, buildSession, handler, isOff, onUnauthorized = async () => false, onStatus = () => {}, onSession = () => {}, onPolled = () => {}, now = () => Date.now() }) {
   /** @type {Ack[]} */
   let pendingAcks = []
   let failures = 0
@@ -115,8 +117,11 @@ export function createPollLoop({ schedule, getClient, buildSession, handler, isO
       if (!current()) {
         // the old generation's error: the new one reports for itself
       } else if (e.kind === 'unauthorized') {
-        stopped = true
-        await safeStatus('unauthorized', 'el hub rechazó el token: vuelve a emparejar con /link pair <slot>', 'unauthorized')
+        // true: a newer token was activated and the loop restarted with it (this generation ends here)
+        if (!(await safeAdopt())) {
+          stopped = true
+          await safeStatus('unauthorized', 'el hub rechazó el token: si corriste /up en esta máquina, /reload-plugins; si no, conéctala con curl -fsSL <hub>/up | bash', 'unauthorized')
+        }
       } else if (e.code === 'too_many_sessions') {
         // The device's cap on sessions online at once (16), not a request rate:
         // nothing changes by retrying sooner, so wait steadily and say why.
@@ -135,6 +140,15 @@ export function createPollLoop({ schedule, getClient, buildSession, handler, isO
     } finally {
       running = false
       if (!stopped && gen === generation) schedule(delay, () => void tick(gen))
+    }
+  }
+
+  /** @returns {Promise<boolean>} */
+  async function safeAdopt() {
+    try {
+      return (await onUnauthorized()) === true
+    } catch {
+      return false
     }
   }
 

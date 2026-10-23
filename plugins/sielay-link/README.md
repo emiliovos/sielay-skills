@@ -23,7 +23,7 @@ La entrada del marketplace va fijada al tag `sielay-link-v1.5.1`. Solo cambia po
 curl -fsSL https://sielay.cloud/up | bash
 ```
 
-El script imprime una liga con un código. La abres con tu sesión de sielay, revisas la máquina y apruebas con un factor nuevo. Después escribe la credencial en `~/.claude/sielay-link/token` (0600), instala este plugin por https y dice con qué dirección quedó la máquina. Haz `/reload-plugins` en tus sesiones abiertas.
+El script imprime una liga con un código. La abres con tu sesión de sielay, revisas la máquina y apruebas con un factor nuevo. Después escribe la credencial en `~/.claude/sielay-link/token` (0600), instala este plugin por https y dice con qué dirección quedó la máquina. Haz `/reload-plugins` en tus sesiones abiertas. Desde la 1.5.2, una sesión abierta antes del `/up` también toma sola el token nuevo: cuando el hub rechaza el viejo (401), vuelve a leer el archivo y sigue con el nuevo, salvo que haya un `link_token` en `/plugin`, que siempre gana. Si el archivo trae el mismo token, la sesión se detiene y dice que hagas `/reload-plugins` o que conectes la máquina con `/up`.
 
 ## El MCP de sielay (desde la 1.5.0)
 

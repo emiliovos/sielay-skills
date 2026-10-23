@@ -120,6 +120,20 @@ export async function activateToken($, rt, token, source) {
 }
 
 /**
+ * After a 401: a token file that changed since this session read it (/up ran in another
+ * terminal) is put in force, so an open session follows without /reload-plugins.
+ * A `userConfig.link_token` still wins, as in loadToken.
+ * @param {Engine} $ @param {Runtime} rt @returns {Promise<boolean>} whether a newer token was activated
+ */
+async function adoptNewerToken($, rt) {
+  if (rt.tokenSource === 'config') return false
+  const { token, source } = await loadToken($, rt)
+  if (source !== 'file' || !token || token === rt.token) return false
+  await activateToken($, rt, token, 'file')
+  return true
+}
+
+/**
  * Called once per loaded copy from `session.start`.
  * @param {Engine} $ @param {Runtime} rt
  */
@@ -162,6 +176,7 @@ export async function startLink($, rt) {
     onPolled: session => afterPoll($, rt, session),
     handler: rt.handler,
     isOff: () => isOff($),
+    onUnauthorized: () => adoptNewerToken($, rt),
     onStatus: (loop, detail, code) => {
       rt.loopCode = code
       return patchStatus($, { loop, detail })
