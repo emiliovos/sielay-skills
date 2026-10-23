@@ -67,6 +67,30 @@ fresh; plant bin/sielay-link-socket-write.mjs "export const f = () => fetch('htt
 fresh; plant bin/sielay-mcp-headers.mjs "import cp from 'node:child_process'";                     expect_fail "child_process in the MCP helper"
 fresh; plant bin/sielay-mcp-headers.sh "curl -s https://evil.example/x";                           expect_fail "URL off the allow-list in the sh helper"
 fresh; touch "$TMP/p/bin/other.sh";                                                               expect_fail "another shell script in bin"
+# Evasions from the review of 1.5.0: code no text rule reads, in the two pinned helpers.
+fresh; plant bin/sielay-mcp-headers.sh 'eval "$(printf %s "aWQ=" | base64 -d)"';                   expect_fail "eval of decoded text in the sh helper (pinned)"
+fresh; plant bin/sielay-mcp-headers.mjs "import { createRequire } from 'node:module'";            expect_fail "createRequire in the MCP helper"
+fresh; plant bin/sielay-mcp-headers.mjs "import { execSync } from 'node:child_process'";          expect_fail "an import outside node:fs/os/path"
+fresh; plant bin/sielay-mcp-headers.mjs "// a comment only";                                      expect_fail "any change to a pinned helper"
+# The rules behind the pin, on a gate copy whose pins match the planted helpers (as a PR that also
+# edited the pins would): only those rules can catch these.
+expect_fail_repinned() { # name
+  cases=$((cases+1))
+  python3 - "$GATE" "$TMP/gate.sh" "$TMP/p" <<'PY'
+import hashlib, re, sys
+gate, out, root = sys.argv[1:]
+s = open(gate).read()
+for f in ("bin/sielay-mcp-headers.sh", "bin/sielay-mcp-headers.mjs"):
+    sha = hashlib.sha256(open(f"{root}/{f}", "rb").read()).hexdigest()
+    s = re.sub(r'"%s=[0-9a-f]{64}"' % re.escape(f), '"%s=%s"' % (f, sha), s)
+open(out, "w").write(s)
+PY
+  if bash "$TMP/gate.sh" "$TMP/p" >/dev/null 2>&1; then echo "FAIL $1 (gate passed)"; fails=$((fails+1)); else echo "ok   $1"; fi
+}
+fresh; cases=$((cases+1)); cp "$GATE" "$TMP/gate.sh"
+if bash "$TMP/gate.sh" "$TMP/p" >/dev/null 2>&1; then echo "ok   a copy of the gate passes the clean plugin"; else echo "FAIL gate copy on the clean plugin"; fails=$((fails+1)); fi
+fresh; plant bin/sielay-mcp-headers.mjs "import { request } from 'node:https'";                    expect_fail_repinned "an import outside node:fs/os/path (repinned)"
+fresh; plant bin/sielay-mcp-headers.mjs "export const w = () => new Worker('x')";                  expect_fail_repinned "Worker in the MCP helper (repinned)"
 
 # Evasions from the PR #10 review.
 fresh; plant mod/link-runtime.js "export async function ev1(\$) { const s = ' //'; return \$.process.run(['id']) }"; expect_fail "a string holding // cannot hide a call"

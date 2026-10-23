@@ -135,6 +135,20 @@ test('without Node: sh + curl does the same exchange, with the credential on cur
   } finally { cleanup() }
 })
 
+test('a Node without fetch (older than 18) falls back to sh + curl', async () => {
+  const { dir, h, cleanup } = home()
+  try {
+    const bin = noNodePath(dir, `{"token":"${MCP}"}\n200`)
+    writeFileSync(join(bin, 'node'), '#!/bin/sh\necho "$*" >> "$(dirname "$0")/../node.argv"\nexit 1\n')
+    chmodSync(join(bin, 'node'), 0o755)
+    const r = await run({ PATH: bin, HOME: h })
+    assert.equal(r.code, 0, r.stderr)
+    assert.equal(r.stdout, `{"Authorization":"Bearer ${MCP}"}`)
+    assert.match(readFileSync(join(dir, 'node.argv'), 'utf8'), /typeof fetch/)
+    assert.ok(readFileSync(join(dir, 'curl.argv'), 'utf8').includes('/api/up/mcp-token'))
+  } finally { cleanup() }
+})
+
 test('without Node: no file → exit 2 before curl; a refusal or a non-token → exit 1', async () => {
   const missing = home({ token: null })
   try {
@@ -158,5 +172,5 @@ test('without Node: no file → exit 2 before curl; a refusal or a non-token →
 
 test('.mcp.json points the sielay server at the hub with this helper, and nothing else', () => {
   const mcp = JSON.parse(readFileSync(join(dirname(SH), '..', '.mcp.json'), 'utf8'))
-  assert.deepEqual(mcp, { mcpServers: { sielay: { type: 'http', url: 'https://sielay.cloud/mcp', headersHelper: 'sh ${CLAUDE_PLUGIN_ROOT}/bin/sielay-mcp-headers.sh' } } })
+  assert.deepEqual(mcp, { mcpServers: { sielay: { type: 'http', url: 'https://sielay.cloud/mcp', headersHelper: 'sh "${CLAUDE_PLUGIN_ROOT}/bin/sielay-mcp-headers.sh"' } } })
 })

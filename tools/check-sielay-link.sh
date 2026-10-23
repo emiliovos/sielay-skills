@@ -77,7 +77,7 @@ if hj != {"modules": ["../mod/sielay-link-mod.js"]}:
     out.append('hooks.json: must be exactly {"modules": ["../mod/sielay-link-mod.js"]}')
 # The only MCP server is sielay's, on the hub, authenticated by the plugin's own helper.
 want_mcp = {"mcpServers": {"sielay": {"type": "http", "url": "https://sielay.cloud/mcp",
-            "headersHelper": "sh ${CLAUDE_PLUGIN_ROOT}/bin/sielay-mcp-headers.sh"}}}
+            "headersHelper": 'sh "${CLAUDE_PLUGIN_ROOT}/bin/sielay-mcp-headers.sh"'}}}
 if mj != want_mcp:
     out.append(".mcp.json: must be exactly the sielay server on https://sielay.cloud/mcp with bin/sielay-mcp-headers.sh")
 print("\n".join(out))
@@ -169,6 +169,20 @@ forbid 'fs\.write|socketPath' '$.fs.write and socket fetches are not used'
 # with fetch (Node) or curl (bin/sielay-mcp-headers.sh, when Node is missing; the file
 # allow-list keeps it the only shell script, and the JS cannot spawn processes).
 only_in 'fetch\(' 'mod/link-hub-client.js,bin/sielay-mcp-headers.mjs' 'network call (fetch)'
+
+# The two helpers run on every MCP connection, outside the engine's `$` model (--engine never sees
+# them) and the shell one outside every JS text rule. So they are pinned: any change to either has to
+# update its sha256 here, in the same reviewed PR. The JS helper may also import only node:fs,
+# node:os and node:path, and never reach a module loader, vm, workers or native code.
+for pin in "bin/sielay-mcp-headers.sh=7c225ea36770e6aed4b7e880f9928f11f2fbe3bc59b3c176457be3a6c5e1e264" "bin/sielay-mcp-headers.mjs=cf69c9a3da125d63e3935036f9e70d607c0b5eff8285a75fa650a9048aa0d355"; do
+  f="${pin%%=*}"; want="${pin#*=}"
+  got=$(python3 -c 'import hashlib, sys; print(hashlib.sha256(open(sys.argv[1], "rb").read()).hexdigest())' "$root/$f" 2>/dev/null || true)
+  [ "$got" = "$want" ] || err "$f changed (sha256 $got): review it and update its pin in tools/check-sielay-link.sh"
+done
+if hits=$(grep -nE '^[[:space:]]*import\b|\bimport[[:space:]]*\(' "$src/bin/sielay-mcp-headers.mjs" | grep -vE "^[0-9]+:import \{ [A-Za-z, ]+ \} from 'node:(fs|os|path)'$"); then
+  echo "$hits" >&2; err "bin/sielay-mcp-headers.mjs may only import from node:fs, node:os and node:path"
+fi
+forbid 'createRequire|node:(vm|module|worker_threads|child_process)|process\.(binding|dlopen|execve)|\bWorker\b' 'module loaders, vm, workers and native code are forbidden'
 only_in 'process\.run' 'mod/link-delivery-adapter.js' 'host process ($.process.run)'
 
 # Every URL in runtime code must be on an allow-listed origin.

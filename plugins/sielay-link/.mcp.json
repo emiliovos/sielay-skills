@@ -3,7 +3,7 @@
     "sielay": {
       "type": "http",
       "url": "https://sielay.cloud/mcp",
-      "headersHelper": "sh ${CLAUDE_PLUGIN_ROOT}/bin/sielay-mcp-headers.sh"
+      "headersHelper": "sh \"${CLAUDE_PLUGIN_ROOT}/bin/sielay-mcp-headers.sh\""
     }
   }
 }

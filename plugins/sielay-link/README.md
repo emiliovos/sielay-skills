@@ -33,7 +33,7 @@ El plugin trae el servidor MCP `sielay` (`.mcp.json`, `https://sielay.cloud/mcp`
 - **Actúa como miembro.** Un admin solo tiene herramientas de admin si aprobó la máquina con «MCP admin» y sigue siendo admin.
 - Revocar la máquina en sielay corta su MCP en la siguiente llamada.
 - **Solo máquinas conectadas con `/up`.** Un token de link anterior no da MCP: el hub responde `mcp_not_enabled` hasta que la máquina pase otra vez por `/up`.
-- **Con Node** el helper corre `bin/sielay-mcp-headers.mjs`. **Sin Node**, que es lo normal con Claude Code nativo, hace lo mismo en `sh` con `curl`. La credencial le llega a `curl` por stdin, nunca en argv.
+- **Con Node 18 o más reciente** el helper corre `bin/sielay-mcp-headers.mjs`. **Sin Node**, que es lo normal con Claude Code nativo, hace lo mismo en `sh` con `curl`. La credencial le llega a `curl` por stdin, nunca en argv.
 - **Falla cerrado:** sin el archivo, o ante una respuesta que no es un token, sale con error y un mensaje sin secretos.
 - El helper solo lee el archivo. Si guardaste un `link_token` en `/plugin`, el MCP no lo ve: quítalo de ahí.
 - Si tenías un MCP `sielay` propio con token fijo (`claude mcp list`), quítalo con `claude mcp remove sielay`.
@@ -219,6 +219,7 @@ Desde la 1.1.0, `/si:build-auto` llama a `link_build_stage` en cada cambio de et
   - solo `mod/link-hub-client.js` y el helper del MCP (`bin/sielay-mcp-headers.*`, una sola petición a `/api/up/mcp-token`) hacen peticiones de red;
   - solo `mod/link-delivery-adapter.js` corre procesos del sistema: Node para el socket, `sh` para el archivo del token, y `tmux` y `hostname` para el nombre.
 - **`.mcp.json` fijo:** la compuerta exige exactamente el servidor `sielay` en `https://sielay.cloud/mcp` con el helper del plugin.
+- **Helpers fijados:** los dos helpers del MCP corren en cada conexión, fuera del motor, así que la compuerta fija su sha256. Cambiar cualquiera de los dos obliga a actualizar el pin en el mismo PR. El `.mjs` además solo puede importar `node:fs`, `node:os` y `node:path`.
 - **El CI lo revisa en cada PR.** `tools/check-sielay-link.sh` exige todo lo anterior y además prohíbe:
   - `asUser`, `eval` y URL fuera de la lista;
   - tokens escritos en el código;

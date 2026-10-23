@@ -1,5 +1,5 @@
 #!/bin/sh
-# headersHelper of the `sielay` MCP server (.mcp.json). With Node on the PATH it runs
+# headersHelper of the `sielay` MCP server (.mcp.json). With Node 18+ (global fetch) on the PATH it runs
 # sielay-mcp-headers.mjs; Claude Code installed natively does not bring Node, so without it
 # this POSIX sh does the same with curl: it reads ~/.claude/sielay-link/token, trades it for a
 # new 24 h MCP token (POST /api/up/mcp-token) and prints {"Authorization":"Bearer <token>"}.
@@ -7,7 +7,9 @@
 # Fails closed with a message on stderr that never carries a token.
 set -u
 here=$(dirname "$0")
-if command -v node >/dev/null 2>&1; then exec node "$here/sielay-mcp-headers.mjs"; fi
+if command -v node >/dev/null 2>&1 && node -e 'process.exit(typeof fetch === "function" ? 0 : 1)' 2>/dev/null; then
+  exec node "$here/sielay-mcp-headers.mjs"
+fi
 
 HUB="https://sielay.cloud"
 fail() { printf 'sielay-mcp-headers: %s\n' "$1" >&2; exit "${2:-1}"; }
