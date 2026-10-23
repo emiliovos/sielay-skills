@@ -18,7 +18,7 @@ const PAIRING = /** @type {const} */ ({ plugin: 'sielay-link', key: 'pairing' })
 const CONVERSATIONS = /** @type {const} */ ({ plugin: 'sielay-link', key: 'conversations' })
 const NOTICE = /** @type {const} */ ({ plugin: 'sielay-link', key: 'notice' })
 
-export const CLIENT_VERSION = '1.3.0'
+export const CLIENT_VERSION = '1.4.0'
 
 /** @typedef {import('claude-code').EngineInterface} Engine */
 /** @typedef {import('../types/index.js').LinkStatus} LinkStatus */
@@ -40,6 +40,10 @@ export function createRuntime(options) {
     loop: /** @type {ReturnType<typeof createPollLoop>|null} */ (null),
     pairing: /** @type {ReturnType<typeof createPairingFlow>|null} */ (null),
     tmux: /** @type {{ name?: string, at: number }} */ ({ at: -Infinity }),
+    /** The session name, fixed at the first poll (link-session-payload.js); `/link name` clears it. */
+    namePin: /** @type {import('./link-session-payload.js').NamePin|null} */ (null),
+    /** The poll loop's last code (link_build_stage's `reason`); null until the first poll. Memory only. */
+    loopCode: /** @type {import('./link-poll-loop.js').LoopCode|null} */ (null),
     /** The build held across a /clear (link-build-hooks.js). */
     buildCarry: /** @type {import('../types/index.js').LinkBuildState|null} */ (null),
     /** The last invalid build field logged, so it is logged once. */
@@ -110,6 +114,7 @@ export async function activateToken($, rt, token, source) {
   rt.tokenSource = source
   rt.client = token ? createHubClient($, { hubUrl: rt.hubUrl, token }) : null
   await patchStatus($, { tokenSource: source })
+  rt.loopCode = null
   rt.loop?.start()
 }
 
@@ -118,6 +123,7 @@ export async function activateToken($, rt, token, source) {
  * @param {Engine} $ @param {Runtime} rt
  */
 export async function startLink($, rt) {
+  rt.loopCode = null
   try {
     rt.hubUrl = normalizeHubUrl(rt.options.hub_url)
   } catch (err) {
@@ -154,7 +160,10 @@ export async function startLink($, rt) {
     onPolled: session => afterPoll($, rt, session),
     handler: rt.handler,
     isOff: () => isOff($),
-    onStatus: (loop, detail) => patchStatus($, { loop, detail }),
+    onStatus: (loop, detail, code) => {
+      rt.loopCode = code
+      return patchStatus($, { loop, detail })
+    },
     onSession: s => patchStatus($, { address: s.address, name: s.name_assigned }),
   })
   rt.pairing = createPairingFlow({

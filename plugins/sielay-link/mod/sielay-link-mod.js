@@ -5,6 +5,7 @@
 import { createRuntime, startLink, sessionPayload, isOff } from './link-runtime.js'
 import { recordModeSample, recordSessionTitle, recordTurnEnd } from './link-session-payload.js'
 import { LINK_TOOL_SPECS, runLinkTool } from './link-tools.js'
+import { reportState } from './link-build-tool.js'
 import { runLinkCommand } from './link-commands.js'
 import { PROMPT_FALLBACK_CONTEXT } from './link-inbound-framing.js'
 import { discoveryFor } from './link-discovery-context.js'
@@ -59,7 +60,7 @@ async function callTool($, rt, name, input) {
     notePrefix: prefix => void (rt.addressPrefix = prefix),
     build: {
       declare: fields => declareFromTool($, rt, fields),
-      canReport: async () => rt.client !== null && !(await isOff($)),
+      canReport: async () => reportState({ paired: rt.client !== null, off: await isOff($), code: rt.loopCode }),
     },
   })
   return answer.deny !== undefined ? { deny: answer.deny } : { result: answer.result }

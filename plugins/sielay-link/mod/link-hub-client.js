@@ -18,7 +18,7 @@ export class HubError extends Error {
   /**
    * @param {HubErrorKind} kind
    * @param {string} message
-   * @param {{ status?: number, code?: string, field?: string, retryAfterMs?: number }} [extra]
+   * @param {{ status?: number, code?: string, field?: string, scope?: string, retryAfterMs?: number }} [extra]
    */
   constructor(kind, message, extra = {}) {
     super(message)
@@ -27,6 +27,8 @@ export class HubError extends Error {
     this.status = extra.status
     this.code = extra.code
     this.field = extra.field
+    /** What a 409 link_paused names as off: person, line, device or session. */
+    this.scope = extra.scope
     this.retryAfterMs = extra.retryAfterMs
   }
 }
@@ -135,7 +137,8 @@ export function createHubClient($, { hubUrl, token }) {
       throw new HubError('rate_limited', 'hub rate limit', { status: 429, code, retryAfterMs: retryAfterMs(res.headers) })
     }
     const field = typeof data?.field === 'string' ? data.field.slice(0, 64) : undefined
-    throw new HubError('http', `hub answered ${res.status}${code ? ` ${code}` : ''}`, { status: res.status, code, field })
+    const scope = typeof data?.scope === 'string' ? data.scope.slice(0, 16) : undefined
+    throw new HubError('http', `hub answered ${res.status}${code ? ` ${code}` : ''}`, { status: res.status, code, field, scope })
   }
 
   return {

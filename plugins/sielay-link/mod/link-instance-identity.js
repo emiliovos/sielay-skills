@@ -11,7 +11,9 @@
 // process: its messaging socket path when it has one (the same across reloads
 // and /clear, different per terminal, gone when the process exits), else the
 // session id. A record is this session's when the owner is us; it is free when
-// its owner is no longer alive or stopped renewing for INSTANCE_LEASE_MS. A new
+// its owner is no longer alive (socketOwnerAlive: the socket file outlives its
+// process, so the PID in its name is what tells) or stopped renewing for
+// INSTANCE_LEASE_MS. A new
 // id is minted only while every record is held by another live process.
 // Two processes claiming at the same instant may race; the next poll settles it.
 
@@ -80,4 +82,26 @@ export async function claimInstanceId({ store, key, me, now, ownerAlive, newId, 
     .slice(0, MAX_RECORDS)
   await store.set(key, kept)
   return mine.instance_id
+}
+
+/**
+ * Whether the Claude Code process behind a messaging socket still runs. The
+ * socket is named `<PID>.sock` and its file stays on disk after the process
+ * exits, so on a machine with procfs the PID decides; without procfs, or with
+ * a socket named otherwise, the file is all there is to go by.
+ * @param {string} path the socket path
+ * @param {(path: string) => Promise<boolean>} exists
+ * @returns {Promise<boolean>}
+ */
+export async function socketOwnerAlive(path, exists) {
+  if (!(await exists(path))) return false
+  const pid = /(?:^|[\\/])([1-9][0-9]{0,9})\.sock$/.exec(path)?.[1]
+  if (!pid) return true
+  try {
+    if (!(await exists('/proc/self'))) return true
+    return await exists(`/proc/${pid}`)
+  } catch {
+    // procfs not readable here: keep the file's answer
+    return true
+  }
 }

@@ -6,10 +6,18 @@
 // Errors: 503 pauses (60 s), 401 stops until restart(), 429 waits
 // retry-after or backs off, anything else backs off 1 s → 60 s.
 //
+// Every status goes out with a stable code (onStatus's third argument), the
+// one link_build_stage answers `reason` with: the status itself when the hub
+// said something definite, `too_many_sessions` for the session cap, and
+// `unreachable` for every other backoff (network, 5xx, a plain rate limit).
+//
 // One loop only: every start() opens a new generation and a timer from an
 // older one does nothing. A tick that finds another still running (a restart
 // while a 25 s poll is in flight) retries shortly instead of returning, so a
-// restart can never leave the loop dead.
+// restart can never leave the loop dead. A poll that comes back after a
+// restart still hands its messages over (their acks ride the next poll), but
+// what it says about the hub (status, session, a 401) belongs to the old
+// token and is dropped.
 
 export const WAIT_S = 25
 export const MAX_DELAY_MS = 60_000
@@ -22,6 +30,7 @@ export const BUSY_RETRY_MS = 250
 
 /**
  * @typedef {'starting'|'online'|'off'|'unpaired'|'paused'|'unauthorized'|'backoff'} LoopStatus
+ * @typedef {'online'|'off'|'unpaired'|'paused'|'unauthorized'|'too_many_sessions'|'unreachable'} LoopCode
  * @typedef {import('./link-inbound-handler.js').Ack} Ack
  */
 
@@ -32,7 +41,7 @@ export const BUSY_RETRY_MS = 250
  *   buildSession: () => Promise<{ instance_id: string } & Record<string, unknown>>,
  *   handler: { handlePoll: (instanceId: string, data: any) => Promise<Ack[]> },
  *   isOff: () => Promise<boolean>,
- *   onStatus?: (status: LoopStatus, detail?: string) => Promise<void> | void,
+ *   onStatus?: (status: LoopStatus, detail: string|undefined, code: LoopCode) => Promise<void> | void,
  *   onSession?: (session: { id?: string, address?: string, name_assigned?: string }) => Promise<void> | void,
  *   onPolled?: (sent: { instance_id: string } & Record<string, unknown>) => Promise<void> | void,
  *   now?: () => number | Promise<number>,
@@ -61,16 +70,17 @@ export function createPollLoop({ schedule, getClient, buildSession, handler, isO
     }
     running = true
     let delay = 0
+    const current = () => gen === generation
     try {
       if (await isOff()) {
         delay = OFF_RECHECK_MS
-        await onStatus('off')
+        await onStatus('off', undefined, 'off')
         return
       }
       const client = getClient()
       if (!client) {
         delay = OFF_RECHECK_MS
-        await onStatus('unpaired')
+        await onStatus('unpaired', undefined, 'unpaired')
         return
       }
       const session = await buildSession()
@@ -86,14 +96,14 @@ export function createPollLoop({ schedule, getClient, buildSession, handler, isO
         throw err
       }
       failures = 0
-      if (data?.session) await onSession(data.session)
+      if (data?.session && current()) await onSession(data.session)
       pendingAcks.push(...(await handler.handlePoll(session.instance_id, data ?? {})))
       try {
         await onPolled(session)
       } catch {
         // after-poll bookkeeping (the build's cleanup) retries on the next poll
       }
-      await onStatus('online')
+      if (current()) await onStatus('online', undefined, 'online')
       const after = Number(data?.poll_after_ms)
       delay = pendingAcks.length ? 0 : Number.isFinite(after) ? Math.min(MAX_DELAY_MS, Math.max(0, after)) : 0
       const empty = !Array.isArray(data?.messages) || data.messages.length === 0
@@ -102,23 +112,25 @@ export function createPollLoop({ schedule, getClient, buildSession, handler, isO
       }
     } catch (err) {
       const e = /** @type {{ kind?: string, code?: string, retryAfterMs?: number, message?: string }} */ (err ?? {})
-      if (e.kind === 'unauthorized') {
+      if (!current()) {
+        // the old generation's error: the new one reports for itself
+      } else if (e.kind === 'unauthorized') {
         stopped = true
-        await safeStatus('unauthorized', 'el hub rechazó el token: vuelve a emparejar con /link pair <slot>')
+        await safeStatus('unauthorized', 'el hub rechazó el token: vuelve a emparejar con /link pair <slot>', 'unauthorized')
       } else if (e.code === 'too_many_sessions') {
-        // The device's session quota (16 new sessions in 7 days), not a request rate:
+        // The device's cap on sessions online at once (16), not a request rate:
         // nothing changes by retrying sooner, so wait steadily and say why.
         delay = MAX_DELAY_MS
-        await safeStatus('backoff', 'esta máquina abrió demasiadas sesiones nuevas (más de 16 en 7 días); reintento cada minuto')
+        await safeStatus('backoff', 'esta máquina ya tiene 16 sesiones en línea (el tope); reintento cada minuto', 'too_many_sessions')
       } else if (e.kind === 'paused') {
         delay = PAUSE_MS
-        await safeStatus('paused', 'sielay-link está apagado en el hub')
+        await safeStatus('paused', 'sielay-link está apagado en el hub', 'paused')
       } else if (e.kind === 'rate_limited' && typeof e.retryAfterMs === 'number') {
         delay = Math.min(MAX_DELAY_MS, Math.max(1000, e.retryAfterMs))
-        await safeStatus('backoff', 'demasiadas peticiones; esperando')
+        await safeStatus('backoff', 'demasiadas peticiones; esperando', 'unreachable')
       } else {
         delay = backoff()
-        await safeStatus('backoff', String(e.message ?? err))
+        await safeStatus('backoff', String(e.message ?? err), 'unreachable')
       }
     } finally {
       running = false
@@ -126,10 +138,10 @@ export function createPollLoop({ schedule, getClient, buildSession, handler, isO
     }
   }
 
-  /** @param {LoopStatus} status @param {string} detail */
-  async function safeStatus(status, detail) {
+  /** @param {LoopStatus} status @param {string} detail @param {LoopCode} code */
+  async function safeStatus(status, detail, code) {
     try {
-      await onStatus(status, detail)
+      await onStatus(status, detail, code)
     } catch {
       // status display must never break the loop
     }

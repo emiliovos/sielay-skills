@@ -69,15 +69,28 @@ const CODE_MESSAGES = {
   unknown_peer: 'No existe esa dirección. Revisa las disponibles con link_peers.',
   too_large: 'El mensaje pasa de 16 KB. Resúmelo o divídelo.',
   invalid: 'El hub rechazó el mensaje por formato inválido.',
-  too_many_sessions: 'Esta máquina abrió más de 16 sesiones nuevas en 7 días. Reusa una sesión (mismo nombre y carpeta) o pide a un admin que revise.',
+  too_many_sessions: 'Esta máquina ya tiene 16 sesiones en línea, el tope. Cierra una o reusa una sesión (mismo nombre y carpeta), o pide a un admin que revise.',
 }
+
+/** Where a 409 link_paused says sielay-link is off (`scope`). */
+const PAUSE_SCOPES = Object.freeze({
+  person: 'para una de las personas',
+  line: 'en la línea entre esas dos máquinas',
+  device: 'en una de las dos máquinas',
+  session: 'en una de las dos terminales',
+})
 
 /**
  * @param {unknown} err
  * @returns {string}
  */
 export function describeHubError(err) {
-  const e = /** @type {{ kind?: string, code?: string, field?: string, message?: string }} */ (err ?? {})
+  const e = /** @type {{ kind?: string, code?: string, field?: string, scope?: string, message?: string }} */ (err ?? {})
+  if (e.code === 'link_paused') {
+    // own keys only: a scope like "toString" never reaches Object.prototype
+    const where = e.scope && Object.hasOwn(PAUSE_SCOPES, e.scope) ? PAUSE_SCOPES[/** @type {keyof typeof PAUSE_SCOPES} */ (e.scope)] : 'para esta conversación'
+    return `sielay-link está apagado ${where}. Un admin lo prende desde /admin/link o /conexiones; no reintentes.`
+  }
   if (e.code === 'invalid' && e.field === 'conversation_id') {
     return 'Esa conversación no es de esta sesión (el hub te ve como otra). Contesta con link_send a la dirección de la otra sesión, sin conversation.'
   }

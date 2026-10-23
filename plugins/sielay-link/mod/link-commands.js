@@ -75,6 +75,7 @@ export async function runLinkCommand($, rt, args, origin) {
     const name = normalizeName(arg)
     if (!name) return { text: 'Uso: /link name <nombre> (minúsculas, números y guiones, hasta 40).' }
     await $.store.set(`name.${await cwdHash(await sessionDir($))}`, name)
+    rt.namePin = null // the next payload takes the saved name and fixes it again
     return { text: `Nombre de la sesión para esta carpeta: ${name}. El hub lo toma en el siguiente poll.` }
   }
   if (sub === 'off' || sub === 'on') {

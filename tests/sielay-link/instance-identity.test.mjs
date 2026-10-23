@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { claimInstanceId, instanceKey, INSTANCE_LEASE_MS, MAX_RECORDS } from '../../plugins/sielay-link/mod/link-instance-identity.js'
+import { claimInstanceId, instanceKey, socketOwnerAlive, INSTANCE_LEASE_MS, MAX_RECORDS } from '../../plugins/sielay-link/mod/link-instance-identity.js'
 
 function memStore() {
   const m = new Map()
@@ -78,4 +78,28 @@ test('a malformed stored value is ignored, never trusted', async () => {
   const id = await w.claim('sock:A', 1_000)
   assert.match(id, /^(ok-1|inst-1)$/)
   assert.ok(w.store.m.get('instance.hash-a.api').every(r => typeof r.instance_id === 'string' && typeof r.renewed_at === 'number'))
+})
+
+test('a socket owner is alive only while its file and the PID in its name are: a quick restart frees the old record', async () => {
+  const files = new Set(['/proc/self', '/run/user/1/cc-socks/111.sock', '/proc/111', '/run/user/1/cc-socks/222.sock'])
+  const exists = async p => files.has(p)
+  assert.equal(await socketOwnerAlive('/run/user/1/cc-socks/111.sock', exists), true, 'live process, socket in place')
+  assert.equal(await socketOwnerAlive('/run/user/1/cc-socks/222.sock', exists), false, 'socket left behind by a dead PID')
+  assert.equal(await socketOwnerAlive('/run/user/1/cc-socks/333.sock', exists), false, 'socket gone')
+  assert.equal(await socketOwnerAlive('/tmp/other-name.sock', async p => p === '/tmp/other-name.sock' || p === '/proc/self'), true, 'no PID in the name: the file is all there is')
+  assert.equal(await socketOwnerAlive('/var/x/444.sock', async p => p === '/var/x/444.sock'), true, 'no procfs (macOS): the file is all there is')
+  assert.equal(await socketOwnerAlive('/var/x/555.sock', async p => { if (p.startsWith('/proc')) throw new Error('denied'); return true }), true, 'procfs unreadable: fall back to the file')
+})
+
+test('restart within the lease while the old socket file lingers: same instance_id, no name-2', async () => {
+  const store = memStore()
+  const files = new Set(['/proc/self', '/s/100.sock', '/proc/100'])
+  const ownerAlive = async o => socketOwnerAlive(o.slice(5), async p => files.has(p))
+  let n = 0
+  const claim = (me, now) => claimInstanceId({ store, key: instanceKey('h', 'api'), me, now, ownerAlive, newId: () => `inst-${(n += 1)}` })
+  assert.equal(await claim('sock:/s/100.sock', 1_000), 'inst-1')
+  files.delete('/proc/100') // the CLI exited; its socket file stays on disk
+  files.add('/s/200.sock')
+  files.add('/proc/200')
+  assert.equal(await claim('sock:/s/200.sock', 5_000), 'inst-1')
 })
