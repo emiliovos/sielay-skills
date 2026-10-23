@@ -1,7 +1,7 @@
 // link_build_stage: the one tool through which /si:build-auto tells sielay how
 // its build is going. It only reports: it controls nothing, approves nothing
 // and starts nothing. Pure (no `$`): the mod passes in how to store the build
-// and whether this session reports to a hub right now.
+// and whether the hub is taking this session's polls right now (reportState).
 
 import { BUILD_STAGES, BUILD_STATUSES, BUILD_ROLES, BUILD_TEXT_MAX } from './link-build-validate.js'
 import { BUILD_ESTIMATE_PHASES_MAX, BUILD_ESTIMATE_H_MAX } from './link-build-fields.js'
@@ -14,8 +14,11 @@ export const BUILD_TOOL_SPEC = Object.freeze({
     'Solo informa a sielay en qué va el build de /si:build-auto de esta sesión (etapa, estado, resumen, entrega); ' +
     'no controla nada: no aprueba etapas, no mergea ni dispara acciones. El hub lo recibe en el siguiente poll (≤ 25 s). ' +
     'Cada llamada mezcla sus campos con los del mismo build_id; un build_id nuevo empieza otro build. Los subagentes, ' +
-    'el uso de tokens y started_at los pone el plugin. Responde reported:false si esta sesión no está emparejada o ' +
-    'sielay-link está apagado (el estado se guarda igual).',
+    'el uso de tokens y started_at los pone el plugin. El build se guarda siempre. reported:true significa que el hub acepta ' +
+    'los polls de esta sesión, no que registró el build (puede ignorarlo por su tope de builds, un build cerrado o el visor ' +
+    'apagado). Con reported:false, el campo reason dice por qué: pending (aún no hubo poll), too_many_sessions (la máquina ' +
+    'llegó a su tope de sesiones en línea), paused, unauthorized, unpaired, off o unreachable (red o hub caído). ' +
+    'No reintentes por eso: el siguiente poll lo lleva si la sesión vuelve a estar en línea.',
   inputSchema: {
     type: 'object',
     additionalProperties: false,
@@ -77,10 +80,30 @@ export const BUILD_TOOL_SPEC = Object.freeze({
   isDeferred: /** @type {const} */ (false),
 })
 
+/** Every `reason` link_build_stage can answer with (the frozen table of the contract). */
+export const REPORT_REASONS = Object.freeze(['pending', 'too_many_sessions', 'paused', 'unauthorized', 'unpaired', 'off', 'unreachable'])
+
+/** @typedef {{ reported: true, reason?: undefined } | { reported: false, reason: string }} ReportState */
+
+/**
+ * Whether the hub is taking this session's polls, from what is true right now
+ * (off, paired) and the poll loop's last code (null before the first poll).
+ * @param {{ paired: boolean, off: boolean, code: import('./link-poll-loop.js').LoopCode|null|undefined }} input
+ * @returns {ReportState}
+ */
+export function reportState({ paired, off, code }) {
+  if (off) return { reported: false, reason: 'off' }
+  if (!paired) return { reported: false, reason: 'unpaired' }
+  // null before the first poll; off/unpaired that no longer hold wait for the next poll
+  if (code === null || code === undefined || code === 'off' || code === 'unpaired') return { reported: false, reason: 'pending' }
+  if (code === 'online') return { reported: true }
+  return { reported: false, reason: REPORT_REASONS.includes(code) ? code : 'unreachable' }
+}
+
 /**
  * @typedef {{
  *   declare: (input: Record<string, unknown>) => Promise<{ error?: string }>,
- *   canReport: () => Promise<boolean>,
+ *   canReport: () => Promise<ReportState>,
  * }} BuildToolDeps
  */
 
@@ -92,5 +115,6 @@ export const BUILD_TOOL_SPEC = Object.freeze({
 export async function runBuildTool(input, deps) {
   const { error } = await deps.declare(input ?? {})
   if (error) return { deny: `link_build_stage: el campo ${error} no es válido; no se guardó ni se envía nada.` }
-  return { result: JSON.stringify({ ok: true, reported: await deps.canReport() }) }
+  const { reported, reason } = await deps.canReport()
+  return { result: JSON.stringify(reported ? { ok: true, reported } : { ok: true, reported, reason }) }
 }

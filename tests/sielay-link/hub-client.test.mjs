@@ -176,3 +176,10 @@ test('pairStart: an unknown slot is a typed 404', async () => {
   const client = createHubClient({ hubUrl: undefined, token: '', http: fakeFetch(() => ({ status: 404, json: {} })) })
   await assert.rejects(client.pairStart({ slot: 'nope' }), err => err.status === 404)
 })
+
+test('409 link_paused keeps the scope the hub names, bounded; a non-string scope is dropped', async () => {
+  const paused = scope => createHubClient({ hubUrl: undefined, token: TOKEN, http: fakeFetch(() => ({ status: 409, json: { code: 'link_paused', scope } })) })
+  await assert.rejects(paused('device').send({}), err => err instanceof HubError && err.code === 'link_paused' && err.scope === 'device' && err.status === 409)
+  await assert.rejects(paused('x'.repeat(40)).send({}), err => err.scope === 'x'.repeat(16))
+  await assert.rejects(paused(7).send({}), err => err.code === 'link_paused' && err.scope === undefined)
+})

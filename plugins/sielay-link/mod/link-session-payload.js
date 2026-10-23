@@ -5,7 +5,7 @@
 
 import { modeState } from './link-mode-freshness.js'
 import { resolveSessionName, cwdHash } from './link-session-name-resolution.js'
-import { claimInstanceId, instanceKey } from './link-instance-identity.js'
+import { claimInstanceId, instanceKey, socketOwnerAlive } from './link-instance-identity.js'
 import { pollBuild } from './link-build-hooks.js'
 
 // $.state references: literal plugin/key, declared in each file that uses them.
@@ -69,7 +69,8 @@ export async function readMode($) {
 
 /**
  * The folder this session's identity is computed from: its project root
- * (`$.session.root()`), where it started or where `/cd` or a worktree took it.
+ * (`$.session.root()`), where it started or where `/cd` or a worktree took it
+ * (the identity itself is fixed at the first poll, see pinName).
  * A shell `cd` does not move it, so a terminal that works inside another
  * project's folder never turns into that project's session (which took over
  * the other terminal's session and its strip). Falls back to the live cwd on
@@ -109,7 +110,7 @@ async function readProjectFile($, cwd) {
  * The instance_id for (cwd, name): reused across reloads, /clear, --resume and
  * restarts, distinct for a second terminal live in the same folder (see
  * link-instance-identity.js). The owner is this Claude Code process's
- * messaging socket, which exists only while the process lives.
+ * messaging socket, alive while the PID in its name runs.
  * @param {Engine} $ @param {string} hash @param {string} name @param {string} sessionId @param {number} now
  */
 async function instanceIdFor($, hash, name, sessionId, now) {
@@ -119,7 +120,7 @@ async function instanceIdFor($, hash, name, sessionId, now) {
     key: instanceKey(hash, name),
     me: socket ? `sock:${socket}` : `sess:${sessionId}`,
     now,
-    ownerAlive: async owner => (owner.startsWith('sock:') ? $.fs.exists(owner.slice(5)) : true),
+    ownerAlive: async owner => (owner.startsWith('sock:') ? socketOwnerAlive(owner.slice(5), path => $.fs.exists(path)) : true),
     newId: () => crypto.randomUUID(),
   })
 }
@@ -139,9 +140,26 @@ async function safePollBuild($, rt) {
 }
 
 /**
- * @typedef {{ adapter: { tmuxSessionName: (env: string|undefined) => Promise<string|undefined> } | null, tmux: { name?: string, at: number } }
+ * @typedef {{ name: string, source: import('./link-session-name-resolution.js').NameSource, hash: string }} NamePin
+ * @typedef {{ adapter: { tmuxSessionName: (env: string|undefined) => Promise<string|undefined> } | null, tmux: { name?: string, at: number }, namePin?: NamePin|null }
  *   & import('./link-build-hooks.js').BuildRuntime} PayloadRuntime
  */
+
+/**
+ * The session's identity (name and folder hash), fixed the first time it is
+ * resolved once the adapter has read tmux (the loop is running): a /cd, a
+ * worktree switch or a title that arrives later changes neither, so the
+ * instance_id (keyed by both) and the hub row stay the same, with no `name-2`.
+ * Inside tmux, a name that could not be read yet (a slow or failed tmux call)
+ * fixes nothing, so the next refresh can still pick it. `/link name` clears it.
+ * @param {PayloadRuntime} rt @param {NamePin} resolved @param {boolean} tmuxUnread
+ * @returns {NamePin}
+ */
+function pinName(rt, resolved, tmuxUnread) {
+  if (rt.namePin) return rt.namePin
+  if (rt.adapter && !tmuxUnread) rt.namePin = { ...resolved }
+  return resolved
+}
 
 /**
  * @param {Engine} $
@@ -150,18 +168,19 @@ async function safePollBuild($, rt) {
  */
 export async function buildSessionPayload($, rt, { withBuild = false } = {}) {
   const [sessionId, cwd, now] = await Promise.all([$.session.id(), sessionDir($), $.clock.now()])
-  const hash = await cwdHash(cwd)
+  const liveHash = await cwdHash(cwd)
+  const tmuxEnv = await $.env.get('TMUX')
   if (rt.adapter && now - rt.tmux.at > TMUX_TTL_MS) {
-    rt.tmux = { name: await rt.adapter.tmuxSessionName(await $.env.get('TMUX')), at: now }
+    rt.tmux = { name: await rt.adapter.tmuxSessionName(tmuxEnv), at: now }
   }
   const [project, saved, { value: title }, env, mode] = await Promise.all([
     readProjectFile($, cwd),
-    $.store.get(`name.${hash}`),
+    $.store.get(`name.${liveHash}`),
     $.state.get(SESSION_TITLE),
     $.env.get('SIELAY_LINK_NAME'),
     readMode($),
   ])
-  const resolved = resolveSessionName({
+  const fresh = resolveSessionName({
     env,
     saved: typeof saved === 'string' ? saved : undefined,
     projectFile: project.name,
@@ -169,6 +188,8 @@ export async function buildSessionPayload($, rt, { withBuild = false } = {}) {
     nativeTitle: title ?? undefined,
     cwd,
   })
+  const resolved = pinName(rt, { ...fresh, hash: liveHash }, Boolean(tmuxEnv) && !rt.tmux.name)
+  const hash = resolved.hash
   const instanceId = await instanceIdFor($, hash, resolved.name, sessionId, now)
   const build = withBuild ? await safePollBuild($, rt) : undefined
   return {

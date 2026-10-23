@@ -2,6 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { LINK_TOOL_SPECS, runLinkTool, describeHubError } from '../../plugins/sielay-link/mod/link-tools.js'
 import { HubError } from '../../plugins/sielay-link/mod/link-hub-client.js'
+import { reportState, REPORT_REASONS } from '../../plugins/sielay-link/mod/link-build-tool.js'
 
 const from = { name: 'api', instance_id: 'i1', cwd_hash: 'h', mode: 'bypassPermissions', mode_fresh: 1 }
 
@@ -137,6 +138,7 @@ test('an unknown tool name is denied', async () => {
 
 test('too_many_sessions explains the session quota', async () => {
   assert.match(describeHubError(new HubError('rate_limited', 'x', { status: 429, code: 'too_many_sessions' })), /16 sesiones/)
+  assert.match(describeHubError(new HubError('rate_limited', 'x', { status: 429, code: 'too_many_sessions' })), /16 sesiones en línea/)
 })
 
 const buildInput = { build_id: 'sielay-plan', role: 'coordinator', stage: 2, status: 'running' }
@@ -159,17 +161,59 @@ test('link_build_stage says it only reports and controls nothing', () => {
 
 test('link_build_stage unpaired: stores and answers ok with reported false, never a pairing denial', async () => {
   const declared = []
-  const build = { declare: async i => (declared.push(i), {}), canReport: async () => false }
+  const build = { declare: async i => (declared.push(i), {}), canReport: async () => ({ reported: false, reason: 'unpaired' }) }
   const r = await runLinkTool('link_build_stage', buildInput, { ...deps().d, client: null, build })
-  assert.deepEqual(JSON.parse(r.result), { ok: true, reported: false })
+  assert.deepEqual(JSON.parse(r.result), { ok: true, reported: false, reason: 'unpaired' })
   assert.deepEqual(declared, [buildInput])
 })
 
 test('link_build_stage paired: reported true; an invalid field is denied by name', async () => {
-  const ok = { declare: async () => ({}), canReport: async () => true }
+  const ok = { declare: async () => ({}), canReport: async () => ({ reported: true }) }
   assert.deepEqual(JSON.parse((await runLinkTool('link_build_stage', buildInput, { ...deps().d, build: ok })).result), { ok: true, reported: true })
-  const bad = { declare: async () => ({ error: 'stage' }), canReport: async () => true }
+  const bad = { declare: async () => ({ error: 'stage' }), canReport: async () => ({ reported: true }) }
   assert.match((await runLinkTool('link_build_stage', { ...buildInput, stage: 9 }, { ...deps().d, build: bad })).deny, /campo stage/)
-  const badEst = { declare: async () => ({ error: 'estimate.phases' }), canReport: async () => true }
+  const badEst = { declare: async () => ({ error: 'estimate.phases' }), canReport: async () => ({ reported: true }) }
   assert.match((await runLinkTool('link_build_stage', { ...buildInput, estimate: { total_h: 1, phases: 'x' } }, { ...deps().d, build: badEst })).deny, /campo estimate\.phases no es válido; no se guardó/)
+})
+
+test('reportState follows the frozen table: online true, before the first poll pending, hub refusals by code, the rest unreachable', () => {
+  assert.deepEqual(reportState({ paired: true, off: false, code: 'online' }), { reported: true })
+  assert.deepEqual(reportState({ paired: true, off: false, code: null }), { reported: false, reason: 'pending' })
+  for (const code of ['too_many_sessions', 'paused', 'unauthorized', 'unpaired', 'off']) {
+    assert.deepEqual(reportState({ paired: code !== 'unpaired', off: code === 'off', code }), { reported: false, reason: code }, code)
+  }
+  for (const code of ['unreachable', 'backoff', 'weird', undefined]) {
+    assert.deepEqual(reportState({ paired: true, off: false, code }), code === undefined ? { reported: false, reason: 'pending' } : { reported: false, reason: 'unreachable' }, String(code))
+  }
+  assert.deepEqual([...REPORT_REASONS].sort(), ['off', 'paused', 'pending', 'too_many_sessions', 'unauthorized', 'unpaired', 'unreachable'])
+})
+
+test('reportState: off or unpaired right now wins over an older online poll', () => {
+  assert.deepEqual(reportState({ paired: true, off: true, code: 'online' }), { reported: false, reason: 'off' })
+  assert.deepEqual(reportState({ paired: false, off: false, code: 'online' }), { reported: false, reason: 'unpaired' })
+  assert.deepEqual(reportState({ paired: false, off: true, code: null }), { reported: false, reason: 'off' })
+})
+
+test('reportState: an off or unpaired code that no longer holds (/link on, a new token) is pending until the next poll', () => {
+  assert.deepEqual(reportState({ paired: true, off: false, code: 'off' }), { reported: false, reason: 'pending' })
+  assert.deepEqual(reportState({ paired: true, off: false, code: 'unpaired' }), { reported: false, reason: 'pending' })
+})
+
+test('link_build_stage passes the reason through, and the description says what reported:true means', async () => {
+  const build = { declare: async () => ({}), canReport: async () => ({ reported: false, reason: 'too_many_sessions' }) }
+  assert.deepEqual(JSON.parse((await runLinkTool('link_build_stage', buildInput, { ...deps().d, build })).result), { ok: true, reported: false, reason: 'too_many_sessions' })
+  const spec = LINK_TOOL_SPECS.find(s => s.name === 'link_build_stage')
+  assert.match(spec.description, /reported:true significa que el hub acepta los polls de esta sesión/)
+  assert.match(spec.description, /no que registró el build/)
+  assert.match(spec.description, /reason/)
+})
+
+test('link_paused names what is off by scope, and says not to retry', () => {
+  const paused = scope => describeHubError(new HubError('http', 'x', { status: 409, code: 'link_paused', ...(scope ? { scope } : {}) }))
+  assert.equal(paused('person'), 'sielay-link está apagado para una de las personas. Un admin lo prende desde /admin/link o /conexiones; no reintentes.')
+  assert.match(paused('line'), /apagado en la línea entre esas dos máquinas\./)
+  assert.match(paused('device'), /apagado en una de las dos máquinas\./)
+  assert.match(paused('session'), /apagado en una de las dos terminales\./)
+  assert.match(paused(undefined), /apagado para esta conversación\. Un admin lo prende desde \/admin\/link o \/conexiones; no reintentes\./)
+  assert.match(paused('toString'), /para esta conversación/, 'an unknown scope never reaches the prototype')
 })

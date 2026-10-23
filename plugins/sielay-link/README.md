@@ -37,16 +37,19 @@ Tu dirección es `persona/máquina/sesión`. La persona y la máquina las fija e
 2. `/link name <nombre>`, guardado para esta carpeta;
 3. `.claude/sielay-link.json` del proyecto: `{"name": "api", "project": "Mi proyecto"}`;
 4. el nombre de la sesión de tmux;
-5. el nombre que le diste con `/rename`. Llega con el siguiente prompt, no al instante;
+5. el nombre que le diste con `/rename`, si ya estaba al arrancar (ver abajo);
 6. el nombre de la carpeta.
 
 Si otra carpeta ya usa ese nombre y está en línea, el hub te asigna `nombre-2`.
 
-**«Carpeta» es la raíz del proyecto de la sesión:** donde arrancó Claude Code, o adonde la llevó `/cd` o un worktree. Un `cd` en la terminal no la cambia, así que una sesión que trabaja dentro de la carpeta de otro proyecto sigue siendo ella misma y nunca toma la sesión de la terminal de ese proyecto. Con un Claude Code sin `$.session.root()` se usa la carpeta actual.
+**La identidad se fija al arrancar** (desde la 1.4.0). El plugin resuelve el nombre y la carpeta en el primer poll y los conserva toda la sesión. Un `/cd`, un cambio de worktree o un título de `/rename` que llega después no los cambian, así que el hub sigue viendo la misma fila y no aparece `nombre-2`. Dentro de tmux, si el nombre de tmux todavía no se pudo leer, no se fija nada hasta leerlo. Para cambiar el nombre a media sesión usa `/link name <nombre>`: se toma en el siguiente poll, junto con la carpeta en la que estás entonces. Lo demás cuenta al reiniciar.
+
+**«Carpeta» es la raíz del proyecto de la sesión:** donde arrancó Claude Code (o adonde la llevó `/cd` o un worktree antes del primer poll, o antes de un `/link name`). Un `cd` en la terminal no la cambia, así que una sesión que trabaja dentro de la carpeta de otro proyecto sigue siendo ella misma y nunca toma la sesión de la terminal de ese proyecto. Con un Claude Code sin `$.session.root()` se usa la carpeta actual.
 
 **La misma sesión sigue siendo la misma.** El plugin guarda en `$.store` la identidad de la instancia, por carpeta y nombre.
 
 - Si recargas el plugin, haces `/clear`, usas `--resume` o reinicias en la misma carpeta, el hub te ve como la misma instancia y no pasas a `nombre-2`.
+- Un reinicio rápido también (desde la 1.4.0): el archivo del socket de Claude Code sobrevive al proceso, así que el plugin revisa que el PID de su nombre siga vivo (`/proc/<pid>`) antes de dar por ocupada la identidad. Sin `/proc` (macOS) solo cuenta que el archivo exista, y el reinicio rápido recupera su identidad a los 90 s.
 - Dos terminales abiertas a la vez en la misma carpeta y con el mismo nombre sí son instancias distintas. La segunda recibe `nombre-2`.
 
 ## Comandos y herramientas
@@ -62,6 +65,8 @@ Si otra carpeta ya usa ese nombre y está en línea, el hub te asigna `nombre-2`
 | `/link accept <id>` / `reject <id>` | Acepta o rechaza ese mensaje. Solo cuenta si lo tecleas tú en el prompt |
 | `link_send`, `link_reply`, `link_peers` | Las herramientas del modelo para hablar con otras sesiones. **No existe ninguna para aceptar, rechazar ni liberar** |
 | `link_build_stage` | Le dice al hub en qué va el build de `/si:build-auto` de esta sesión. Solo informa: no controla nada (ver «Reporte del build») |
+
+Si el hub tiene apagado sielay-link para esa conversación (409 `link_paused`), `link_send` y `link_reply` dicen qué está apagado: una de las personas, la línea entre las dos máquinas, una de las máquinas o una de las terminales, y que un admin lo prende desde `/admin/link` o `/conexiones` (desde la 1.4.0). No hay que reintentar.
 
 `link_peers` devuelve `{ "tu_direccion": …, "peers": [ … ] }`. `tu_direccion` sale de la dirección que el hub asignó en el último poll; si todavía no hay poll, del prefijo `persona/máquina` que manda el hub (`self.address_prefix`) más el nombre de la sesión; si el hub es anterior y no lo manda, va `null`. `peers` no cambia.
 
@@ -142,7 +147,19 @@ El encabezado es:
 
 Desde la 1.1.0, `/si:build-auto` llama a `link_build_stage` en cada cambio de etapa, de estado o de entrega. El plugin guarda el build en el estado de la sesión y lo manda como `session.build` en cada poll, así que el hub lo ve en 25 s o menos. El visor de builds de sielay lo muestra.
 
-- **Solo informa.** La herramienta no aprueba etapas, no mergea y no dispara nada. Si la sesión no está emparejada o sielay-link está apagado, guarda el build igual y responde `{ "ok": true, "reported": false }`.
+- **Solo informa.** La herramienta no aprueba etapas, no mergea y no dispara nada. Guarda el build siempre, y responde `{ "ok": true, "reported": true }` o `{ "ok": true, "reported": false, "reason": "…" }`.
+- **Qué significa `reported`** (desde la 1.4.0). `reported: true` dice que el hub acepta los polls de esta sesión, no que registró el build: el hub lo puede ignorar por su tope de builds, porque el build ya cerró o porque el visor está apagado. Sale del último poll:
+
+  | Último poll | Respuesta |
+  |---|---|
+  | aceptado | `reported: true` |
+  | todavía no hubo poll | `reported: false, reason: "pending"` |
+  | la máquina llegó a su tope de 16 sesiones en línea | `reason: "too_many_sessions"` |
+  | sielay-link apagado en el hub (503) | `reason: "paused"` |
+  | token rechazado (401) | `reason: "unauthorized"` |
+  | sin token | `reason: "unpaired"` |
+  | apagado en esta sesión (`/link off` o `SIELAY_LINK_OFF=1`) | `reason: "off"` |
+  | cualquier otro error (red, 5xx, límite de peticiones) | `reason: "unreachable"` |
 - **Qué pone el plugin:**
   - **`started_at`**, al declarar el build. **`stage_since`**, al cambiar de etapa, si la skill no la manda.
   - **Los subagentes vivos.** El alta llega con `SubagentStart`, que trae el tipo, y la descripción con el resultado de `agent.spawn`; los dos se emparejan por el id del agente. La baja llega con `SubagentStop` o con el `turn.complete` del subagente. Un subagente sin señal durante 30 min sale de la lista.

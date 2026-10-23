@@ -20,6 +20,7 @@ function harness({ answers, mode = { mode: 'bypassPermissions', fresh: true }, o
   const polls = []
   const injected = []
   const statuses = []
+  const codes = []
   let strip = []
   let round = 0
   const client = {
@@ -43,7 +44,10 @@ function harness({ answers, mode = { mode: 'bypassPermissions', fresh: true }, o
     buildSession: async () => ({ name: 'api', instance_id: instanceIds ? instanceIds[round++] ?? 'last' : 'inst-1' }),
     handler,
     isOff: async () => state.off,
-    onStatus: s => void statuses.push(s),
+    onStatus: (s, _detail, code) => {
+      statuses.push(s)
+      codes.push(code)
+    },
   })
   async function step() {
     const t = timers.shift()
@@ -53,7 +57,7 @@ function harness({ answers, mode = { mode: 'bypassPermissions', fresh: true }, o
     await new Promise(r => setImmediate(r))
     return t.ms
   }
-  return { loop, step, timers, polls, injected, statuses, state, getStrip: () => strip }
+  return { loop, step, timers, polls, injected, statuses, codes, state, getStrip: () => strip }
 }
 
 const ok = (messages = [], extra = {}) => ({ session: { id: 's1' }, messages, strip: [], poll_after_ms: 0, ...extra })
@@ -243,4 +247,97 @@ test('onPolled gets the session a poll carried, only once the poll went through;
   assert.deepEqual(polled.map(s => s.build), [{ build_id: 'b-1', status: 'done' }])
   assert.equal(timers.length, 1, 'the loop goes on')
   loop.stop()
+})
+
+test('every status carries a stable code for link_build_stage: one per hub answer, the rest unreachable', async () => {
+  const cases = [
+    [ok(), 'online'],
+    [new HubError('unauthorized', 'x', { status: 401 }), 'unauthorized'],
+    [new HubError('rate_limited', 'x', { status: 429, code: 'too_many_sessions' }), 'too_many_sessions'],
+    [new HubError('paused', 'x', { status: 503 }), 'paused'],
+    [new HubError('rate_limited', 'x', { status: 429, retryAfterMs: 5000 }), 'unreachable'],
+    [new HubError('rate_limited', 'x', { status: 429 }), 'unreachable'],
+    [new HubError('network', 'down'), 'unreachable'],
+    [new HubError('http', 'x', { status: 502 }), 'unreachable'],
+    [new Error('boom'), 'unreachable'],
+  ]
+  for (const [answer, code] of cases) {
+    const h = harness({ answers: [answer] })
+    h.loop.start()
+    await h.step()
+    assert.equal(h.codes.at(-1), code, `${answer instanceof Error ? answer.message + ' ' + (answer.code ?? answer.kind ?? '') : 'ok'}`)
+  }
+  const off = harness({ answers: [ok()], off: true })
+  off.loop.start()
+  await off.step()
+  assert.equal(off.codes.at(-1), 'off')
+  const unpaired = harness({ answers: [ok()] })
+  unpaired.state.client = null
+  unpaired.loop.start()
+  await unpaired.step()
+  assert.equal(unpaired.codes.at(-1), 'unpaired')
+})
+
+test('429 too_many_sessions names the live-session cap, not a 7-day count', async () => {
+  const details = []
+  const timers = []
+  const loop = createPollLoop({
+    schedule: (ms, fn) => timers.push(fn),
+    getClient: () => ({ poll: async () => { throw new HubError('rate_limited', 'x', { status: 429, code: 'too_many_sessions' }) } }),
+    buildSession: async () => ({ instance_id: 'i' }),
+    handler: { handlePoll: async () => [] },
+    isOff: async () => false,
+    onStatus: (_s, detail) => void details.push(detail),
+  })
+  loop.start()
+  timers.shift()()
+  await new Promise(r => setImmediate(r))
+  assert.match(details.at(-1), /16 sesiones en línea/)
+  assert.doesNotMatch(details.at(-1), /7 días/)
+  loop.stop()
+})
+
+test('a poll still in flight from before a restart reports nothing: no status, no session, and its 401 never stops the new loop', async () => {
+  const timers = []
+  const codes = []
+  const sessions = []
+  let answer
+  const loop = createPollLoop({
+    schedule: (ms, fn) => timers.push(fn),
+    getClient: () => ({ poll: () => new Promise((resolve, reject) => (answer = { resolve, reject })) }),
+    buildSession: async () => ({ instance_id: 'i' }),
+    handler: { handlePoll: async () => [] },
+    isOff: async () => false,
+    onStatus: (_s, _d, code) => void codes.push(code),
+    onSession: s => void sessions.push(s),
+  })
+  const settle = async () => { for (let i = 0; i < 5; i += 1) await new Promise(r => setImmediate(r)) }
+  loop.start()
+  timers.shift()()
+  await settle()
+  loop.start() // a new token while the old long poll waits
+  answer.resolve(ok())
+  await settle()
+  assert.deepEqual(codes, [], 'the old generation\'s online is not this token\'s')
+  assert.deepEqual(sessions, [])
+
+  const revoked = []
+  let pending
+  const loop2 = createPollLoop({
+    schedule: (ms, fn) => revoked.push(fn),
+    getClient: () => ({ poll: () => new Promise((_res, reject) => (pending = reject)) }),
+    buildSession: async () => ({ instance_id: 'i' }),
+    handler: { handlePoll: async () => [] },
+    isOff: async () => false,
+    onStatus: (_s, _d, code) => void codes.push(code),
+  })
+  loop2.start()
+  revoked.shift()()
+  await settle()
+  loop2.start()
+  pending(new HubError('unauthorized', 'x', { status: 401 }))
+  await settle()
+  assert.equal(loop2.isStopped, false, 'the old token\'s 401 does not stop the loop of the new one')
+  assert.deepEqual(codes, [])
+  loop2.stop()
 })
