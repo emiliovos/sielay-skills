@@ -15,7 +15,7 @@ function memStore() {
 }
 
 /** Builds a loop whose timer queue the test drives one round at a time. */
-function harness({ answers, mode = { mode: 'bypassPermissions', fresh: true }, off = false, instanceIds } = {}) {
+function harness({ answers, mode = { mode: 'bypassPermissions', fresh: true }, off = false, instanceIds, onUnauthorized } = {}) {
   const timers = []
   const polls = []
   const injected = []
@@ -44,6 +44,7 @@ function harness({ answers, mode = { mode: 'bypassPermissions', fresh: true }, o
     buildSession: async () => ({ name: 'api', instance_id: instanceIds ? instanceIds[round++] ?? 'last' : 'inst-1' }),
     handler,
     isOff: async () => state.off,
+    onUnauthorized,
     onStatus: (s, _detail, code) => {
       statuses.push(s)
       codes.push(code)
@@ -128,6 +129,30 @@ test('503 pauses, 429 honours retry-after, 401 stops until start()', async () =>
   revoked.loop.start()
   await revoked.step()
   assert.equal(revoked.polls.length, 2)
+})
+
+test('a 401 after /up wrote a new token file goes on with that token instead of stopping', async () => {
+  let asked = 0
+  const h = harness({
+    answers: [new HubError('unauthorized', 'x', { status: 401 }), ok()],
+    // what the runtime does when the file has a newer token: activate it, which restarts the loop
+    onUnauthorized: async () => { asked += 1; h.loop.start(); return true },
+  })
+  h.loop.start()
+  await h.step()
+  assert.equal(asked, 1)
+  assert.equal(h.loop.isStopped, false)
+  assert.equal(h.statuses.includes('unauthorized'), false, 'no 401 shown for the old token')
+  assert.equal(h.timers.length, 1, 'only the restarted generation is scheduled')
+  await h.step()
+  assert.equal(h.polls.length, 2)
+  assert.equal(h.statuses.at(-1), 'online')
+
+  const same = harness({ answers: [new HubError('unauthorized', 'x', { status: 401 })], onUnauthorized: async () => false })
+  same.loop.start()
+  await same.step()
+  assert.equal(same.loop.isStopped, true, 'the same token in the file: stops as before')
+  assert.equal(same.statuses.at(-1), 'unauthorized')
 })
 
 test('SIELAY_LINK_OFF / /link off: no poll, rechecks later', async () => {

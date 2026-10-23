@@ -98,7 +98,7 @@ export function describeHubError(err) {
   const known = e.code ? CODE_MESSAGES[e.code] : undefined
   if (known) return known
   if (e.kind === 'paused') return 'sielay-link está apagado en el hub ahora mismo.'
-  if (e.kind === 'unauthorized' || e.kind === 'no_token') return 'El token de sielay-link no sirve: vuelve a emparejar con /link pair <slot>.'
+  if (e.kind === 'unauthorized' || e.kind === 'no_token') return 'El token de sielay-link no sirve. Si acabas de correr /up en esta máquina, corre /reload-plugins (no la des de alta otra vez); si no, conéctala con curl -fsSL <hub>/up | bash, o con /link pair <slot> si un admin te dio un slot.'
   if (e.kind === 'rate_limited') return 'El hub pide esperar (demasiadas peticiones). Intenta en un momento.'
   if (e.kind === 'network') return 'No se pudo contactar al hub de sielay-link.'
   return `sielay-link: ${e.message ?? String(err)}`
