@@ -50,7 +50,7 @@ Si unos repos se pushean distinto que otros (por ejemplo, el repo del proyecto v
 - Push: rama+PR; pve2-docs, pve2-plans: main directo
 ```
 
-El modo `continuar` no usa el estado ni el push del contrato: no escribe bitácora ni docs, no pushea y siempre entrega el handoff en pantalla.
+El modo `continuar` no usa el estado ni el push del contrato: no escribe bitácora ni docs, no pushea y siempre entrega el handoff en pantalla. El modo `autonomo` (para terminales de un build que reinician su contexto) es `continuar` sin preguntas y con el handoff en `~/handoffs/<sesion>.md`, de 40 líneas como máximo.
 
 Si la sesión arranca fuera de un repo (por ejemplo, en el home de un servidor que maneja varios proyectos), la skill lee el `CLAUDE.md` del directorio donde arrancó.
 

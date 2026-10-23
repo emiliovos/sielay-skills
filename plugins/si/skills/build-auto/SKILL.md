@@ -11,7 +11,7 @@ metadata:
   deps: "git en el repo destino. Recomendado: AgentKit (skills /ak:*); sin él, cada etapa se hace con subagentes nativos. Opcional: /si:checkpoint para el cierre (--checkpoint) y red a context7.com (o su MCP) para consultar la doc de dependencias en las etapas 2 y 3."
   installs: []
   risk: none
-  version: "1.7.0"
+  version: "1.8.0"
 ---
 
 # Build-auto: backbone de proyecto autónomo
@@ -81,6 +81,14 @@ Cada etapa recibe y deja este contrato compacto: **Goal · Scope y no-goals · E
 
 ## Reporte a sielay
 Si la sesión tiene la herramienta `link_build_stage` (plugin `sielay-link`), lee `references/reporte-sielay.md` antes del Frame y reporta en sus momentos: entrada a cada etapa, aprobaciones, cierre de cada fase, entrega y fin con `outcome`. Al cerrar cada etapa va un `summary` de 1 a 3 frases, y el Estimado va como `estimate` en los gates del Frame y del Plan y en cada reestimación. El `build_id` es `<repo>-<carpeta-del-plan>` (con `-r2`, `-r3`… en una corrida nueva sobre la misma carpeta). Si la herramienta no existe o no reporta, la skill sigue igual, sin error ni pregunta.
+
+## Presupuesto de contexto
+El costo de un build crece con el tamaño del contexto por el número de turnos. Reglas por defecto:
+- **Contexto corto.** El coordinador se mantiene pequeño (reinicio por checkpoint corto hacia 100 K de contexto) y las terminales de trabajo, hacia 150 K: `/si:checkpoint autonomo`, `/clear` y retomar desde el archivo. Una lectura grande se delega a un subagente; no se usa la ventana de 1 M en builds autónomos.
+- **Autocompactación solo en terminales autónomas.** Se lanzan con `claude --autocompact 250k` (el CLI acepta de 100k a 1M). Nunca va en la config global ni en sesiones interactivas.
+- **Máximo 2 builds o subagentes a la vez.** Más paralelismo solo si cada uno vive por debajo de 100 K.
+- **Modelo por rol.** Planear y la revisión final, el modelo más fuerte; implementar y revisar por fase en subagentes, uno intermedio (Sonnet); tester, exploración y git, el más ligero que alcance. Si un rol no se puede fijar, dilo en la ficha.
+- **Coordinación barata.** Un aviso por evento (fase terminada, bloqueo, pregunta que cambia el plan); sin acuses de recibo ni progreso intermedio; esperar sin turnos (aviso de inactividad o notificación de fin), nunca sondear.
 
 ## Las 7 etapas
 | # | Etapa | Con AgentKit | Sin AgentKit (modo nativo) | Gate |

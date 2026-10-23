@@ -3,7 +3,7 @@ name: checkpoint
 description: "Ritual de cierre de sesión + handoff genérico para cualquier proyecto. Úsalo al terminar de trabajar: resuelve el contexto y el contrato de cierre del proyecto (CLAUDE.md o descriptor) → bitácora/estado → docs → commit → push según el flujo del repo → handoff copy-paste para seguir en otra terminal con contexto limpio. Si el CLAUDE.md del repo declara su cierre en la sección '## Cierre de sesión', lo sigue sin crear archivos nuevos; si no, usa los valores por defecto. Actívalo cuando el usuario diga '/checkpoint', 'checkpoint', 'cierra la sesión', 'termina y dame handoff', 'cerremos', 'wrap up', 'dame el handoff', o al final de una tanda de trabajo. Modo 'continuar' (/checkpoint continuar, 'checkpoint para seguir', 'voy a limpiar contexto'): sin bitácora ni docs ni push, solo commit local + handoff en pantalla para seguir la misma tarea tras /clear."
 user-invocable: true
 when_to_use: "Invoke al cerrar una sesión de trabajo: deja el trabajo commiteado (en el repo/entorno correcto), la bitácora o el archivo de estado y los docs al día, y un prompt de handoff para retomar en frío. Resuelve acceso, rutas, flujo de push y destino del handoff por proyecto en vez de asumir constantes fijas — una sola skill sirve para proyectos con y sin convenciones propias. Para proyectos SIN buzón de coordinación (trabajo en solitario)."
-argument-hint: "[continuar] [<slug-del-proyecto>] [nota opcional de cierre]"
+argument-hint: "[continuar|autonomo] [<slug-del-proyecto>] [nota opcional de cierre]"
 keywords: [cierre, handoff, journal, estado, docs, commit, push, wrap-up, sesion, continuar, compact]
 metadata:
   category: workflow
@@ -11,7 +11,7 @@ metadata:
   deps: "git configurado en el repo destino. Opcional: una sección '## Cierre de sesión' en el CLAUDE.md del repo o un descriptor de proyecto (p.ej. docs/projects/<slug>/project.json) para fijar archivo de estado, flujo de push y destino del handoff; si no existen, se usan los valores por defecto."
   installs: []
   risk: none
-  version: "2.4.0"
+  version: "2.5.0"
 ---
 
 # Checkpoint — cierre de sesión + handoff
@@ -22,7 +22,7 @@ Ritual que se corre **al terminar de trabajar**. Deja todo sincronizado (git + b
 
 > **Principio:** tú ya tienes el contexto de la sesión — escribe directo, no gastes tokens re-scouteando. Sé conciso y honesto (si algo quedó a medias o falló, dilo, no lo inventes).
 
-## Modos: `cierre` o `continuar`
+## Modos: `cierre`, `continuar` o `autonomo`
 
 - **`cierre` (por defecto):** terminas la tanda. Corre los Pasos 0 a 5 completos.
 - **`continuar`:** la tarea sigue en una terminal nueva o tras `/clear`, solo quieres soltar contexto. Se activa con el argumento `continuar` o frases como "checkpoint para seguir", "voy a limpiar contexto", "handoff para continuar". Corre:
@@ -31,6 +31,11 @@ Ritual que se corre **al terminar de trabajar**. Deja todo sincronizado (git + b
   - **Paso 3:** commit local del trabajo de esta tarea, si hay algo. Nunca en `main`/`master` de un repo con `Push: rama+PR`: si estás ahí, no commitees y dilo en el handoff.
   - **Paso 4: no se pushea**, diga lo que diga el contrato. Reporta los commits como locales.
   - **Paso 5:** handoff siempre en pantalla (no escribe archivos), con la estructura completa.
+
+- **`autonomo`:** para terminales de un build autónomo que reinician su contexto (`/clear`) y retoman desde un archivo. Se activa con el argumento `autonomo` o cuando un coordinador lo pide. Es `continuar` más estas reglas:
+  - **Cero preguntas al usuario.** Si algo es ambiguo, decide el valor por defecto y anótalo en el handoff.
+  - **El handoff va a un archivo, no a la pantalla:** `~/handoffs/<sesion>.md` (crea la carpeta si falta; `<sesion>` es el nombre de la sesión o del slug). Máximo 40 líneas, sin narrativa: objetivo, estado (hecho / en curso, con rama y PR), siguiente paso concreto, archivos tocados y comandos de verificación. Sin secretos (ver redacción de secretos).
+  - **Responde con una sola línea:** la ruta del archivo. No imprimas el handoff.
 
 ### ¿`/compact`, `checkpoint continuar` o `checkpoint`?
 - **`/compact`:** la misma tarea sigue y casi todo el contexto sigue sirviendo. No hace falta esta skill.
@@ -106,7 +111,7 @@ Si ya escribiste la bitácora o el estado de esta tanda, dilo y sáltalo.
 - Nunca corras scripts de publicación ni deploys (ver el contrato).
 
 ## Paso 5 — handoff
-Escribe el handoff donde diga el contrato (`<ruta>`, `estado` o `pantalla`; con `pantalla` no se escribe ningún archivo; en modo `continuar`, siempre `pantalla`) Y preséntalo siempre como **prompt copy-paste** para pegar en una terminal nueva. Estructura obligatoria:
+Escribe el handoff donde diga el contrato (`<ruta>`, `estado` o `pantalla`; con `pantalla` no se escribe ningún archivo; en modo `continuar`, siempre `pantalla`; en modo `autonomo`, siempre el archivo `~/handoffs/<sesion>.md` de ≤40 líneas) Y preséntalo siempre como **prompt copy-paste** para pegar en una terminal nueva. Estructura obligatoria:
 1. **LEE PRIMERO** — plan, archivo de estado o fase actual + contexto (docs de setup, specs).
 2. **ESTADO (no rehacer)** — qué está hecho + PRs/branches. Sácalo de comandos, no de memoria: `git status --short`, `git worktree list` y `gh pr list --state open` (o el equivalente de la forja) en cada repo tocado. Cita PRs y ramas tal como salen ahí.
 3. **DECISIONES VIGENTES** — decisiones que la sesión nueva no debe reabrir, con su porqué en media línea.
