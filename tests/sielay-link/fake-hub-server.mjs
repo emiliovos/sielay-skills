@@ -21,15 +21,15 @@ export async function startFakeHub({ token }) {
       const body = raw ? JSON.parse(raw) : {}
       const path = new URL(req.url, 'http://x').pathname
       log.push({ method: req.method, path, body, auth: req.headers.authorization })
-      const send = (status, json) => {
-        res.writeHead(status, { 'content-type': 'application/json', 'cache-control': 'no-store' })
+      const send = (status, json, headers = {}) => {
+        res.writeHead(status, { 'content-type': 'application/json', 'cache-control': 'no-store', ...headers })
         res.end(JSON.stringify(json))
       }
       if (req.headers.authorization !== `Bearer ${token}`) return send(401, { code: 'bad_token' })
 
       if (path === '/api/up/mcp-token') {
         if (req.method !== 'POST' || !req.headers['x-requested-with']) return send(400, { code: 'bad_request' })
-        return send(mcp.status, mcp.body)
+        return send(mcp.status, mcp.body, mcp.headers)
       }
       if (path === '/api/link/poll') {
         if (body.session) Object.assign(receiver, { mode: body.session.mode, mode_fresh: body.session.mode_fresh })

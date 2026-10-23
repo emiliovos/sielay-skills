@@ -62,8 +62,8 @@ test('with Node: exchanges the credential and prints exactly the Authorization h
   } finally { cleanup() }
 })
 
-test('with Node: no credential file, or a malformed one, fails closed before any request', async () => {
-  for (const token of [null, 'not-a-link-token']) {
+test('with Node: no credential file, or a malformed one (two lines included), fails closed before any request', async () => {
+  for (const token of [null, 'not-a-link-token', `${SLK}\nAAAA`]) {
     const { h, cleanup } = home({ token })
     try {
       await withHub(async hub => {
@@ -83,6 +83,7 @@ test('with Node: a refusal or a non-token answer fails closed, and stderr never 
     [{ status: 429, body: { code: 'rate_limited' } }, /demasiados tokens/],
     [{ status: 200, body: { token: 'short' } }, /no es un token MCP/],
     [{ status: 500, body: {} }, /respondió 500/],
+    [{ status: 302, body: {}, headers: { location: 'https://evil.example/collect' } }, /no hay conexión/],
   ]
   for (const [reply, message] of cases) {
     const { h, cleanup } = home()
@@ -129,6 +130,7 @@ test('without Node: sh + curl does the same exchange, with the credential on cur
     const argv = readFileSync(join(dir, 'curl.argv'), 'utf8')
     assert.match(argv, /-H @- .*https:\/\/sielay\.cloud\/api\/up\/mcp-token/)
     assert.match(argv, /--proto =https/)
+    assert.match(argv, /--max-time 8 /)
     assert.ok(!argv.includes(SLK), 'the credential is not in argv')
     assert.equal(readFileSync(join(dir, 'curl.stdin'), 'utf8'), `Authorization: Bearer ${SLK}\n`)
     assert.deepEqual(readdirSync(dir).sort(), ['bin', 'curl.argv', 'curl.stdin', 'home'])
@@ -149,6 +151,19 @@ test('a Node without fetch (older than 18) falls back to sh + curl', async () =>
   } finally { cleanup() }
 })
 
+test('without Node: a credential file with more than one line fails closed before curl, like Node', async () => {
+  for (const text of [`${SLK}\nAAAA`, `junk\n${SLK}`, `${SLK} x`]) {
+    const { dir, h, cleanup } = home({ token: null })
+    try {
+      writeFileSync(join(h, '.claude', 'sielay-link', 'token'), text, { mode: 0o600 })
+      const r = await run({ PATH: noNodePath(dir, `{"token":"${MCP}"}\n200`), HOME: h })
+      assert.equal(r.code, 2, JSON.stringify(text))
+      assert.equal(r.stdout, '')
+      assert.deepEqual(readdirSync(dir).sort(), ['bin', 'home'], 'curl never ran')
+    } finally { cleanup() }
+  }
+})
+
 test('without Node: no file → exit 2 before curl; a refusal or a non-token → exit 1', async () => {
   const missing = home({ token: null })
   try {
@@ -158,7 +173,7 @@ test('without Node: no file → exit 2 before curl; a refusal or a non-token →
     assert.match(r.stderr, /no está .*sielay-link\/token; conéctala otra vez con: curl -fsSL https:\/\/sielay\.cloud\/up \| bash/)
     assert.deepEqual(readdirSync(missing.dir).sort(), ['bin', 'home'], 'curl never ran')
   } finally { missing.cleanup() }
-  for (const [reply, message] of [['{"code":"mcp_not_enabled"}\n403', /no tiene acceso al MCP/], ['{"token":"abc"}\n200', /no es un token MCP/], ['{}\n401', /respondió 401/]]) {
+  for (const [reply, message] of [['{"code":"mcp_not_enabled"}\n403', /no tiene acceso al MCP/], ['{"token":"abc"}\n200', /no es un token MCP/], ['{}\n401', /respondió 401/], ['\n302', /respondió 302/]]) {
     const { dir, h, cleanup } = home()
     try {
       const r = await run({ PATH: noNodePath(dir, reply), HOME: h })

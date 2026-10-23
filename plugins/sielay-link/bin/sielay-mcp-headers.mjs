@@ -50,7 +50,7 @@ try {
     headers: { Authorization: `Bearer ${slk}`, 'Content-Type': 'application/json', 'X-Requested-With': 'sielay-mcp-helper' },
     body: '{}',
     redirect: 'error',
-    signal: AbortSignal.timeout(10_000),
+    signal: AbortSignal.timeout(8_000), // Claude Code gives the helper 10 s
   })
 } catch (e) {
   fail(`no hay conexión con ${HUB} (${e?.name ?? 'error'})`)

@@ -3,7 +3,8 @@
 # sielay-mcp-headers.mjs; Claude Code installed natively does not bring Node, so without it
 # this POSIX sh does the same with curl: it reads ~/.claude/sielay-link/token, trades it for a
 # new 24 h MCP token (POST /api/up/mcp-token) and prints {"Authorization":"Bearer <token>"}.
-# Nothing is written to disk. The credential reaches curl on stdin (-H @-), never in argv.
+# Nothing is written to disk. The credential reaches curl on stdin (-H @-, from the printf
+# builtin), never in argv.
 # Fails closed with a message on stderr that never carries a token.
 set -u
 here=$(dirname "$0")
@@ -16,10 +17,21 @@ fail() { printf 'sielay-mcp-headers: %s\n' "$1" >&2; exit "${2:-1}"; }
 command -v curl >/dev/null 2>&1 || fail "hace falta node o curl"
 file="${HOME:-}/.claude/sielay-link/token"
 [ -r "$file" ] || fail "no está $file; conéctala otra vez con: curl -fsSL https://sielay.cloud/up | bash" 2
-grep -Eqx 'slk_[A-Za-z0-9_-]{43}' "$file" || fail "$file no tiene una credencial de sielay-link válida" 2
+# One read, and that same value is checked and sent: exactly slk_ + 43 characters, one line
+# (a trailing newline is dropped by $(...), anything else fails closed).
+slk=$(cat -- "$file") || fail "no se puede leer $file" 2
+case "$slk" in
+  slk_*) ;;
+  *) fail "$file no tiene una credencial de sielay-link válida" 2 ;;
+esac
+case "${slk#slk_}" in
+  *[!A-Za-z0-9_-]*) fail "$file no tiene una credencial de sielay-link válida" 2 ;;
+esac
+[ "${#slk}" -eq 47 ] || fail "$file no tiene una credencial de sielay-link válida" 2
 
-resp=$( { printf 'Authorization: Bearer '; tr -d '\n' < "$file"; printf '\n'; } |
-  curl -q -sS --max-time 10 --proto '=https' -X POST -H @- -H 'Content-Type: application/json' \
+# 8 s: Claude Code gives the helper 10 s.
+resp=$(printf 'Authorization: Bearer %s\n' "$slk" |
+  curl -q -sS --max-time 8 --proto '=https' -X POST -H @- -H 'Content-Type: application/json' \
     -H 'X-Requested-With: sielay-mcp-helper' --data '{}' -w '\n%{http_code}' "$HUB/api/up/mcp-token" 2>/dev/null) ||
   fail "no hay conexión con $HUB"
 status=$(printf '%s\n' "$resp" | tail -n 1)
