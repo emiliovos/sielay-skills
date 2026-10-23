@@ -182,7 +182,7 @@ done
 if hits=$(grep -nE '^[[:space:]]*import\b|\bimport[[:space:]]*\(' "$src/bin/sielay-mcp-headers.mjs" | grep -vE "^[0-9]+:import \{ [A-Za-z, ]+ \} from 'node:(fs|os|path)'$"); then
   echo "$hits" >&2; err "bin/sielay-mcp-headers.mjs may only import from node:fs, node:os and node:path"
 fi
-forbid 'createRequire|node:(vm|module|worker_threads|child_process)|process\.(binding|dlopen|execve)|\bWorker\b' 'module loaders, vm, workers and native code are forbidden'
+forbid 'createRequire|getBuiltinModule|node:(vm|module|worker_threads|child_process)|process\.(binding|dlopen|execve)|\bWorker\b' 'module loaders, vm, workers and native code are forbidden'
 only_in 'process\.run' 'mod/link-delivery-adapter.js' 'host process ($.process.run)'
 
 # Every URL in runtime code must be on an allow-listed origin.

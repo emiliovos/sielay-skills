@@ -91,6 +91,7 @@ fresh; cases=$((cases+1)); cp "$GATE" "$TMP/gate.sh"
 if bash "$TMP/gate.sh" "$TMP/p" >/dev/null 2>&1; then echo "ok   a copy of the gate passes the clean plugin"; else echo "FAIL gate copy on the clean plugin"; fails=$((fails+1)); fi
 fresh; plant bin/sielay-mcp-headers.mjs "import { request } from 'node:https'";                    expect_fail_repinned "an import outside node:fs/os/path (repinned)"
 fresh; plant bin/sielay-mcp-headers.mjs "export const w = () => new Worker('x')";                  expect_fail_repinned "Worker in the MCP helper (repinned)"
+fresh; plant bin/sielay-mcp-headers.mjs "export const g = () => process.getBuiltinModule('node:child' + '_process')"; expect_fail_repinned "getBuiltinModule in the MCP helper (repinned)"
 
 # Evasions from the PR #10 review.
 fresh; plant mod/link-runtime.js "export async function ev1(\$) { const s = ' //'; return \$.process.run(['id']) }"; expect_fail "a string holding // cannot hide a call"
