@@ -120,6 +120,21 @@ export function createDeliveryAdapter($, { helperPath }) {
       }
     },
 
+    /**
+     * The command line of process `pid` (this Claude Code), for its launch mode.
+     * @param {string} pid digits only
+     * @returns {Promise<string|undefined>}
+     */
+    async processArgs(pid) {
+      if (!/^\d{1,10}$/.test(pid)) return undefined
+      try {
+        const r = await $.process.run(['ps', '-o', 'args=', '-p', pid], { timeoutMs: 3_000 })
+        return r.exitCode === 0 ? r.stdout.trim().slice(0, 4_000) || undefined : undefined
+      } catch {
+        return undefined
+      }
+    },
+
     /** @returns {Promise<string|undefined>} the machine's hostname, shown to the approving admin */
     async hostname() {
       try {
