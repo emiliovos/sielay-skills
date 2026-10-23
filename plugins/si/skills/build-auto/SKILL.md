@@ -11,7 +11,7 @@ metadata:
   deps: "git en el repo destino. Recomendado: AgentKit (skills /ak:*); sin él, cada etapa se hace con subagentes nativos. Opcional: /si:checkpoint para el cierre (--checkpoint) y red a context7.com (o su MCP) para consultar la doc de dependencias en las etapas 2 y 3."
   installs: []
   risk: none
-  version: "1.8.0"
+  version: "1.9.0"
 ---
 
 # Build-auto: backbone de proyecto autónomo
@@ -85,10 +85,10 @@ Si la sesión tiene la herramienta `link_build_stage` (plugin `sielay-link`), le
 ## Presupuesto de contexto
 El costo de un build crece con el tamaño del contexto por el número de turnos. Reglas por defecto:
 - **Contexto corto.** El coordinador se mantiene pequeño (reinicio por checkpoint corto hacia 100 K de contexto) y las terminales de trabajo, hacia 150 K: `/si:checkpoint autonomo`, `/clear` y retomar desde el archivo. Una lectura grande se delega a un subagente; no se usa la ventana de 1 M en builds autónomos.
-- **Autocompactación solo en terminales autónomas.** Se lanzan con `claude --autocompact 250k` (el CLI acepta de 100k a 1M). Nunca va en la config global ni en sesiones interactivas.
+- **Autocompactación solo en terminales autónomas.** Se lanzan con `claude --autocompact 200k` (el CLI acepta de 100k a 1M). Nunca va en la config global ni en sesiones interactivas.
 - **Máximo 2 builds o subagentes a la vez.** Más paralelismo solo si cada uno vive por debajo de 100 K.
-- **Modelo por rol.** Planear y la revisión final, el modelo más fuerte; implementar y revisar por fase en subagentes, uno intermedio (Sonnet); tester, exploración y git, el más ligero que alcance. Si un rol no se puede fijar, dilo en la ficha.
-- **Coordinación barata.** Un aviso por evento (fase terminada, bloqueo, pregunta que cambia el plan); sin acuses de recibo ni progreso intermedio; esperar sin turnos (aviso de inactividad o notificación de fin), nunca sondear.
+- **Modelo por rol.** Planear y la revisión final, el modelo más fuerte; implementar y revisar por fase en subagentes, uno intermedio (Sonnet); tester, exploración y git, el más ligero que alcance. Una terminal de fase mecánica (pruebas, migraciones, docs, un cambio acotado) se lanza con `--model sonnet`; diseño, depuración difícil y el coordinador siguen en el más fuerte. El modelo se fija al lanzar y nunca se cambia a mitad de sesión: cambiarlo invalida el caché. Si un rol no se puede fijar, dilo en la ficha.
+- **Coordinación barata.** Cada terminal de trabajo le manda al coordinador **un aviso por fase** (al cerrarla, con PR, resultado y pendientes), no uno por evento; fuera de eso, solo un bloqueo o una pregunta que cambia el plan. Sin acuses de recibo ni progreso intermedio: cada mensaje a una sesión ociosa le reenvía todo su contexto. Esperar sin turnos (aviso de inactividad o notificación de fin), nunca sondear.
 
 ## Las 7 etapas
 | # | Etapa | Con AgentKit | Sin AgentKit (modo nativo) | Gate |
