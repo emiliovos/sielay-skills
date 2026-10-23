@@ -2,7 +2,7 @@
 
 Conecta sesiones de Claude Code a través de un hub de [sielay](https://sielay.cloud). Una sesión le escribe a otra con `link_send`. El mensaje llega a la otra terminal con un encabezado verificado por el hub. Lo que pase después lo deciden el hub y la persona que está en esa terminal.
 
-**Es opcional y va aparte del plugin `si`.** Trae un módulo de hooks, un ejecutable pequeño de Node y tráfico de red. Todo eso está acotado por `tools/check-sielay-link.sh` (ver «Seguridad»).
+**Es opcional y va aparte del plugin `si`.** Trae un módulo de hooks, dos ejecutables pequeños (el escritor del socket y el helper del MCP) y tráfico de red. Todo eso está acotado por `tools/check-sielay-link.sh` (ver «Seguridad»).
 
 ## Instalar
 
@@ -17,7 +17,28 @@ La entrada del marketplace va fijada al tag `sielay-link-v1.4.0`. Solo cambia po
 - **Node 20 o más reciente** en el `PATH`, para el adaptador `socket` (probado con v20 y v22; el escritor solo usa `node:net`). El plugin solo revisa que `node --version` corra: sin Node, los mensajes entran como prompt (modo de respaldo) y el plugin lo avisa.
 - **Linux o macOS** para el adaptador `socket`. En Windows no hay socket unix: se usa el modo `prompt`.
 
-## Emparejar esta máquina
+## Conectar esta máquina con `/up`
+
+```
+curl -fsSL https://sielay.cloud/up | bash
+```
+
+El script imprime una liga con un código. La abres con tu sesión de sielay, revisas la máquina y apruebas con un factor nuevo. Después escribe la credencial en `~/.claude/sielay-link/token` (0600), instala este plugin por https y dice con qué dirección quedó la máquina. Haz `/reload-plugins` en tus sesiones abiertas.
+
+## El MCP de sielay (desde la 1.5.0)
+
+El plugin trae el servidor MCP `sielay` (`.mcp.json`, `https://sielay.cloud/mcp`) sin un token fijo:
+- Al conectar, Claude Code corre `bin/sielay-mcp-headers.sh`. Ese helper lee `~/.claude/sielay-link/token`, lo cambia en el hub por un token MCP nuevo (`POST /api/up/mcp-token`) y se lo da a Claude Code como cabecera `Authorization`.
+- **El token MCP dura 24 h y no se guarda en disco.** Cada conexión pide uno nuevo. Claude Code no vuelve a correr el helper ante un 401, así que una sesión de más de 24 h pierde el MCP hasta reconectarlo con `/mcp` o abrir otra sesión.
+- **Actúa como miembro.** Un admin solo tiene herramientas de admin si aprobó la máquina con «MCP admin» y sigue siendo admin.
+- Revocar la máquina en sielay corta su MCP en la siguiente llamada.
+- **Solo máquinas conectadas con `/up`.** Un token de link anterior no da MCP: el hub responde `mcp_not_enabled` hasta que la máquina pase otra vez por `/up`.
+- **Con Node 18 o más reciente** el helper corre `bin/sielay-mcp-headers.mjs`. **Sin Node**, que es lo normal con Claude Code nativo, hace lo mismo en `sh` con `curl`. La credencial le llega a `curl` por stdin, nunca en argv.
+- **Falla cerrado:** sin el archivo, o ante una respuesta que no es un token, sale con error y un mensaje sin secretos.
+- El helper solo lee el archivo. Si guardaste un `link_token` en `/plugin`, el MCP no lo ve: quítalo de ahí.
+- Si tenías un MCP `sielay` propio con token fijo (`claude mcp list`), quítalo con `claude mcp remove sielay`.
+
+## Emparejar esta máquina con un slot (sin `/up`)
 
 1. Un admin crea un **slot** en el dashboard (`/admin/link`). El slot fija la persona y la máquina, por ejemplo `ana-laptop`.
 2. En la sesión: `/link pair <slot>`. El panel muestra un código.
@@ -194,7 +215,11 @@ Desde la 1.1.0, `/si:build-auto` llama a `link_build_stage` en cada cambio de et
 - **Lista permitida del hub:** `hub_url` solo acepta `https://sielay.cloud` o `https://sielay.vostec.mx`.
   - Cualquier otro valor se rechaza al cargar.
   - Las redirecciones las sigue Claude Code, no el plugin. Entre orígenes distintos quita todas las cabeceras salvo accept y content-type, así que el token no sale de esos orígenes.
-- **Red y procesos acotados:** solo `mod/link-hub-client.js` hace peticiones de red, y solo `mod/link-delivery-adapter.js` corre procesos del sistema: Node para el socket, `sh` para el archivo del token, y `tmux` y `hostname` para el nombre.
+- **Red y procesos acotados:**
+  - solo `mod/link-hub-client.js` y el helper del MCP (`bin/sielay-mcp-headers.*`, una sola petición a `/api/up/mcp-token`) hacen peticiones de red;
+  - solo `mod/link-delivery-adapter.js` corre procesos del sistema: Node para el socket, `sh` para el archivo del token, y `tmux` y `hostname` para el nombre.
+- **`.mcp.json` fijo:** la compuerta exige exactamente el servidor `sielay` en `https://sielay.cloud/mcp` con el helper del plugin.
+- **Helpers fijados:** los dos helpers del MCP corren en cada conexión, fuera del motor, así que la compuerta fija su sha256. Cambiar cualquiera de los dos obliga a actualizar el pin en el mismo PR. El `.mjs` además solo puede importar `node:fs`, `node:os` y `node:path`.
 - **El CI lo revisa en cada PR.** `tools/check-sielay-link.sh` exige todo lo anterior y además prohíbe:
   - `asUser`, `eval` y URL fuera de la lista;
   - tokens escritos en el código;

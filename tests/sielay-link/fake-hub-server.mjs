@@ -1,6 +1,7 @@
 // A fake sielay-link hub over node:http for client tests. Implements just the
 // contract slice the client touches (contracts §3): poll (gate at lease),
-// decide (strip only), ack, plus test-side admin actions (hold, release).
+// decide (strip only), ack, plus test-side admin actions (hold, release), and
+// the MCP token exchange (POST /api/up/mcp-token) the headersHelper calls.
 import http from 'node:http'
 
 /**
@@ -10,6 +11,8 @@ export async function startFakeHub({ token }) {
   const messages = new Map() // id -> { delivery, gate, status }
   const log = [] // every request: { path, body, auth }
   const receiver = { mode: 'default', mode_fresh: 0 }
+  // What POST /api/up/mcp-token answers to the right token (tests may replace it).
+  const mcp = { status: 200, body: { token: 'c0ffee'.repeat(10) + 'beef', expires_at: '2026-10-23T12:00:00Z', ttl_s: 86400, role: 'member' } }
 
   const server = http.createServer((req, res) => {
     let raw = ''
@@ -18,12 +21,16 @@ export async function startFakeHub({ token }) {
       const body = raw ? JSON.parse(raw) : {}
       const path = new URL(req.url, 'http://x').pathname
       log.push({ method: req.method, path, body, auth: req.headers.authorization })
-      const send = (status, json) => {
-        res.writeHead(status, { 'content-type': 'application/json', 'cache-control': 'no-store' })
+      const send = (status, json, headers = {}) => {
+        res.writeHead(status, { 'content-type': 'application/json', 'cache-control': 'no-store', ...headers })
         res.end(JSON.stringify(json))
       }
       if (req.headers.authorization !== `Bearer ${token}`) return send(401, { code: 'bad_token' })
 
+      if (path === '/api/up/mcp-token') {
+        if (req.method !== 'POST' || !req.headers['x-requested-with']) return send(400, { code: 'bad_request' })
+        return send(mcp.status, mcp.body, mcp.headers)
+      }
       if (path === '/api/link/poll') {
         if (body.session) Object.assign(receiver, { mode: body.session.mode, mode_fresh: body.session.mode_fresh })
         for (const a of body.ack ?? []) {
@@ -73,6 +80,7 @@ export async function startFakeHub({ token }) {
     port,
     log,
     messages,
+    mcp,
     /** Queues a message the sender's gate held (never leased). */
     hold(delivery) {
       messages.set(delivery.id, { delivery, gate: 'held', status: 'queued' })
