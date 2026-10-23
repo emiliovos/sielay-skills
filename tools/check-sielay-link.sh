@@ -31,8 +31,8 @@ ALLOWED_ORIGINS='https://sielay.cloud https://sielay.vostec.mx'
 # --- Exact file allow-list; no symlinks. `.claude-plugin/types/` and the top-level
 # `tsconfig.json` are what the engine lays beside a mod it loads from a folder
 # (both git-ignored), so they are skipped.
-allowed=".gitignore .claude-plugin .claude-plugin/plugin.json hooks hooks/hooks.json bin
-bin/sielay-link-socket-write.mjs types types/index.d.ts README.md tests tests/sielay-link-mod.test.ts
+allowed=".gitignore .claude-plugin .claude-plugin/plugin.json .mcp.json hooks hooks/hooks.json bin
+bin/sielay-link-socket-write.mjs bin/sielay-mcp-headers.mjs bin/sielay-mcp-headers.sh types types/index.d.ts README.md tests tests/sielay-link-mod.test.ts
 mod mod/sielay-link-mod.js mod/link-band.jsx mod/link-pane.jsx mod/link-commands.js mod/link-delivery-adapter.js
 mod/link-hub-client.js mod/link-inbound-framing.js mod/link-inbound-handler.js mod/link-mode-freshness.js
 mod/link-pairing.js mod/link-poll-loop.js mod/link-run-gate.js mod/link-runtime.js mod/link-session-name-resolution.js
@@ -54,6 +54,7 @@ out = []
 try:
     pj = json.load(open(f"{root}/.claude-plugin/plugin.json", encoding="utf-8"))
     hj = json.load(open(f"{root}/hooks/hooks.json", encoding="utf-8"))
+    mj = json.load(open(f"{root}/.mcp.json", encoding="utf-8"))
 except Exception as e:
     print(f"invalid manifest JSON ({e})"); sys.exit()
 extra = set(pj) - {"name", "version", "description", "author", "homepage", "license", "keywords", "repository", "userConfig"}
@@ -74,6 +75,11 @@ if not set(hub.get("options") or []) <= set(origins): out.append("plugin.json: h
 if (uc.get("machine_name") or {}).get("sensitive"): out.append("plugin.json: machine_name is informative, not sensitive")
 if hj != {"modules": ["../mod/sielay-link-mod.js"]}:
     out.append('hooks.json: must be exactly {"modules": ["../mod/sielay-link-mod.js"]}')
+# The only MCP server is sielay's, on the hub, authenticated by the plugin's own helper.
+want_mcp = {"mcpServers": {"sielay": {"type": "http", "url": "https://sielay.cloud/mcp",
+            "headersHelper": "sh ${CLAUDE_PLUGIN_ROOT}/bin/sielay-mcp-headers.sh"}}}
+if mj != want_mcp:
+    out.append(".mcp.json: must be exactly the sielay server on https://sielay.cloud/mcp with bin/sielay-mcp-headers.sh")
 print("\n".join(out))
 PY
 ); then :; else err "manifest check could not run"; fi
@@ -135,12 +141,15 @@ for sub in ("mod", "bin"):
             continue
         out = dst / f.relative_to(root)
         out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_text(strip_comments(f.read_text(encoding="utf-8")), encoding="utf-8")
+        text = f.read_text(encoding="utf-8")
+        # Shell is not JS: an unquoted URL's `//` would read as a comment, so .sh is copied as is.
+        out.write_text(text if f.suffix == ".sh" else strip_comments(text), encoding="utf-8")
 PY
 code=("$src/mod" "$src/bin")
-only_in() { # pattern allowed-file description
-  local hits
-  hits=$(grep -rnE "$1" "${code[@]}" | grep -v "^$src/$2:" || true)
+only_in() { # pattern allowed-file[,allowed-file...] description
+  local hits f
+  hits=$(grep -rnE "$1" "${code[@]}" || true)
+  for f in ${2//,/ }; do hits=$(grep -v "^$src/$f:" <<<"$hits" || true); done
   [ -z "$hits" ] || { echo "$hits" >&2; err "$3 outside $2"; }
 }
 forbid() { # pattern description
@@ -156,7 +165,10 @@ forbid 'config\.set' '$.config.set is not used: a sensitive field throws and a p
 forbid '\$\s*\[|\$\.[A-Za-z]+\s*\[|\$\?\.' '$ must be spelled $.noun.event(...): no brackets or optional chaining'
 forbid '\}\s*=\s*\$\b|=\s*\$\.[A-Za-z]+\s*[;,)]|=\s*\$\s*[;,)]' 'no destructuring of $ or aliasing a noun of $'
 forbid 'fs\.write|socketPath' '$.fs.write and socket fetches are not used'
-only_in 'fetch\(' 'mod/link-hub-client.js' 'network call (fetch)'
+# The MCP headersHelper is the other network caller: one POST to the hub's /api/up/mcp-token,
+# with fetch (Node) or curl (bin/sielay-mcp-headers.sh, when Node is missing; the file
+# allow-list keeps it the only shell script, and the JS cannot spawn processes).
+only_in 'fetch\(' 'mod/link-hub-client.js,bin/sielay-mcp-headers.mjs' 'network call (fetch)'
 only_in 'process\.run' 'mod/link-delivery-adapter.js' 'host process ($.process.run)'
 
 # Every URL in runtime code must be on an allow-listed origin.

