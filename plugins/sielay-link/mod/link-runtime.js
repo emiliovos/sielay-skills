@@ -3,6 +3,7 @@
 
 import { createHubClient, normalizeHubUrl } from './link-hub-client.js'
 import { createDeliveryAdapter } from './link-delivery-adapter.js'
+import { recordLaunchMode } from './link-launch-mode.js'
 import { createInboundHandler } from './link-inbound-handler.js'
 import { createPollLoop } from './link-poll-loop.js'
 import { createPairingFlow } from './link-pairing.js'
@@ -134,6 +135,7 @@ export async function startLink($, rt) {
   const adapter = createDeliveryAdapter($, { helperPath: `${$.plugin.root}/bin/sielay-link-socket-write.mjs` })
   rt.adapter = adapter
   const mode = await adapter.detect()
+  await recordLaunchMode($, adapter) // before the first poll, so the hub sees the mode at once
   if (mode === 'prompt') $.ui.toast('sielay-link: sin Node en el PATH, los mensajes llegan como prompt (modo respaldo).')
 
   rt.handler = createInboundHandler({

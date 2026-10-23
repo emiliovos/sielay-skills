@@ -3,14 +3,15 @@
 // A peer's message runs on its own only when the hub said run=1 with gate=auto AND this
 // session is in bypassPermissions with a fresh reading, checked at the moment
 // of injecting (never from a value cached at poll time). Everything else goes
-// to the strip, where only a person's Accept keystroke runs it. A dashboard
-// "release" only ever moves a message to the strip; the model has no tool to
-// decide or release anything.
+// to the strip, where only a person's Accept keystroke runs it. A person's
+// "release" on the dashboard counts as that Accept: the hub then sends the
+// message as gate=accepted (below). The model has no tool to decide or release anything.
 //
 // One more case runs: run=1 with gate=accepted. The hub sends that only for a
-// message a person already accepted in this terminal whose `injected` ack never
-// arrived (the lease expired), and keeps redelivering it until it does. It is
-// injected as-is, in any mode; the dedupe by id keeps it from running twice.
+// message a person already decided: released on the dashboard, or accepted in
+// this terminal and whose `injected` ack never arrived (the lease expired). It
+// keeps redelivering it until the ack arrives. It is injected as-is, in any
+// mode; the dedupe by id keeps it from running twice.
 
 /**
  * @param {{ delivery: { run?: unknown, gate?: unknown }, mode: { mode?: unknown, fresh?: unknown } }} input
