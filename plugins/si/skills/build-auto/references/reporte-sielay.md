@@ -32,10 +32,10 @@ Solo el coordinador (`role: "coordinator"`) manda `stage`, `status`, `outcome`, 
 | Momento | Campos (además de los obligatorios) |
 |---|---|
 | Arranque (entrada a la etapa 1) | `stage: 1`, `status: "running"`, `title` (el objetivo, máximo 120), `repo` (`<dueño>/<repo>`), `flags`; `branch` y `linear` (clave del issue) si ya se conocen |
-| Entrada a cada etapa | `stage: N`, `status: "running"`. En la 3, `plan` (ruta del `plan.md`). En la 4, `plan_progress: { done: 0, total: <fases> }` y `phase` de la primera |
-| Pedir aprobación (etapas 1, 2 y 3) | `status: "waiting_approval"` y el `summary` de lo que se presenta. En la 1, `estimate` con el estimado grueso del Frame; en la 3, `estimate` con el del plan por fase, con `stage: 3` todavía (ese es el programado, que se congela al entrar a la etapa 4) |
+| Entrada a cada etapa | `stage: N`, `status: "running"`. En la 3, `plan` (ruta del `plan.md`). En la 4, `plan_progress: { done: 0, total: <carriles> }` y `phase` del primero |
+| Pedir aprobación (etapa 1 y la conjunta en la 3; la 2 solo con `--pausas` o la pausa automática) | `status: "waiting_approval"` y el `summary` de lo que se presenta. En la 1, `estimate` con el estimado grueso del Frame; en la 3, `estimate` con el del plan por carril, con `stage: 3` todavía (ese es el programado, que se congela al entrar a la etapa 4) |
 | Aprobación recibida | `status: "running"`, `gate: { stage: N, approved_by: "<quien-aprobó>", approved_at: "<salida de date -u>" }` (`approved_by` es el nombre del usuario si lo conoces; si no, `usuario`); luego, la entrada a la etapa siguiente |
-| Cierre de cada fase (etapa 4) | `plan_progress` con `done` + 1 y `phase` de la que sigue en curso (con varias en paralelo, la de número menor) |
+| Cierre de cada carril (etapa 4) | `plan_progress` con `done` + 1 y `phase` del que sigue en curso (con varios en paralelo, el de número menor) |
 | PR abierto | `pr: <número>`, `branch`, `delivery: { merge_pr: "pending" }` |
 | Comando de entrega corriendo / terminado | `delivery.merge_pr`: `"running"`, luego `"merged"` o `"failed"`; `stamp` con el SHA del sello si la compuerta lo produce (si no, `null`) |
 | Deploy pendiente o hecho | `delivery.deploy_pending: true` mientras falte publicar; `false` cuando el comando de publicación termina bien |
@@ -45,9 +45,9 @@ Solo el coordinador (`role: "coordinator"`) manda `stage`, `status`, `outcome`, 
 
 Notas:
 - En `main directo` no hay PR: `pr` queda fuera y `merge_pr` sigue el push a main por la compuerta.
-- Con varios PRs, `pr` es el que se entrega ahora.
+- Con rama de integración, `pr` es el PR final; con varios PRs, el que se entrega ahora.
 - Con `--chico` no hay etapa 2: se pasa de la 1 a la 3.
-- "Adelante con todo" (aprobaciones 2 y 3 juntas): dos `gate` con el mismo `approved_at`, primero el de la etapa 2 al recibirla y luego el de la 3 al cerrar el plan, en vez de `waiting_approval`.
+- Aprobación conjunta (por defecto, Evidencia y Plan juntos): al pasar de la etapa 2 a la 3 no hay `waiting_approval`; al recibir la aprobación van dos `gate` con el mismo `approved_at`, primero el de la etapa 2 y luego el de la 3. Con `--pausas` o la pausa automática, la etapa 2 tiene su propio `waiting_approval` y su `gate`.
 - Volver a una etapa (por ejemplo, de Revisar a Implementar) es otra entrada: se reporta igual.
 - `links` es opcional: hasta 10 `{ label, href }` hacia reportes del plan, con ruta relativa (sin `/` inicial) o URL `https:`.
 
@@ -64,7 +64,7 @@ Notas:
 ```
 - Cada envío lleva el estimado **completo**: reemplaza al anterior, no se mezcla con él. `reason` solo en una reestimación.
 - Límites: `total_h` mayor que 0 y hasta 999 (se redondea a 0,1); hasta 20 fases, cada una con `name` (máximo 80) y `h` de 0 a 999; `assumption` máximo 200; `reason` máximo 120; el objeto entero, máximo 2048 bytes.
-- **Reestima** cuando el total previsto se mueve más que ±max(0,5 h, 10 % del programado), o al cerrar una fase que se pasó de lo estimado. Siempre con `reason`.
+- **Reestima** cuando el total previsto se mueve más que ±max(0,5 h, 10 % del programado), o al cerrar un carril que se pasó de lo estimado. Siempre con `reason`.
 - Una reestimación es un dato, no una enmienda: no pide aprobación. Solo la pide si el motivo cambia el Goal, los criterios, los no-goals o la autoridad, y entonces es una enmienda normal.
 
 ## `outcome`
