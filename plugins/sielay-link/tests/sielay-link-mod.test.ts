@@ -484,24 +484,73 @@ test('closing the terminal tells the hub once with the same identity as the poll
   expect(polls(sent)).toHaveLength(before)
 })
 
-test('closing the terminal never fails when the hub refuses or is down', { options: { link_token: 'test-token' } }, async ($, on) => {
-  const clock = mock.clock(on, { now: 7_500_000 })
+function closingHost(on: any, clockNow: number, hub: (url: string) => any, env: { off: boolean; hangOff: boolean }) {
   mock.store(on)
-  mock.env(on, { HOME: '/nowhere' })
+  on('env.get', ($: any, e: any) => {
+    if (e.name === 'SIELAY_LINK_OFF') return env.hangOff ? new Promise(() => {}) : { value: env.off ? '1' : undefined }
+    return { value: e.name === 'HOME' ? '/nowhere' : undefined }
+  })
   fakeHost(on)
   on('session.end', ($: any, e: any) => ({ sessionId: e.sessionId }))
+  on('http.fetch', ($: any, e: any) => hub(e.url))
+}
+const okJson = (body: unknown, status = 200) => ({ value: { status, ok: status < 300, headers: {}, text: JSON.stringify(body) } })
+const pollAnswer = { session: { id: 's' }, messages: [], strip: [], poll_after_ms: 60_000 }
+
+test('closing the terminal never fails when the hub refuses', { options: { link_token: 'test-token' } }, async ($, on) => {
+  const clock = mock.clock(on, { now: 7_500_000 })
   let calls = 0
-  on('http.fetch', ($: any, e: any) => {
-    if (e.url.endsWith('/sessions/self/end')) {
-      calls++
-      return { value: { status: 409, ok: false, headers: {}, text: '{"error":"session_busy","code":"session_busy"}' } }
-    }
-    return { value: { status: 200, ok: true, headers: {}, text: JSON.stringify({ session: { id: 's' }, messages: [], strip: [], poll_after_ms: 60_000 }) } }
-  })
+  closingHost(on, 0, url => (url.endsWith('/sessions/self/end') ? (calls++, okJson({ error: 'session_busy', code: 'session_busy' }, 409)) : okJson(pollAnswer)), { off: false, hangOff: false })
   await $.session.start({ cwd: '/srv/p', surface: 'terminal', isInteractive: true })
   await clock.advance(10)
   await clock.settle()
   const done: any = await $.session.end({ reason: 'other', sessionId: 'sess-1', resume: {} } as any)
   expect(calls).toBe(1)
   expect(done.sessionId).toBe('sess-1')
+})
+
+test('closing the terminal gives up after 3 s when the hub hangs', { options: { link_token: 'test-token' } }, async ($, on) => {
+  const clock = mock.clock(on, { now: 7_600_000 })
+  let ends = 0
+  closingHost(on, 0, url => (url.endsWith('/sessions/self/end') ? (ends++, new Promise(() => {})) : okJson(pollAnswer)), { off: false, hangOff: false })
+  await $.session.start({ cwd: '/srv/p', surface: 'terminal', isInteractive: true })
+  await clock.advance(10)
+  await clock.settle()
+  let finished = false
+  const closing = $.session.end({ reason: 'prompt_input_exit', sessionId: 'sess-1', resume: {} } as any).then(() => { finished = true })
+  await clock.advance(2_900)
+  await clock.settle()
+  expect(finished).toBe(false)
+  await clock.advance(200)
+  await closing
+  expect(ends).toBe(1)
+})
+
+test('closing the terminal gives up after 3 s when reading the off switch hangs; with the switch on it sends nothing; /resume sends nothing', { options: { link_token: 'test-token' } }, async ($, on) => {
+  const clock = mock.clock(on, { now: 7_700_000 })
+  const env = { off: false, hangOff: false }
+  const seen: string[] = []
+  closingHost(on, 0, url => (seen.push(url), okJson(pollAnswer)), env)
+  await $.session.start({ cwd: '/srv/p', surface: 'terminal', isInteractive: true })
+  await clock.advance(10)
+  await clock.settle()
+  const ends = () => seen.filter(u => u.endsWith('/sessions/self/end')).length
+
+  await $.session.end({ reason: 'resume', sessionId: 'sess-1', resume: {} } as any)
+  expect(ends()).toBe(0)
+
+  env.hangOff = true
+  let finished = false
+  const closing = $.session.end({ reason: 'other', sessionId: 'sess-1', resume: {} } as any).then(() => { finished = true })
+  await clock.advance(2_900)
+  await clock.settle()
+  expect(finished).toBe(false)
+  await clock.advance(200)
+  await closing
+  expect(ends()).toBe(0)
+
+  env.hangOff = false
+  env.off = true
+  await $.session.end({ reason: 'other', sessionId: 'sess-1', resume: {} } as any)
+  expect(ends()).toBe(0)
 })
