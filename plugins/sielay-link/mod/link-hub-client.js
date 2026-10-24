@@ -156,6 +156,8 @@ export function createHubClient($, { hubUrl, token }) {
       }
       return (await call('POST', '/decide', body)).data
     },
+    /** @param {{ session: object }} body the terminal closing: the hub retires this session's row */
+    endSession: async body => (await call('POST', '/sessions/self/end', body)).data,
     peers: async () => (await call('GET', '/peers')).data,
     /** @param {{ slot: string, hostname?: string, client_version?: string }} body */
     pairStart: async body => (await call('POST', '/pair/start', body, { auth: false })).data,

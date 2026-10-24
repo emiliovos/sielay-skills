@@ -56,6 +56,8 @@ export function createPollLoop({ schedule, getClient, buildSession, handler, isO
   let stopped = true
   let running = false
   let generation = 0
+  /** When the poll in flight was sent (ms), or null. */
+  let inFlightSince = null
 
   /** @returns {number} */
   function backoff() {
@@ -91,11 +93,14 @@ export function createPollLoop({ schedule, getClient, buildSession, handler, isO
       /** @type {any} */
       let data
       const startedAt = await now()
+      inFlightSince = startedAt
       try {
         data = await client.poll({ session, ...(ack.length ? { ack } : {}), wait_s: WAIT_S })
       } catch (err) {
         pendingAcks = [...ack, ...pendingAcks]
         throw err
+      } finally {
+        inFlightSince = null
       }
       failures = 0
       if (data?.session && current()) await onSession(data.session)
@@ -173,6 +178,10 @@ export function createPollLoop({ schedule, getClient, buildSession, handler, isO
     stop() {
       stopped = true
       generation += 1
+    },
+    /** When the poll in flight was sent (ms), or null: the goodbye waits until it has surely been claimed. */
+    get inFlightSince() {
+      return inFlightSince
     },
     /** @returns {boolean} */
     get isStopped() {

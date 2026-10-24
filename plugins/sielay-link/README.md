@@ -97,6 +97,10 @@ Para que el modelo las use sin preguntarte cada vez, agrégalas a `permissions.a
 { "permissions": { "allow": ["mcp__sielay-link__link_send", "mcp__sielay-link__link_reply", "mcp__sielay-link__link_peers", "mcp__sielay-link__link_build_stage"] } }
 ```
 
+## Cierre de la sesión (desde la 1.6.0)
+
+Al cerrar Claude Code, la sesión avisa al hub (`POST /api/link/sessions/self/end`, con un tope de 3 s) y su fila se retira sola, así no se acumulan terminales muertas. Si todavía tiene mensajes en cola o una conversación abierta, el hub responde 409 `session_busy` y la fila queda como antes (se duerme a las 2 h y se purga a los 7 días). Un `/clear` o un `/resume` no la retiran. Si el hub no responde, el cierre sigue sin error.
+
 ## Descubrimiento
 
 Desde la 1.2.0, una conversación nueva sabe sola su dirección y cómo escribirle a otra sesión. En el primer prompt de la conversación, el plugin agrega al contexto del modelo, sin mostrártelo, una sola línea:

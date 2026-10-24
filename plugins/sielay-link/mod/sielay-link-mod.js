@@ -9,6 +9,7 @@ import { reportState } from './link-build-tool.js'
 import { runLinkCommand } from './link-commands.js'
 import { PROMPT_FALLBACK_CONTEXT } from './link-inbound-framing.js'
 import { discoveryFor } from './link-discovery-context.js'
+import { endOnClose } from './link-session-end.js'
 import { renderBand } from './link-band.jsx'
 import { renderPane } from './link-pane.jsx'
 import {
@@ -146,6 +147,7 @@ export function register(on, options) {
   on('session.end', async ($, e, next) => {
     rt.discoveryAnnounced = false
     await carryOnClear($, rt, e)
+    await endOnClose($, rt, e, () => isOff($))
     return next(e)
   }).catch(passThrough)
   on('classic.SessionStart', async ($, e, next) => {

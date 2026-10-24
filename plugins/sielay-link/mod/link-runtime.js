@@ -19,7 +19,7 @@ const PAIRING = /** @type {const} */ ({ plugin: 'sielay-link', key: 'pairing' })
 const CONVERSATIONS = /** @type {const} */ ({ plugin: 'sielay-link', key: 'conversations' })
 const NOTICE = /** @type {const} */ ({ plugin: 'sielay-link', key: 'notice' })
 
-export const CLIENT_VERSION = '1.4.0'
+export const CLIENT_VERSION = '1.6.0'
 
 /** @typedef {import('claude-code').EngineInterface} Engine */
 /** @typedef {import('../types/index.js').LinkStatus} LinkStatus */
@@ -45,6 +45,8 @@ export function createRuntime(options) {
     namePin: /** @type {import('./link-session-payload.js').NamePin|null} */ (null),
     /** The poll loop's last code (link_build_stage's `reason`); null until the first poll. Memory only. */
     loopCode: /** @type {import('./link-poll-loop.js').LoopCode|null} */ (null),
+    /** The session object of the last poll sent, without its build: the goodbye reuses it. */
+    lastSession: /** @type {Record<string, unknown>|null} */ (null),
     /** The build held across a /clear (link-build-hooks.js). */
     buildCarry: /** @type {import('../types/index.js').LinkBuildState|null} */ (null),
     /** The last invalid build field logged, so it is logged once. */
@@ -171,6 +173,8 @@ export async function startLink($, rt) {
     buildSession: async () => {
       const built = await buildSessionPayload($, rt, { withBuild: true })
       await patchStatus($, { name: built.session.name, nameSource: built.nameSource })
+      const { build: _build, ...identity } = built.session
+      rt.lastSession = identity
       return built.session
     },
     onPolled: session => afterPoll($, rt, session),
