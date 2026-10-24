@@ -2,6 +2,8 @@
 
 Sigue el procedimiento de deploy que declare el repo y que quedó fijado en el plan aprobado (comando de publicación y de backup); esta receta lo complementa con la verificación. Si el repo no declara cómo publicar o cómo respaldar, no lo inventes: es una pregunta del Frame, y sin respuesta no se publica. Lo marcado *si aplica* depende de cómo se despliega el proyecto (contenedores, servicio en el host, plataforma administrada).
 
+**Un solo deploy al final**, cuando el PR de integración (o el último carril) está en la rama principal con su sello: un backup, las migraciones juntas y una prueba de humo. Los carriles no se publican uno por uno.
+
 ## Antes del build
 1. **Integración nueva:** pruébala primero aislada, con la base de datos en memoria o temporal y un archivo de entorno de prueba (permisos 600, borrado después). Si el proyecto usa contenedores, hazlo en un contenedor desechable de la imagen (*si aplica*).
 2. **Migraciones:** pruébalas en una base de datos vacía y en una **copia del backup de producción**, nunca en la base real. La copia vive en un entorno desechable del mismo host (contenedor o directorio temporal), se borra al terminar y nunca se commitea ni se sube a otro lado: puede tener datos personales.

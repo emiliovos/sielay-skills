@@ -53,6 +53,7 @@ Sin AgentKit, haz lo mismo con un subagente `tester` y entrega la misma evidenci
 - **Qué se entregó y dónde:** PRs o commits, URLs, issues, y qué quedó desplegado.
 - **Evidencia de cada criterio de aceptación:** pruebas, mutaciones que muerden, capturas, logs, prueba de humo.
 - **Cifras medidas** (tiempos, costos) contra los objetivos del plan.
+- **Dónde se fue el tiempo:** una tabla por tramo (espera humana, evidencia y plan, implementación, revisión, CI, integración, merge, deploy) con su duración real, el programado contra el real y la ruta crítica que de verdad resultó. Sale de las horas anotadas en `plan.md`. Es lo que permite calibrar el estimado del siguiente build.
 - **Riesgos aceptados y pendientes**, cada uno con su issue (*si hay tracker*); momentos humanos que le quedan al usuario.
 - **Worktrees y ramas** que borraste y los que quedan.
 - **Aprendizajes del flujo** para la próxima vez (guárdalos en la memoria del proyecto si existe).
