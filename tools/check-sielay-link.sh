@@ -38,7 +38,7 @@ mod/link-hub-client.js mod/link-inbound-framing.js mod/link-inbound-handler.js m
 mod/link-pairing.js mod/link-poll-loop.js mod/link-run-gate.js mod/link-runtime.js mod/link-session-name-resolution.js
 mod/link-session-payload.js mod/link-state-refs.js mod/link-tools.js mod/link-inbound-store.js mod/link-strip-selection.js mod/link-instance-identity.js
 mod/link-build-tool.js mod/link-build-state.js mod/link-build-hooks.js mod/link-build-validate.js mod/link-build-fields.js mod/link-build-estimate.js mod/link-secret-scrub.js
-mod/link-discovery-context.js"
+mod/link-discovery-context.js mod/link-session-end.js"
 while IFS= read -r -d '' p; do
   rel="${p#"$root"/}"
   case "$rel" in .claude-plugin/types|.claude-plugin/types/*|tsconfig.json) continue ;; esac
