@@ -60,13 +60,17 @@ export function createInboundHandler({ store, adapter, readMode, onStrip, onConv
     return [...all.values()].sort((a, b) => (arrival.get(a.id) ?? 0) - (arrival.get(b.id) ?? 0))
   }
 
+  /** This session's own address, from the last poll answer: the header names its machine «esta máquina». */
+  /** @type {string|undefined} */
+  let selfAddress
+
   async function publish() {
     await onStrip(currentStrip())
   }
 
   /** @param {Delivery} d */
   async function inject(d) {
-    await adapter.inject(frameInbound(d))
+    await adapter.inject(frameInbound(d, { self: selfAddress }))
   }
 
   return {
@@ -75,12 +79,13 @@ export function createInboundHandler({ store, adapter, readMode, onStrip, onConv
     /**
      * Handles one poll answer; returns the acks to send with the next poll.
      * @param {string} instanceId
-     * @param {{ messages?: unknown[], strip?: unknown[] }} data
+     * @param {{ messages?: unknown[], strip?: unknown[], session?: { address?: unknown } }} data
      * @returns {Promise<Ack[]>}
      */
     async handlePoll(instanceId, data) {
       /** @type {Ack[]} */
       const acks = []
+      if (typeof data.session?.address === 'string') selfAddress = data.session.address
       for (const [id, d] of Object.entries(await readPending(instanceId))) {
         try {
           await inject(d)

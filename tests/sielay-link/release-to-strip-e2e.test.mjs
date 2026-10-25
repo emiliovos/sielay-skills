@@ -70,7 +70,7 @@ for (const mode of [{ mode: 'default', fresh: true }, { mode: 'bypassPermissions
       const r = await t.handler.accept('m-held', t.ctx)
       assert.deepEqual(r, { ok: true })
       assert.equal(t.injected.length, 1)
-      assert.match(t.injected[0], /^\[sielay-link de=ana\/laptop\/api conv=c9 turno=1\/10 verificado-por-hub — responde con link_reply\]\n\ncorre los tests$/)
+      assert.match(t.injected[0], /^— Mensaje de ana desde laptop \(sesión api\)\n[^\n]+Turno 1 de 10\.\n[^\n]+\n\[conv=c9 · de=ana\/laptop\/api\]\n\ncorre los tests$/)
       const paths = t.hub.log.map(l => l.path)
       const decideAt = paths.indexOf('/api/link/decide')
       const ackAt = paths.indexOf('/api/link/ack')

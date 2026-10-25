@@ -8,8 +8,14 @@ import { normalizeName } from './link-session-name-resolution.js'
 import { neutralizeBody } from './link-inbound-framing.js'
 import { BUILD_TOOL_SPEC, runBuildTool } from './link-build-tool.js'
 import { ownAddress, selfPrefixOf } from './link-discovery-context.js'
+import { ADDRESS } from './link-tool-address.js'
+import { CODE_MESSAGES, describeHubError, closedConversationNote, noteFor, resultNote } from './link-tool-messages.js'
+
+export { describeHubError, closedConversationNote }
 
 const MAX_BODY_BYTES = 16 * 1024
+/** The hub's cap for `to` as a list (one conversation per address). */
+const MAX_RECIPIENTS = 10
 
 /** @type {ReadonlyArray<{ name: string, description: string, inputSchema: Record<string, unknown>, isDeferred: false }>} */
 export const LINK_TOOL_SPECS = Object.freeze([
@@ -17,14 +23,21 @@ export const LINK_TOOL_SPECS = Object.freeze([
     name: 'link_send',
     description:
       'Envía un mensaje a otra sesión de Claude Code emparejada por sielay-link (dirección persona/máquina/sesión; ' +
-      'usa link_peers para verlas). Abre una conversación nueva salvo que pases `conversation`. ' +
+      'usa link_peers para verlas). Abre una conversación nueva salvo que pases `conversation`. Con `to` como lista ' +
+      `(hasta ${MAX_RECIPIENTS} direcciones, sin conversation) abre una conversación con cada una y responde un resultado por destino. ` +
       'El hub decide si el receptor lo ejecuta solo o lo deja en su franja para que una persona lo acepte.',
     inputSchema: {
       type: 'object',
       additionalProperties: false,
       required: ['to', 'text'],
       properties: {
-        to: { type: 'string', description: 'Dirección destino: persona/máquina/sesión' },
+        to: {
+          anyOf: [
+            { type: 'string' },
+            { type: 'array', items: { type: 'string' }, minItems: 1, maxItems: MAX_RECIPIENTS },
+          ],
+          description: 'Dirección destino persona/máquina/sesión, o una lista de hasta 10',
+        },
         text: { type: 'string', description: 'Texto del mensaje (máximo 16 KB)' },
         conversation: { type: 'string', description: 'Id de una conversación existente (opcional)' },
       },
@@ -53,58 +66,21 @@ export const LINK_TOOL_SPECS = Object.freeze([
     description:
       'Lista las sesiones de Claude Code con las que esta sesión puede hablar por sielay-link (las de tus máquinas y las de ' +
       'máquinas conectadas) y tu propia dirección. Úsala antes de link_send cuando te pidan escribirle a otra sesión.',
-    inputSchema: { type: 'object', additionalProperties: false, properties: {} },
+    inputSchema: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        online_only: { type: 'boolean', description: 'Solo las sesiones en línea, de la más activa a la menos (por defecto). false trae también las desconectadas' },
+      },
+    },
     isDeferred: false,
   },
   BUILD_TOOL_SPEC,
 ])
 
-/** @type {Record<string, string>} */
-const CODE_MESSAGES = {
-  turn_cap: 'La conversación llegó a su tope de turnos. Un admin puede extenderla desde el dashboard; si no, termina aquí.',
-  pair_budget: 'Este par agotó su presupuesto de turnos (30 en 6 h). Espera o pide a un admin que lo revise.',
-  pair_cooldown: 'Una conversación de este par llegó al tope hace poco: espera 30 min antes de abrir otra.',
-  conversation_closed: 'Esa conversación está cerrada. Abre una nueva con link_send si hace falta.',
-  not_paired: 'No estás emparejado con esa sesión. Un admin tiene que crear el par.',
-  unknown_peer: 'No existe esa dirección. Revisa las disponibles con link_peers.',
-  too_large: 'El mensaje pasa de 16 KB. Resúmelo o divídelo.',
-  invalid: 'El hub rechazó el mensaje por formato inválido.',
-  too_many_sessions: 'Esta máquina ya tiene 16 sesiones en línea, el tope. Cierra una o reusa una sesión (mismo nombre y carpeta), o pide a un admin que revise.',
-}
 
-/** Where a 409 link_paused says sielay-link is off (`scope`). */
-const PAUSE_SCOPES = Object.freeze({
-  person: 'para una de las personas',
-  line: 'en la línea entre esas dos máquinas',
-  device: 'en una de las dos máquinas',
-  session: 'en una de las dos terminales',
-})
-
-/**
- * @param {unknown} err
- * @returns {string}
- */
-export function describeHubError(err) {
-  const e = /** @type {{ kind?: string, code?: string, field?: string, scope?: string, message?: string }} */ (err ?? {})
-  if (e.code === 'link_paused') {
-    // own keys only: a scope like "toString" never reaches Object.prototype
-    const where = e.scope && Object.hasOwn(PAUSE_SCOPES, e.scope) ? PAUSE_SCOPES[/** @type {keyof typeof PAUSE_SCOPES} */ (e.scope)] : 'para esta conversación'
-    return `sielay-link está apagado ${where}. Un admin lo prende desde /admin/link o /conexiones; no reintentes.`
-  }
-  if (e.code === 'invalid' && e.field === 'conversation_id') {
-    return 'Esa conversación no es de esta sesión (el hub te ve como otra). Contesta con link_send a la dirección de la otra sesión, sin conversation.'
-  }
-  if (e.code === 'invalid' && e.field) return `El hub rechazó el campo ${e.field} por formato inválido.`
-  const known = e.code ? CODE_MESSAGES[e.code] : undefined
-  if (known) return known
-  if (e.kind === 'paused') return 'sielay-link está apagado en el hub ahora mismo.'
-  if (e.kind === 'unauthorized' || e.kind === 'no_token') return 'El token de sielay-link no sirve. Si acabas de correr /up en esta máquina, corre /reload-plugins (no la des de alta otra vez); si no, conéctala con curl -fsSL <hub>/up | bash, o con /link pair <slot> si un admin te dio un slot.'
-  if (e.kind === 'rate_limited') return 'El hub pide esperar (demasiadas peticiones). Intenta en un momento.'
-  if (e.kind === 'network') return 'No se pudo contactar al hub de sielay-link.'
-  return `sielay-link: ${e.message ?? String(err)}`
-}
-
-const ADDRESS = /^[a-z0-9-]{1,40}\/[a-z0-9-]{1,40}\/[a-z0-9-]{1,40}$/
+/** @param {unknown} raw @returns {string} the address normalized, or '' */
+const toAddress = raw => (typeof raw === 'string' ? raw.split('/').map(normalizeName).join('/') : '')
 
 /**
  * @param {unknown} text
@@ -125,17 +101,8 @@ function isConvId(id) {
 }
 
 /**
- * @param {{ gate?: string }} sent
- * @returns {string}
- */
-function noteFor(sent) {
-  if (sent.gate === 'held') return 'Mensaje retenido: espera que un admin lo libere a la franja del receptor.'
-  return 'Enviado. Si el receptor está en bypass y el par tiene auto-ejecución, corre solo; si no, queda en su franja hasta que una persona lo acepte.'
-}
-
-/**
  * @typedef {{
- *   client: { send: (b: object) => Promise<any>, peers: () => Promise<any> } | null,
+ *   client: { send: (b: object) => Promise<any>, peers: (o?: { onlineOnly?: boolean }) => Promise<any> } | null,
  *   sessionFrom: () => Promise<Record<string, unknown>>,
  *   conversationPeer: (id: string) => Promise<string|undefined>,
  *   rememberConversation: (id: string, address: string) => Promise<void>,
@@ -171,7 +138,8 @@ export async function runLinkTool(name, input, deps) {
   if (!deps.client) return { deny: 'sielay-link no está emparejado en esta máquina: corre /link pair <slot> (el slot lo crea un admin).' }
   try {
     if (name === 'link_peers') {
-      const answer = await deps.client.peers()
+      if (input.online_only !== undefined && typeof input.online_only !== 'boolean') return { deny: 'online_only debe ser true o false.' }
+      const answer = await deps.client.peers({ onlineOnly: input.online_only !== false })
       const peers = Array.isArray(answer?.peers) ? answer.peers : []
       const prefix = selfPrefixOf(answer)
       if (prefix) deps.notePrefix?.(prefix)
@@ -190,8 +158,22 @@ export async function runLinkTool(name, input, deps) {
     /** @type {Record<string, unknown>} */
     const body = { from: await deps.sessionFrom() }
 
+    if (name === 'link_send' && Array.isArray(input.to)) {
+      if (input.conversation !== undefined) return { deny: 'Con varios destinatarios no va conversation: cada uno abre la suya.' }
+      const to = [...new Set(input.to.map(toAddress))]
+      if (to.length === 0 || to.length > MAX_RECIPIENTS) return { deny: `Pon entre 1 y ${MAX_RECIPIENTS} direcciones.` }
+      const bad = to.find(a => !ADDRESS.test(a))
+      if (bad !== undefined) return { deny: 'Cada dirección debe ser persona/máquina/sesión (mira link_peers).' }
+      const sent = await deps.client.send({ ...body, to, client_msg_id: deps.newId(), body: input.text })
+      const results = Array.isArray(sent?.results) ? sent.results : []
+      for (const r of results) {
+        if (r?.ok === true && typeof r.conversation_id === 'string' && typeof r.to === 'string') await deps.rememberConversation(r.conversation_id, r.to)
+      }
+      return { result: asText({ results: results.map(r => ({ ...r, nota: resultNote(r) })) }) }
+    }
+
     if (name === 'link_send') {
-      const to = typeof input.to === 'string' ? input.to.split('/').map(normalizeName).join('/') : ''
+      const to = toAddress(input.to)
       if (!ADDRESS.test(to)) return { deny: 'La dirección debe ser persona/máquina/sesión (mira link_peers).' }
       if (input.conversation !== undefined && !isConvId(input.conversation)) return { deny: 'conversation no es un id válido.' }
       body.to = to
@@ -211,6 +193,9 @@ export async function runLinkTool(name, input, deps) {
     if (typeof sent?.conversation_id === 'string') await deps.rememberConversation(sent.conversation_id, String(body.to))
     return { result: asText({ ...sent, nota: noteFor(sent) }) }
   } catch (err) {
+    const e = /** @type {{ code?: string, closedBy?: string, closedReason?: string }} */ (err ?? {})
+    if (e.code === 'conversation_closed') return { result: closedConversationNote(e) }
     return { deny: describeHubError(err) }
   }
 }
+

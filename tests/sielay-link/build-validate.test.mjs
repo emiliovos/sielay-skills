@@ -48,7 +48,7 @@ test('null: the session leaves its build (valid, build null)', () => {
 })
 
 test('too-big: over BUILD_MAX_BYTES is refused whole, naming the size', () => {
-  const big = { ...validFull(), subagents: Array.from({ length: 50 }, (_, i) => ({ id: `agent-${i}`, type: 'x'.repeat(60), description: 'd'.repeat(160), started_at: '2026-10-20T23:01:00.000Z' })) }
+  const big = { ...validFull(), subagents: Array.from({ length: 50 }, (_, i) => ({ id: `agent-${i}`, type: 'x'.repeat(60), description: 'é'.repeat(160), started_at: '2026-10-20T23:01:00.000Z' })) }
   const r = validateBuild(big, NOW)
   assert.equal(r.build, undefined)
   assert.equal(r.error, 'too_big')
