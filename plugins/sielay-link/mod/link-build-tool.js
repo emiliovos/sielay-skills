@@ -6,6 +6,7 @@
 import { BUILD_STAGES, BUILD_STATUSES, BUILD_ROLES, BUILD_TEXT_MAX } from './link-build-validate.js'
 import { BUILD_ESTIMATE_PHASES_MAX, BUILD_ESTIMATE_H_MAX } from './link-build-fields.js'
 import { WAITING_RETRO_SCHEMA } from './link-build-waiting-retro.js'
+import { DETAIL_SCHEMA, DELIVERY_EXTRA_SCHEMA } from './link-build-detail.js'
 
 const str = (/** @type {string} */ description) => ({ type: 'string', description })
 
@@ -52,6 +53,7 @@ export const BUILD_TOOL_SPEC = Object.freeze({
           merge_pr: { type: ['string', 'null'], enum: ['pending', 'running', 'merged', 'failed', null] },
           stamp: { type: ['string', 'null'], description: 'SHA del sello (7 a 40 hex)' },
           deploy_pending: { type: 'boolean' },
+          ...DELIVERY_EXTRA_SCHEMA,
         },
       },
       linear: str('Issue de Linear, p. ej. VOS-260'),
@@ -77,6 +79,7 @@ export const BUILD_TOOL_SPEC = Object.freeze({
         },
       },
       ...WAITING_RETRO_SCHEMA,
+      ...DETAIL_SCHEMA,
     },
   },
   isDeferred: /** @type {const} */ (false),

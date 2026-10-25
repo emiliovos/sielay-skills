@@ -97,8 +97,12 @@ Para que el modelo las use sin preguntarte cada vez, agrégalas a `permissions.a
 { "permissions": { "allow": ["mcp__sielay-link__link_send", "mcp__sielay-link__link_reply", "mcp__sielay-link__link_peers", "mcp__sielay-link__link_build_stage", "mcp__sielay-link__link_watch"] } }
 ```
 
-## Novedades de la 1.8.1
+## Novedades de la 1.8.2
 
+- **`flow` en `link_build_stage`:** `full` (por omisión), `chico` o `fix`, solo el coordinador; dice qué etapas tiene el build. Un valor desconocido rechaza la llamada con el campo `flow`.
+- **`stage_detail`:** el detalle de una etapa (`stage` 1..7, hasta 8 `items` con `label`, `value` y `href`, y `live` con lo que pasa ahora). El último enviado reemplaza al anterior; `live: null` lo borra en el hub.
+- **`delivery.merge_queue` y `delivery.deploy`:** la fila de merge (`position`, `total`, `reason`, `since`) y el estado del deploy (`approval`, `publishing`, `verified` o `failed`, con `at`). Un subcampo inválido descarta ese objeto, no el build.
+- **Sin los campos nuevos todo sigue igual.**
 - **Una línea por mensaje:** las tres filas (mensaje entrante, llamada de `link_send` / `link_reply` y su resultado) salen ahora en gris tenue, sin colores ni negritas, y en una sola línea recortada con «…» al ancho de la terminal (máximo 80 columnas). Entrante: «◇ sielay-5 · turno 3 · Recibido, voy con la A: POST …». Llamada: «◇ → sielay-2 · Turno #507, CI verde en …». Resultado: la primera línea, «Enviado a sielay-2 · turno 1 de 120 · corre solo». El cuerpo va siempre después del prefijo «◇ …», con los saltos de línea y los espacios colapsados.
 - **La persona solo cuando es otra:** el remitente o el destino se muestra como «ana/sielay-5» cuando su persona no es la de esta sesión, y como «sielay-5» cuando sí. Mientras no se conozca la dirección propia, la persona se muestra siempre. Así una sesión de otra persona con el mismo nombre no se ve igual que una propia.
 - **Avisos del hub:** salen igual, en una línea tenue «◇ aviso del hub · La sesión … lleva 24 min sin leer tu mensaje …».
@@ -250,6 +254,24 @@ Desde la 1.1.0, `/si:build-auto` llama a `link_build_stage` en cada cambio de et
   - Cada envío trae el estimado **completo** y reemplaza al anterior; no se mezcla. `estimate: null` o ausente lo deja como estaba.
   - Las horas se redondean a 0,1 y después se validan: `total_h` mayor que 0 y hasta 999; cada fase con `name` (hasta 80, no vacío después de quitar secretos) y `h` de 0 a 999; hasta 20 fases. `assumption` se recorta a 200 y `reason` a 120. El estimado serializado no pasa de 2 KB.
   - Un estimado inválido lo rechaza la herramienta al llamarla, con el campo que falló (`estimate`, `estimate.total_h`, `estimate.phases`, `estimate.assumption` o `estimate.reason`), y no se guarda nada. También rechaza la llamada si el build ya mezclado no cabe en los 16 KB.
+- **Flujo y detalle por etapa** (desde la 1.8.2, solo el coordinador). Un hub anterior los ignora.
+
+  ```json
+  {
+    "flow": "fix",
+    "stage_detail": {
+      "stage": 5,
+      "items": [{ "label": "CI sielay-ci", "value": "verde · 3626 pruebas", "href": "https://github.com/o/r/actions/runs/1" }],
+      "live": { "label": "gate shifted corriendo", "done": 2, "total": 3, "at": "2026-10-25T19:10:00Z" }
+    },
+    "delivery": { "merge_queue": { "position": 2, "total": 5, "reason": "CI de otro PR", "since": "2026-10-25T18:00:00Z" }, "deploy": { "state": "publishing" } }
+  }
+  ```
+
+  - `flow`: `full`, `chico` o `fix`; sin él, `full`. `stage` sigue siendo 1..7.
+  - `stage_detail`: `stage` obligatorio (1..7); `items` hasta 8 (los de más se recortan) con `label` (80, obligatorio), `value` (160) y `href` (`https:` o ruta relativa, 300; si no es válido se descarta el `href`); `live` con `label` (120, obligatorio), `done`, `total` (enteros desde 0) y `at` (ISO, sin pasar 5 min al futuro), o `null` para borrarlo. Los textos pasan por el mismo quitado de secretos que `summary`. Un campo inválido rechaza la llamada, con su nombre (`stage_detail.items.label`, `stage_detail.live.at`…).
+  - `delivery.merge_queue`: `position` y `total` enteros desde 1 o `null`, `reason` (120) y `since` (ISO). `delivery.deploy`: `state` obligatorio y `at` (ISO). Si alguno es inválido, se descarta ese objeto y el reporte sigue.
+  - Todo cabe en los 16 KB: un `stage_detail` lleno junto a un `retro` lleno pasa.
 - **Ciclo de vida.**
   - `/clear` conserva el build.
   - Un `build_id` nuevo empieza otro build.

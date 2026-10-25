@@ -283,7 +283,28 @@ test('link_build_stage: the build rides the next poll with its subagents (paired
   expect(logs.filter(l => l.includes('build'))).toEqual([])
 })
 
-test('link_build_stage unpaired: ok with reported false, nothing on the network', async ($, on) => {
+test('link_build_stage: flow and stage_detail ride the next poll', { options: { link_token: 'test-token' } }, async ($, on) => {
+  const clock = mock.clock(on, { now: Date.parse('2026-10-25T19:00:00.000Z') })
+  mock.store(on)
+  mock.env(on, { HOME: '/nowhere' })
+  fakeHost(on)
+  fakeAgents(on)
+  on('turn.complete', () => ({ text: '' }))
+  const sent = pollHub(on)
+  await $.session.start({ cwd: '/srv/p', surface: 'terminal', isInteractive: true })
+  await clock.advance(10)
+  await clock.settle()
+  const detail = { stage: 5, items: [{ label: 'CI', value: 'verde', href: 'https://github.com/o/r/actions/runs/1' }], live: { label: 'gate corriendo', done: 2, total: 3 } }
+  const r: any = await $.tool.call({ tool: 'mcp__sielay-link__link_build_stage', ...buildArgs, flow: 'fix', stage_detail: detail } as any)
+  expect(JSON.parse(r.result)).toEqual({ ok: true, reported: true })
+  const bad: any = await $.tool.call({ tool: 'mcp__sielay-link__link_build_stage', ...buildArgs, flow: 'rapido' } as any)
+  expect(bad.deny).toContain('flow')
+  await clock.advance(61_000)
+  await clock.settle()
+  expect(polls(sent).at(-1)!.body.session.build).toMatchObject({ flow: 'fix', stage_detail: detail })
+})
+
+test('link_build_stage unpaired:ok with reported false, nothing on the network', async ($, on) => {
   mock.clock(on, { now: 1_000 })
   mock.store(on)
   mock.env(on, { HOME: '/nowhere' })
