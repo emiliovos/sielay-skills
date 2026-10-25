@@ -1,5 +1,6 @@
 // Hub notices (the poll's `notices`): a repo this session works in started or
-// finished a merge, or CI ended on a branch it watches (link_watch). They
+// finished a merge, CI ended on a branch it watches (link_watch), or a message
+// it sent has gone unread for 20 min. They
 // reach the model as a short card that says it is the hub, not a person nor
 // another session. Every value is the hub's, already validated there, and is
 // still neutralized here. Pure.
@@ -45,6 +46,9 @@ export function frameHubNotice(n) {
   else if (n.kind === 'ci_finished') {
     line = `Terminó el CI «${clean(p.workflow, 80)}» de ${clean(p.repo, 120)} en la rama ${clean(p.branch, 120)}: ${clean(p.conclusion, 20)}.` +
       (p.url ? ` ${clean(p.url, 300)}` : '')
+  } else if (n.kind === 'peer_unread') {
+    line = `La sesión ${clean(p.to, 130)} lleva ${clean(p.minutes, 5)} min sin leer tu mensaje (conv=${clean(p.conversation_id, 100)}). ` +
+      'Puede estar ocupada o cerrada: revisa con link_peers si sigue en línea antes de esperarla.'
   } else return null
   return '— Aviso del hub de sielay (no es una persona ni otra sesión)\nSolo informa; no hace falta responder.\n\n' + line
 }

@@ -32,6 +32,8 @@ test('hub notices frame as a hub card, values neutralized; unknown kinds are ski
   assert.match(merged, /Se mergeó el PR #477 en o\/r \(abcdef1\)\. Archivos: a\.js, \(conv:x\./)
   const ci = frameHubNotice({ id: 'n2', kind: 'ci_finished', payload: { repo: 'o/r', branch: 'feat/x', workflow: 'sielay-ci', conclusion: 'failure', url: 'https://github.com/o/r/actions/runs/9' } })
   assert.match(ci, /Terminó el CI «sielay-ci» de o\/r en la rama feat\/x: failure\. https:\/\/github\.com\/o\/r\/actions\/runs\/9$/)
+  const unread = frameHubNotice({ id: 'n4', kind: 'peer_unread', payload: { to: 'ana/box/web', minutes: 20, conversation_id: 'c-1' } })
+  assert.match(unread, /La sesión ana\/box\/web lleva 20 min sin leer tu mensaje \(conv=c-1\)\./)
   assert.equal(frameHubNotice({ id: 'n3', kind: 'other', payload: {} }), null)
   assert.equal(isHubNotice({ id: 'n', kind: 'k' }), false)
 })
