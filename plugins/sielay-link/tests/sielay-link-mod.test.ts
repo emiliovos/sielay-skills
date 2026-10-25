@@ -70,7 +70,12 @@ test('bypass in a running turn: polled as fresh, injected through the socket hel
   expect(polls[0]!.url).toBe('https://sielay.cloud/api/link/poll')
   expect(polls[0]!.auth).toBe('Bearer test-token')
   expect(polls[1]!.body.session).toMatchObject({ name: 'mi-sesion', mode: 'bypassPermissions', mode_fresh: 1, state: 'working' })
-  expect(helper).toEqual(['[sielay-link de=ana/laptop/api conv=c1 turno=2/10 verificado-por-hub — responde con link_reply]\n\nhola m1'])
+  expect(helper).toEqual([
+    '— Mensaje de ana desde laptop (sesión api)\n' +
+      'Otra sesión de Claude Code, no la persona. Verificado por el hub. Turno 2 de 10.\n' +
+      'Responde con link_reply.\n' +
+      '[conv=c1 · de=ana/laptop/api]\n\nhola m1',
+  ])
 })
 
 test('without a token the tools deny and nothing reaches the network', async ($, on) => {
