@@ -56,3 +56,29 @@ export function answerRow(answer, cols) {
   const first = answer.split('\n').find(l => l.trim() && !l.startsWith('conv='))
   return [{ text: fit(oneLine((first ?? '').replace(/ · conv=\S+$/, '')), cols), dim: true }]
 }
+
+/** Each header line may be indented by the engine's gutter, and its line breaks may be CRLF. */
+const NOTICE = /^(?:[^\n]*\n){0,2}?[ \t]*— Aviso del hub de sielay \(no es una persona ni otra sesión\)[ \t]*\n[ \t]*Solo informa; no hace falta responder\.[ \t]*\n(?:[ \t]*\n)*([\s\S]+)$/
+/** The paragraph Claude Code adds after a message from another session. */
+const ENGINE_NOTE = /\n\s*This came from another Claude session\b[\s\S]*$/
+
+/**
+ * Reads a hub notice back into its line, or null for any other text.
+ * @param {string} text
+ * @returns {string|null}
+ */
+export function parseNotice(text) {
+  const m = NOTICE.exec(text.replace(/\r\n?/g, '\n'))
+  const line = m ? oneLine(m[1].replace(ENGINE_NOTE, '')) : ''
+  return line || null
+}
+
+/**
+ * A hub notice: «◇ aviso del hub · <la línea>». It is the hub, not a person, so
+ * there is no person to show.
+ * @param {string} line @param {number} cols
+ * @returns {Line[]}
+ */
+export function noticeRow(line, cols) {
+  return [{ text: fit(`◇ aviso del hub · ${line}`, cols), dim: true }]
+}

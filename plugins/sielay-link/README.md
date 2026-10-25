@@ -101,6 +101,7 @@ Para que el modelo las use sin preguntarte cada vez, agrégalas a `permissions.a
 
 - **Una línea por mensaje:** las tres filas (mensaje entrante, llamada de `link_send` / `link_reply` y su resultado) salen ahora en gris tenue, sin colores ni negritas, y en una sola línea recortada con «…» al ancho de la terminal (máximo 80 columnas). Entrante: «◇ sielay-5 · turno 3 · Recibido, voy con la A: POST …». Llamada: «◇ → sielay-2 · Turno #507, CI verde en …». Resultado: la primera línea, «Enviado a sielay-2 · turno 1 de 120 · corre solo». El cuerpo va siempre después del prefijo «◇ …», con los saltos de línea y los espacios colapsados.
 - **La persona solo cuando es otra:** el remitente o el destino se muestra como «ana/sielay-5» cuando su persona no es la de esta sesión, y como «sielay-5» cuando sí. Mientras no se conozca la dirección propia, la persona se muestra siempre. Así una sesión de otra persona con el mismo nombre no se ve igual que una propia.
+- **Avisos del hub:** salen igual, en una línea tenue «◇ aviso del hub · La sesión … lleva 24 min sin leer tu mensaje …».
 - **Con ctrl+o** se ve lo completo como en la 1.8.0: el encabezado del mensaje con su cuerpo entero, la llamada con todo el texto y el resultado completo. Lo que lee el modelo no cambia.
 
 ## Novedades de la 1.8.0

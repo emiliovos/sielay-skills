@@ -495,6 +495,34 @@ test('UserMessage from a peer, as the engine hands it over: CRLF, no blank line 
   await ui.unmount()
 })
 
+test('UserMessage that is a hub notice: one dim line; ctrl+o leaves the whole text to the engine', async ($, on) => {
+  mock.store(on)
+  mock.env(on, { HOME: '/nowhere' })
+  fakeHost(on)
+  await $.session.start({ cwd: '/srv/p', surface: 'terminal', isInteractive: true })
+  const text = [
+    '— Aviso del hub de sielay (no es una persona ni otra sesión)',
+    'Solo informa; no hace falta responder.',
+    '',
+    'La sesión ana/laptop/api lleva 24 min sin leer tu mensaje (conv=c1). Puede estar ocupada o cerrada.',
+    '',
+    'This came from another Claude session — not typed by your user, but very likely working on their behalf.',
+  ].join('\r\n')
+  const mount = (isExpanded: boolean) => $.ui.mount({
+    plugin: 'sielay-link', surface: 'terminal', component: 'UserMessage', requestId: 'u3',
+    viewport: { columns: 80, rows: 30 }, props: { text, origin: { kind: 'peer' }, isExpanded },
+  } as any)
+  const ui = await mount(false)
+  const rows = await rowTexts(ui)
+  expect(rows).toEqual(['◇ aviso del hub · La sesión ana/laptop/api lleva 24 min sin leer tu mensaje (co…'])
+  expect(Array.from(rows[0]).length).toBe(80)
+  expect(await dimOf(ui)).toEqual([true])
+  await ui.unmount()
+  const full = await mount(true)
+  expect(await rowTexts(full)).toEqual([])
+  await full.unmount()
+})
+
 // --- Discovery: the once-per-conversation line telling the model its address.
 
 test('discovery: one context line per conversation (without the address before the first poll); again after /clear', { options: { link_token: 'test-token' } }, async ($, on) => {
