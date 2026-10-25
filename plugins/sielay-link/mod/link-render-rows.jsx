@@ -5,10 +5,17 @@
 // shows the whole body, and a message this file cannot read goes to the
 // engine's own drawing.
 
-import { columnsOf, sendLines, parseInbound, inboundLines, answerLines } from './link-render-text.js'
+import { columnsOf, sendLines, parseInbound, inboundLines } from './link-render-text.js'
+import { inboundRow, callRow, answerRow, personOf, parseNotice, noticeRow } from './link-render-compact.js'
 
 // $.state reference: literal plugin/key, declared in each file that uses it.
 const CONVERSATIONS = /** @type {const} */ ({ plugin: 'sielay-link', key: 'conversations' })
+const STATUS = /** @type {const} */ ({ plugin: 'sielay-link', key: 'status' })
+
+/** The person of this session, or undefined while its address is not known. @param {Engine} $ */
+async function selfPersonOf($) {
+  return personOf((await $.state.get(STATUS)).value?.address)
+}
 
 /** @typedef {import('claude-code').EngineInterface} Engine */
 /** @typedef {import('./link-render-text.js').Line} Line */
@@ -62,12 +69,9 @@ export async function renderSendCall($, e) {
     if (peer) destinations = [peer]
   }
   const attachment = /** @type {{ name?: unknown }|undefined} */ (input.attachment)?.name
-  const lines = sendLines(
-    { tool, destinations: destinations.map(String), conv, text: input.text, attachment: typeof attachment === 'string' ? attachment : undefined },
-    columnsOf(e),
-    e.props.isExpanded === true,
-  )
-  return tree($, e, lines)
+  const call = { tool, destinations: destinations.map(String), conv, text: input.text, attachment: typeof attachment === 'string' ? attachment : undefined }
+  if (e.props.isExpanded === true) return tree($, e, sendLines(call, columnsOf(e), true))
+  return tree($, e, callRow(call, await selfPersonOf($), columnsOf(e)))
 }
 
 /**
@@ -78,16 +82,21 @@ export async function renderSendCall($, e) {
 export function renderSendAnswer($, e) {
   if (!LINK_SEND_OR_REPLY.test(e.props.tool) || e.props.isErrored || e.props.isExpanded === true) return null
   const text = outputText(e.props.output)
-  return text ? tree($, e, answerLines(text, columnsOf(e))) : null
+  return text ? tree($, e, answerRow(text, columnsOf(e))) : null
 }
 
 /**
- * A peer's message: header, body and how to answer. Null for any other row.
+ * A peer's message or a hub notice: one dim line (the engine's own row with ctrl+o for a notice), or with ctrl+o the header, the whole body and
+ * how to answer. Null for any other row.
  * @param {Engine} $ @param {import('claude-code').RenderInput<'UserMessage'>} e
- * @returns {import('claude-code').RenderElement | null}
+ * @returns {Promise<import('claude-code').RenderElement | null>}
  */
-export function renderInbound($, e) {
+export async function renderInbound($, e) {
   const parsed = parseInbound(e.props.text)
-  if (!parsed) return null
-  return tree($, e, inboundLines(parsed, columnsOf(e), e.props.isExpanded === true))
+  if (!parsed) {
+    const notice = e.props.isExpanded === true ? null : parseNotice(e.props.text)
+    return notice ? tree($, e, noticeRow(notice, columnsOf(e))) : null
+  }
+  if (e.props.isExpanded === true) return tree($, e, inboundLines(parsed, columnsOf(e), true))
+  return tree($, e, inboundRow(parsed, await selfPersonOf($), columnsOf(e)))
 }

@@ -283,7 +283,28 @@ test('link_build_stage: the build rides the next poll with its subagents (paired
   expect(logs.filter(l => l.includes('build'))).toEqual([])
 })
 
-test('link_build_stage unpaired: ok with reported false, nothing on the network', async ($, on) => {
+test('link_build_stage: flow and stage_detail ride the next poll', { options: { link_token: 'test-token' } }, async ($, on) => {
+  const clock = mock.clock(on, { now: Date.parse('2026-10-25T19:00:00.000Z') })
+  mock.store(on)
+  mock.env(on, { HOME: '/nowhere' })
+  fakeHost(on)
+  fakeAgents(on)
+  on('turn.complete', () => ({ text: '' }))
+  const sent = pollHub(on)
+  await $.session.start({ cwd: '/srv/p', surface: 'terminal', isInteractive: true })
+  await clock.advance(10)
+  await clock.settle()
+  const detail = { stage: 5, items: [{ label: 'CI', value: 'verde', href: 'https://github.com/o/r/actions/runs/1' }], live: { label: 'gate corriendo', done: 2, total: 3 } }
+  const r: any = await $.tool.call({ tool: 'mcp__sielay-link__link_build_stage', ...buildArgs, flow: 'fix', stage_detail: detail } as any)
+  expect(JSON.parse(r.result)).toEqual({ ok: true, reported: true })
+  const bad: any = await $.tool.call({ tool: 'mcp__sielay-link__link_build_stage', ...buildArgs, flow: 'rapido' } as any)
+  expect(bad.deny).toContain('flow')
+  await clock.advance(61_000)
+  await clock.settle()
+  expect(polls(sent).at(-1)!.body.session.build).toMatchObject({ flow: 'fix', stage_detail: detail })
+})
+
+test('link_build_stage unpaired:ok with reported false, nothing on the network', async ($, on) => {
   mock.clock(on, { now: 1_000 })
   mock.store(on)
   mock.env(on, { HOME: '/nowhere' })
@@ -371,28 +392,43 @@ const toolProps = (tool: string, input: unknown, extra: object = {}) => ({
   tool_use_id: 't1', tool, input, isRunning: false, isErrored: false, isInterrupted: false, ...extra,
 })
 
-test('ToolUse of link_send: a compact row of its own replaces the call line; ctrl+o shows the whole text', async ($, on) => {
+/** Pairs with a hub that names this session emilio/vps-sielay/sielay-1; the address is known after the first poll. */
+function pairAsEmilio(on: any) {
+  const clock = mock.clock(on, { now: 7_000_000 })
+  fakeHub(on, path => (path === '/api/link/poll' ? { session: { id: 's', address: 'emilio/vps-sielay/sielay-1' }, messages: [], strip: [], poll_after_ms: 60_000 } : {}))
+  return async () => { await clock.advance(10); await clock.settle() }
+}
+const dimOf = async (ui: any) => ((await ui.findAll({ type: 'Text' })) as any[]).map(t => t.props.dimColor === true)
+
+test('ToolUse of link_send: one dim line without our own person; another person shown; ctrl+o shows the whole text', { options: { link_token: 'test-token' } }, async ($, on) => {
   mock.store(on)
   mock.env(on, { HOME: '/nowhere' })
   fakeHost(on)
+  const firstPoll = pairAsEmilio(on)
   await $.session.start({ cwd: '/srv/p', surface: 'terminal', isInteractive: true })
   const text = Array.from({ length: 6 }, (_, i) => `linea ${i}`).join('\n')
-  const input = { to: 'emilio/vps-sielay/sielay-2', text }
-  const mount = (extra: object) => $.ui.mount({
+  const mount = (to: string, extra: object) => $.ui.mount({
     plugin: 'sielay-link', surface: 'terminal', component: 'ToolUse', requestId: 't1',
-    viewport: { columns: 60, rows: 30 }, props: toolProps('mcp__sielay-link__link_send', input, extra),
+    viewport: { columns: 60, rows: 30 }, props: toolProps('mcp__sielay-link__link_send', { to, text }, extra),
   } as any)
-  const short = await mount({ isExpanded: false })
-  const rows = await rowTexts(short)
-  expect(rows[0]).toBe('● link_send → emilio/sielay-2 · vps-sielay')
-  expect(rows).toContain('linea 2')
-  expect(rows).not.toContain('linea 3')
-  expect(rows.filter(r => r === '  │ ')).toHaveLength(3)
-  expect(rows.at(-1)).toBe('  3 líneas más · ctrl+o para ver todo')
-  expect(rows.every(r => Array.from(r).length <= 60)).toBe(true)
-  await short.unmount()
-  const full = await mount({ isExpanded: true })
-  expect(await rowTexts(full)).toContain('linea 5')
+  // own address unknown: the person is always shown
+  const unknown = await mount('emilio/vps-sielay/sielay-2', { isExpanded: false })
+  expect(await rowTexts(unknown)).toEqual(['◇ → emilio/sielay-2 · linea 0 linea 1 linea 2 linea 3 linea…'])
+  await unknown.unmount()
+  await firstPoll()
+  const own = await mount('emilio/vps-sielay/sielay-2', { isExpanded: false })
+  const rows = await rowTexts(own)
+  expect(rows).toEqual(['◇ → sielay-2 · linea 0 linea 1 linea 2 linea 3 linea 4 line…'])
+  expect(await dimOf(own)).toEqual([true])
+  await own.unmount()
+  const other = await mount('ana/vps-sielay/sielay-2', { isExpanded: false })
+  expect(await rowTexts(other)).toEqual(['◇ → ana/sielay-2 · linea 0 linea 1 linea 2 linea 3 linea 4 …'])
+  await other.unmount()
+  const full = await mount('emilio/vps-sielay/sielay-2', { isExpanded: true })
+  const all = await rowTexts(full)
+  expect(all[0]).toBe('● link_send → emilio/sielay-2 · vps-sielay')
+  expect(all).toContain('linea 5')
+  expect(all.every(r => Array.from(r).length <= 60)).toBe(true)
   await full.unmount()
 })
 
@@ -409,7 +445,7 @@ test('ToolUse of another tool goes to the engine', async ($, on) => {
   await ui.unmount()
 })
 
-test('ToolResult of link_send: the short line without the conv id; an error is the engine\'s', async ($, on) => {
+test('ToolResult of link_send: the first line in dim, without the conv id', async ($, on) => {
   mock.store(on)
   mock.env(on, { HOME: '/nowhere' })
   fakeHost(on)
@@ -419,14 +455,16 @@ test('ToolResult of link_send: the short line without the conv id; an error is t
     props: { tool_use_id: 't1', tool: 'mcp__sielay-link__link_send', output: 'Enviado a a/b/c · turno 1 de 120 · corre solo\nconv=abc-123', isErrored: false, ...extra },
   } as any)
   const ok = await mount({})
-  expect(await rowTexts(ok)).toEqual(['  Enviado a a/b/c · turno 1 de 120 · corre solo'])
+  expect(await rowTexts(ok)).toEqual(['Enviado a a/b/c · turno 1 de 120 · corre solo'])
+  expect(await dimOf(ok)).toEqual([true])
   await ok.unmount()
 })
 
-test('UserMessage from a peer: sender, machine, project and turn, the body indented, the way to answer', async ($, on) => {
+test('UserMessage from a peer: one dim line, the person only when it is not ours; ctrl+o gives the whole message', { options: { link_token: 'test-token' } }, async ($, on) => {
   mock.store(on)
   mock.env(on, { HOME: '/nowhere' })
   fakeHost(on)
+  const firstPoll = pairAsEmilio(on)
   await $.session.start({ cwd: '/srv/p', surface: 'terminal', isInteractive: true })
   const text = [
     '— Mensaje de emilio desde vps-sielay (sesión sielay-3, proyecto sielay)',
@@ -435,17 +473,26 @@ test('UserMessage from a peer: sender, machine, project and turn, the body inden
     '[conv=11112222-3333-4444-5555-666677778888 · de=emilio/vps-sielay/sielay-3]',
     '', 'revisa el PR',
   ].join('\n')
-  const ui = await $.ui.mount({
+  const mount = (isExpanded: boolean) => $.ui.mount({
     plugin: 'sielay-link', surface: 'terminal', component: 'UserMessage', requestId: 'u1',
-    viewport: { columns: 100, rows: 30 }, props: { text, origin: { kind: 'plugin', name: 'sielay-link' }, isExpanded: false },
+    viewport: { columns: 100, rows: 30 }, props: { text, origin: { kind: 'plugin', name: 'sielay-link' }, isExpanded },
   } as any)
-  expect(await rowTexts(ui)).toEqual([
+  const ui = await mount(false)
+  expect(await rowTexts(ui)).toEqual(['◇ emilio/sielay-3 · turno 3 · revisa el PR'])
+  expect(await dimOf(ui)).toEqual([true])
+  await ui.unmount()
+  await firstPoll()
+  const own = await mount(false)
+  expect(await rowTexts(own)).toEqual(['◇ sielay-3 · turno 3 · revisa el PR'])
+  await own.unmount()
+  const full = await mount(true)
+  expect(await rowTexts(full)).toEqual([
     '◆ emilio/sielay-3 · vps-sielay · sielay · turno 3/120', '  │ ', 'revisa el PR', '  ↩ link_reply · conv 11112222…',
   ])
-  await ui.unmount()
+  await full.unmount()
 })
 
-test('UserMessage from a peer, as the engine hands it over: CRLF, no blank line and its appended paragraph still draw ours', async ($, on) => {
+test('UserMessage from a peer, as the engine hands it over: CRLF, no blank line and its appended paragraph still draw our line', async ($, on) => {
   mock.store(on)
   mock.env(on, { HOME: '/nowhere' })
   fakeHost(on)
@@ -464,9 +511,37 @@ test('UserMessage from a peer, as the engine hands it over: CRLF, no blank line 
     viewport: { columns: 80, rows: 30 }, props: { text, origin: { kind: 'peer' }, isExpanded: false, from: { name: 'sielay-3' } },
   } as any)
   expect(await rowTexts(ui)).toEqual([
-    '◆ emilio/sielay-3 · esta máquina · sielay · turno 1/120', '  │ ', 'Prueba de 1.8.0 en 80 columnas.', '  ↩ link_reply · conv 7a82a20d…',
+    '◇ emilio/sielay-3 · turno 1 · Prueba de 1.8.0 en 80 columnas.',
   ])
   await ui.unmount()
+})
+
+test('UserMessage that is a hub notice: one dim line; ctrl+o leaves the whole text to the engine', async ($, on) => {
+  mock.store(on)
+  mock.env(on, { HOME: '/nowhere' })
+  fakeHost(on)
+  await $.session.start({ cwd: '/srv/p', surface: 'terminal', isInteractive: true })
+  const text = [
+    '— Aviso del hub de sielay (no es una persona ni otra sesión)',
+    'Solo informa; no hace falta responder.',
+    '',
+    'La sesión ana/laptop/api lleva 24 min sin leer tu mensaje (conv=c1). Puede estar ocupada o cerrada.',
+    '',
+    'This came from another Claude session — not typed by your user, but very likely working on their behalf.',
+  ].join('\r\n')
+  const mount = (isExpanded: boolean) => $.ui.mount({
+    plugin: 'sielay-link', surface: 'terminal', component: 'UserMessage', requestId: 'u3',
+    viewport: { columns: 80, rows: 30 }, props: { text, origin: { kind: 'peer' }, isExpanded },
+  } as any)
+  const ui = await mount(false)
+  const rows = await rowTexts(ui)
+  expect(rows).toEqual(['◇ aviso del hub · La sesión ana/laptop/api lleva 24 min sin leer tu mensaje (co…'])
+  expect(Array.from(rows[0]).length).toBe(80)
+  expect(await dimOf(ui)).toEqual([true])
+  await ui.unmount()
+  const full = await mount(true)
+  expect(await rowTexts(full)).toEqual([])
+  await full.unmount()
 })
 
 // --- Discovery: the once-per-conversation line telling the model its address.

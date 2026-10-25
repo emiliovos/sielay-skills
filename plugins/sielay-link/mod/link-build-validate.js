@@ -13,6 +13,7 @@ import {
 } from './link-build-fields.js'
 import { estimate } from './link-build-estimate.js'
 import { waiting, retro } from './link-build-waiting-retro.js'
+import { flow, stageDetail, deliveryExtras } from './link-build-detail.js'
 
 export { BUILD_STAGES, BUILD_STATUSES, BUILD_ROLES, BUILD_MAX_BYTES, BUILD_TEXT_MAX, BUILD_SUBAGENTS_MAX }
 export { BUILD_LINKS_MAX, BUILD_FUTURE_SKEW_MS } from './link-build-fields.js'
@@ -63,6 +64,12 @@ function usage(v) {
   return out
 }
 
+/** The delivery's classic fields (strict) plus its two optional blocks (dropped on their own when bad). @param {unknown} v @param {number} now */
+function mergeDelivery(v, now) {
+  const base = delivery(v)
+  return base === undefined ? undefined : { ...base, ...deliveryExtras(v, now) }
+}
+
 /** @param {unknown} v */
 function flags(v) {
   if (absent(v)) return undefined
@@ -105,13 +112,15 @@ export function validateBuild(input, now) {
       subagents: subagents(input.subagents, now),
       subagents_peak: absent(input.subagents_peak) ? undefined : input.subagents_peak,
       usage: usage(input.usage),
-      delivery: delivery(input.delivery),
+      delivery: mergeDelivery(input.delivery, now),
       linear: text(input.linear, BUILD_TEXT_MAX.linear, 'linear'),
       links: links(input.links),
       estimate: estimate(input.estimate),
       waiting: input.status === 'running' || input.status === 'done' ? undefined : waiting(input.waiting),
       retro: retro(input.retro, input.status),
       outcome: input.status === 'done' && !absent(input.outcome) ? input.outcome : undefined,
+      flow: flow(input.flow),
+      stage_detail: stageDetail(input.stage_detail, now),
       stage_since: date(input.stage_since, now, 'stage_since'),
       started_at: date(input.started_at, now, 'started_at'),
     }

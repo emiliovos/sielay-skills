@@ -18,7 +18,7 @@ export const SEEN_REFRESH_MS = 60_000
 /** What link_build_stage may set: the contract minus what the mod itself fills. */
 export const DECLARED_KEYS = Object.freeze([
   'build_id', 'role', 'stage', 'status', 'outcome', 'title', 'repo', 'plan', 'branch', 'pr', 'flags',
-  'plan_progress', 'phase', 'gate', 'summary', 'delivery', 'linear', 'links', 'stage_since', 'estimate', 'waiting', 'retro',
+  'plan_progress', 'phase', 'gate', 'summary', 'delivery', 'linear', 'links', 'stage_since', 'estimate', 'waiting', 'retro', 'flow', 'stage_detail',
 ])
 const COUNTS = /** @type {const} */ (['input_tokens', 'output_tokens', 'cache_read_input_tokens', 'cache_creation_input_tokens'])
 const ZERO_USAGE = Object.freeze({ input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0, turns: 0 })
