@@ -7,6 +7,9 @@
 // the caller can skip the write.
 
 import { validateBuild } from './link-build-validate.js'
+import { displace, pruneOpen } from './link-build-open.js'
+
+export { openBuildIds } from './link-build-open.js'
 
 /** A subagent with no signal for this long is dropped from the live list. */
 export const SUBAGENT_EXPIRY_MS = 30 * 60_000
@@ -48,7 +51,7 @@ export function declareBuild(state, input, now) {
   /** @type {Record<string, unknown>} */
   const picked = {}
   for (const k of DECLARED_KEYS) if (input[k] !== undefined && !(k === 'estimate' && input[k] === null)) picked[k] = input[k]
-  const same = state !== null && state.declared.build_id === picked.build_id
+  const same = state !== null && !state.closed && state.declared.build_id === picked.build_id
   const prev = same ? state.declared : {}
   const declared = { ...prev, ...picked }
   if (isObj(prev.delivery) && isObj(picked.delivery)) declared.delivery = { ...prev.delivery, ...picked.delivery }
@@ -56,8 +59,11 @@ export function declareBuild(state, input, now) {
   // waiting lives while the build waits: running or done drops it, as the hub does
   if (declared.status === 'running' || declared.status === 'done') delete declared.waiting
   const subagents = pruneExpired(state, now)?.subagents ?? {}
+  const open = displace(state, same, String(declared.build_id), now)
   return {
     declared,
+    touched_at: now,
+    open,
     started_at: same ? state.started_at : iso(now),
     subagents,
     peak: same ? state.peak : liveCount(subagents, now),
@@ -72,7 +78,7 @@ export function declareBuild(state, input, now) {
  * @returns {BuildState|null}
  */
 export function subagentUp(state, sub, now) {
-  if (!state || typeof sub.id !== 'string' || sub.id === '') return state
+  if (!state || state.closed || typeof sub.id !== 'string' || sub.id === '') return state
   const base = pruneExpired(state, now) ?? state
   const old = base.subagents[sub.id]
   /** @type {Subagent} */
@@ -111,9 +117,12 @@ export function subagentDown(state, id) {
  */
 export function pruneExpired(state, now) {
   if (!state) return state
+  const open = pruneOpen(state.open, now)
+  if (state.closed && Object.keys(open).length === 0) return null
   const kept = Object.values(state.subagents).filter(s => now - s.seen <= SUBAGENT_EXPIRY_MS)
-  if (kept.length === Object.keys(state.subagents).length) return state
-  return { ...state, subagents: Object.fromEntries(kept.map(s => [s.id, s])) }
+  const openSame = Object.keys(open).length === Object.keys(state.open ?? {}).length
+  if (kept.length === Object.keys(state.subagents).length && openSame) return state
+  return { ...state, open, subagents: Object.fromEntries(kept.map(s => [s.id, s])) }
 }
 
 /**
@@ -124,7 +133,7 @@ export function pruneExpired(state, now) {
  * @returns {BuildState|null}
  */
 export function addUsage(state, usage, isMain) {
-  if (!state || !isObj(usage)) return state
+  if (!state || state.closed || !isObj(usage)) return state
   /** @param {unknown} n */
   const count = n => (typeof n === 'number' && Number.isFinite(n) && n > 0 ? Math.floor(n) : 0)
   const prev = state.usage ?? { ...ZERO_USAGE }
@@ -146,7 +155,7 @@ export function addUsage(state, usage, isMain) {
  * @returns {BuildState|null}
  */
 export function addActiveTime(state, durationMs) {
-  if (!state || typeof durationMs !== 'number' || !Number.isFinite(durationMs) || durationMs < 1) return state
+  if (!state || state.closed || typeof durationMs !== 'number' || !Number.isFinite(durationMs) || durationMs < 1) return state
   const prev = state.usage ?? { ...ZERO_USAGE }
   const active = Math.min(Number.MAX_SAFE_INTEGER, (prev.active_ms ?? 0) + Math.floor(durationMs))
   return { ...state, usage: { ...prev, active_ms: active } }
@@ -154,13 +163,15 @@ export function addActiveTime(state, durationMs) {
 
 /**
  * After a poll that carried `sent`: a build reported `done` is forgotten, so it
- * never reaches the hub again (a closed build is immutable there).
+ * never reaches the hub again (a closed build is immutable there). With other
+ * builds still open, the state stays as a closed shell that only holds them.
  * @param {BuildState|null} state @param {unknown} sent the `session.build` the poll carried
  * @returns {BuildState|null}
  */
 export function forgetIfDone(state, sent) {
   if (!state || !isObj(sent) || sent.status !== 'done') return state
-  return state.declared.build_id === sent.build_id && state.declared.status === 'done' ? null : state
+  if (state.closed || state.declared.build_id !== sent.build_id || state.declared.status !== 'done') return state
+  return Object.keys(state.open ?? {}).length > 0 ? { ...state, closed: true } : null
 }
 
 /**

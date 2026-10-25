@@ -51,7 +51,7 @@ export function describeHubError(err) {
 }
 
 /** Why a conversation closed, when the hub does not name who closed it. */
-const CLOSED_REASONS = Object.freeze({ idle: 'se cerró sola por inactividad', admin: 'la cerró un admin' })
+const CLOSED_REASONS = Object.freeze({ idle: 'por inactividad', admin: 'por un admin' })
 
 /**
  * A conversation that already ended is not a failure: the answer the model
@@ -60,31 +60,52 @@ const CLOSED_REASONS = Object.freeze({ idle: 'se cerró sola por inactividad', a
  * @returns {string}
  */
 export function closedConversationNote(e) {
-  const by = typeof e.closedBy === 'string' && ADDRESS.test(e.closedBy) ? `la cerró ${e.closedBy}` : undefined
+  const parts = typeof e.closedBy === 'string' && ADDRESS.test(e.closedBy) ? e.closedBy.split('/') : undefined
+  const by = parts ? `${parts[0]}/${parts[2]}` : undefined
   const reason = e.closedReason && Object.hasOwn(CLOSED_REASONS, e.closedReason)
     ? CLOSED_REASONS[/** @type {keyof typeof CLOSED_REASONS} */ (e.closedReason)]
     : undefined
-  const how = by ?? reason
-  return `La conversación ya terminó${how ? `: ${how}` : ''}. No hace falta responder; si quieres seguir, abre otra con link_send.`
+  const how = by ? ` por ${by}` : reason ? ` ${reason}` : ''
+  return `Ya cerrada${how} · no hace falta responder\npara seguir, abre otra con link_send`
 }
 
 /**
- * @param {{ gate?: string }} sent
+ * The first line of a send's answer: where it went, which turn of how many,
+ * and what happens next (it runs by itself, waits for a person, or is held; an unknown gate claims nothing).
+ * @param {{ gate?: string, turn?: unknown, turns_left?: unknown }} sent @param {string} to the destination address
  * @returns {string}
  */
-export function noteFor(sent) {
-  if (sent.gate === 'held') return 'Mensaje retenido: espera que un admin lo libere a la franja del receptor.'
-  return 'Enviado. Si el receptor está en bypass y el par tiene auto-ejecución, corre solo; si no, queda en su franja hasta que una persona lo acepte.'
+export function sentLine(sent, to) {
+  const { turn, turns_left: left } = sent
+  const turns = Number.isInteger(turn) && Number.isInteger(left) ? ` · turno ${turn} de ${Number(turn) + Number(left)}` : ''
+  if (sent.gate === 'held') return `Retenido para ${to}${turns} · espera que un admin lo libere`
+  if (sent.gate === 'auto') return `Enviado a ${to}${turns} · corre solo`
+  if (sent.gate === 'strip') return `En la franja de ${to}${turns} · espera que una persona lo acepte`
+  return `Enviado a ${to}${turns}`
 }
 
 /**
- * The note of one recipient of a multi-send: sent, already ended, or refused
- * in the same words as a single send.
+ * The model's answer to one send: the short line and the conversation id in
+ * full on the next one (a reply needs it).
+ * @param {{ gate?: string, turn?: unknown, turns_left?: unknown, conversation_id?: unknown }} sent @param {string} to
+ * @returns {string}
+ */
+export function sendAnswer(sent, to) {
+  const conv = typeof sent.conversation_id === 'string' ? `\nconv=${sent.conversation_id}` : ''
+  return `${sentLine(sent, to)}${conv}`
+}
+
+/**
+ * One line per recipient of a multi-send: sent (with its conv), already ended,
+ * or refused in the same words as a single send.
  * @param {Record<string, any>} r
  * @returns {string}
  */
-export function resultNote(r) {
-  if (r?.ok === true) return noteFor(r)
-  if (r?.code === 'conversation_closed') return closedConversationNote({ closedBy: r.closed_by, closedReason: r.closed_reason })
-  return describeHubError({ kind: 'http', code: r?.code, field: r?.field, scope: r?.scope, message: `hub answered ${r?.status ?? '?'}` })
+export function resultLine(r) {
+  const to = String(r?.to ?? '?')
+  if (r?.ok === true) return `${sentLine(r, to)}${typeof r.conversation_id === 'string' ? ` · conv=${r.conversation_id}` : ''}`
+  const why = r?.code === 'conversation_closed'
+    ? closedConversationNote({ closedBy: r.closed_by, closedReason: r.closed_reason }).split('\n')[0]
+    : describeHubError({ kind: 'http', code: r?.code, field: r?.field, scope: r?.scope, message: `hub answered ${r?.status ?? '?'}` })
+  return `No enviado a ${to}: ${why}`
 }

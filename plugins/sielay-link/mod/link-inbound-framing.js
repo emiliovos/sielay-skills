@@ -61,7 +61,7 @@ export function neutralizeBody(body) {
  * @param {boolean} [lower]
  * @returns {string}
  */
-function safeField(value, disallowed, lower = false) {
+export function safeField(value, disallowed, lower = false) {
   const text = sanitizeText(value)
   const cleaned = (lower ? text.toLowerCase() : text).replace(disallowed, '-').replace(/-{2,}/g, '-')
   return cleaned.replace(/^-+|-+$/g, '').slice(0, 160) || '?'

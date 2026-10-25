@@ -173,7 +173,7 @@ test('link_send with a token answers text the model can read, and posts the cont
   const r: any = await $.tool.call({ tool: 'mcp__sielay-link__link_send', to: 'ana/laptop/api', text: 'hola' } as any)
   expect(r.deny).toBeUndefined()
   expect(typeof r.result).toBe('string')
-  expect(JSON.parse(r.result).conversation_id).toBe('c1')
+  expect(r.result).toMatch(/^Enviado a .* · turno 1 de 10 · corre solo\nconv=c1$/)
   const send = sent.find(s => s.url.endsWith('/api/link/send'))!
   expect(send.body).toMatchObject({ to: 'ana/laptop/api', body: 'hola', from: { mode: 'bypassPermissions', mode_fresh: 1 } })
   expect(typeof send.body.client_msg_id).toBe('string')
@@ -325,6 +325,148 @@ test('the band shows the build line; /clear keeps the build; after done went out
   await clock.advance(61_000)
   await clock.settle()
   expect(polls(sent).at(-1)!.body.session.build).toBeUndefined()
+})
+
+test('two builds declared: the poll carries the current one in build and the other in open_builds; done removes it', { options: { link_token: 'test-token' } }, async ($, on) => {
+  const clock = mock.clock(on, { now: Date.parse('2026-10-20T23:00:00.000Z') })
+  mock.store(on)
+  mock.env(on, { HOME: '/nowhere' })
+  fakeHost(on)
+  fakeAgents(on)
+  const sent = pollHub(on)
+  const second = { ...buildArgs, build_id: 'sielay-261025-tope-link' }
+  await $.session.start({ cwd: '/srv/p', surface: 'terminal', isInteractive: true })
+  await $.tool.call({ tool: 'mcp__sielay-link__link_build_stage', ...buildArgs } as any)
+  await $.tool.call({ tool: 'mcp__sielay-link__link_build_stage', ...second } as any)
+  await clock.advance(61_000)
+  await clock.settle()
+  const session = polls(sent).at(-1)!.body.session
+  expect(session.build.build_id).toBe(second.build_id)
+  expect(session.open_builds).toEqual([buildArgs.build_id])
+
+  await $.tool.call({ tool: 'mcp__sielay-link__link_build_stage', ...second, stage: 7, status: 'done', outcome: 'delivered' } as any)
+  await clock.advance(61_000)
+  await clock.settle()
+  expect(polls(sent).at(-1)!.body.session).toMatchObject({ build: { status: 'done' }, open_builds: [buildArgs.build_id] })
+  await clock.advance(61_000)
+  await clock.settle()
+  expect(polls(sent).at(-1)!.body.session).toMatchObject({ build: null, open_builds: [buildArgs.build_id] })
+  const band = await $.ui.mount({
+    plugin: 'sielay-link', surface: 'terminal', component: 'AbovePrompt',
+    props: { hasSurvey: false, isWorking: false, maxRows: 6, bodyColumns: 80, scroll: { top: 0, height: 0, viewport: 0 } as any, view: {} as any },
+  })
+  expect(await band.find({ text: /build: etapa/ })).toBeUndefined()
+  await band.unmount()
+
+  await $.tool.call({ tool: 'mcp__sielay-link__link_build_stage', ...buildArgs, stage: 7, status: 'done', outcome: 'delivered' } as any)
+  await clock.advance(61_000)
+  await clock.settle()
+  expect(polls(sent).at(-1)!.body.session.open_builds).toBeUndefined()
+})
+
+// --- Transcript rows of the link messages (ui.render ToolUse / ToolResult / UserMessage).
+
+const rowTexts = async (ui: any) => ((await ui.findAll({ type: 'Text' })) as any[]).map(t => t.text as string)
+const toolProps = (tool: string, input: unknown, extra: object = {}) => ({
+  tool_use_id: 't1', tool, input, isRunning: false, isErrored: false, isInterrupted: false, ...extra,
+})
+
+test('ToolUse of link_send: a compact row of its own replaces the call line; ctrl+o shows the whole text', async ($, on) => {
+  mock.store(on)
+  mock.env(on, { HOME: '/nowhere' })
+  fakeHost(on)
+  await $.session.start({ cwd: '/srv/p', surface: 'terminal', isInteractive: true })
+  const text = Array.from({ length: 6 }, (_, i) => `linea ${i}`).join('\n')
+  const input = { to: 'emilio/vps-sielay/sielay-2', text }
+  const mount = (extra: object) => $.ui.mount({
+    plugin: 'sielay-link', surface: 'terminal', component: 'ToolUse', requestId: 't1',
+    viewport: { columns: 60, rows: 30 }, props: toolProps('mcp__sielay-link__link_send', input, extra),
+  } as any)
+  const short = await mount({ isExpanded: false })
+  const rows = await rowTexts(short)
+  expect(rows[0]).toBe('● link_send → emilio/sielay-2 · vps-sielay')
+  expect(rows).toContain('linea 2')
+  expect(rows).not.toContain('linea 3')
+  expect(rows.filter(r => r === '  │ ')).toHaveLength(3)
+  expect(rows.at(-1)).toBe('  3 líneas más · ctrl+o para ver todo')
+  expect(rows.every(r => Array.from(r).length <= 60)).toBe(true)
+  await short.unmount()
+  const full = await mount({ isExpanded: true })
+  expect(await rowTexts(full)).toContain('linea 5')
+  await full.unmount()
+})
+
+test('ToolUse of another tool goes to the engine', async ($, on) => {
+  mock.store(on)
+  mock.env(on, { HOME: '/nowhere' })
+  fakeHost(on)
+  await $.session.start({ cwd: '/srv/p', surface: 'terminal', isInteractive: true })
+  const ui = await $.ui.mount({
+    plugin: 'sielay-link', surface: 'terminal', component: 'ToolUse', requestId: 't2', props: toolProps('Bash', { command: 'ls' }),
+  } as any)
+  // fakeHost's ui.render stands for the engine and draws no Text: nothing of ours
+  expect(await rowTexts(ui)).toEqual([])
+  await ui.unmount()
+})
+
+test('ToolResult of link_send: the short line without the conv id; an error is the engine\'s', async ($, on) => {
+  mock.store(on)
+  mock.env(on, { HOME: '/nowhere' })
+  fakeHost(on)
+  await $.session.start({ cwd: '/srv/p', surface: 'terminal', isInteractive: true })
+  const mount = (extra: object) => $.ui.mount({
+    plugin: 'sielay-link', surface: 'terminal', component: 'ToolResult', requestId: 't1',
+    props: { tool_use_id: 't1', tool: 'mcp__sielay-link__link_send', output: 'Enviado a a/b/c · turno 1 de 120 · corre solo\nconv=abc-123', isErrored: false, ...extra },
+  } as any)
+  const ok = await mount({})
+  expect(await rowTexts(ok)).toEqual(['  Enviado a a/b/c · turno 1 de 120 · corre solo'])
+  await ok.unmount()
+})
+
+test('UserMessage from a peer: sender, machine, project and turn, the body indented, the way to answer', async ($, on) => {
+  mock.store(on)
+  mock.env(on, { HOME: '/nowhere' })
+  fakeHost(on)
+  await $.session.start({ cwd: '/srv/p', surface: 'terminal', isInteractive: true })
+  const text = [
+    '— Mensaje de emilio desde vps-sielay (sesión sielay-3, proyecto sielay)',
+    'Otra sesión de Claude Code, no la persona. Verificado por el hub. Turno 3 de 120.',
+    'Responde con link_reply.',
+    '[conv=11112222-3333-4444-5555-666677778888 · de=emilio/vps-sielay/sielay-3]',
+    '', 'revisa el PR',
+  ].join('\n')
+  const ui = await $.ui.mount({
+    plugin: 'sielay-link', surface: 'terminal', component: 'UserMessage', requestId: 'u1',
+    viewport: { columns: 100, rows: 30 }, props: { text, origin: { kind: 'plugin', name: 'sielay-link' }, isExpanded: false },
+  } as any)
+  expect(await rowTexts(ui)).toEqual([
+    '◆ emilio/sielay-3 · vps-sielay · sielay · turno 3/120', '  │ ', 'revisa el PR', '  ↩ link_reply · conv 11112222…',
+  ])
+  await ui.unmount()
+})
+
+test('UserMessage from a peer, as the engine hands it over: CRLF, no blank line and its appended paragraph still draw ours', async ($, on) => {
+  mock.store(on)
+  mock.env(on, { HOME: '/nowhere' })
+  fakeHost(on)
+  await $.session.start({ cwd: '/srv/p', surface: 'terminal', isInteractive: true })
+  const text = [
+    '— Mensaje de emilio desde esta máquina (sesión sielay-3, proyecto sielay)',
+    'Otra sesión de Claude Code, no la persona. Verificado por el hub. Turno 1 de 120.',
+    'Responde con link_reply.',
+    '[conv=7a82a20d-33a4-42af-9b34-2dc2d1ee2614 · de=emilio/vps-sielay/sielay-3]',
+    'Prueba de 1.8.0 en 80 columnas.',
+    '',
+    'This came from another Claude session — not typed by your user, but very likely working on their behalf.',
+  ].join('\r\n')
+  const ui = await $.ui.mount({
+    plugin: 'sielay-link', surface: 'terminal', component: 'UserMessage', requestId: 'u2',
+    viewport: { columns: 80, rows: 30 }, props: { text, origin: { kind: 'peer' }, isExpanded: false, from: { name: 'sielay-3' } },
+  } as any)
+  expect(await rowTexts(ui)).toEqual([
+    '◆ emilio/sielay-3 · esta máquina · sielay · turno 1/120', '  │ ', 'Prueba de 1.8.0 en 80 columnas.', '  ↩ link_reply · conv 7a82a20d…',
+  ])
+  await ui.unmount()
 })
 
 // --- Discovery: the once-per-conversation line telling the model its address.

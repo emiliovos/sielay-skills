@@ -11,12 +11,11 @@ import { watchBody } from './link-watch-tool.js'
 import { LINK_TOOL_SPECS, MAX_RECIPIENTS } from './link-tool-specs.js'
 import { ownAddress, selfPrefixOf } from './link-discovery-context.js'
 import { ADDRESS } from './link-tool-address.js'
-import { CODE_MESSAGES, describeHubError, closedConversationNote, noteFor, resultNote } from './link-tool-messages.js'
+import { CODE_MESSAGES, describeHubError, closedConversationNote, sendAnswer, resultLine } from './link-tool-messages.js'
 
 export { describeHubError, closedConversationNote, LINK_TOOL_SPECS }
 
 const MAX_BODY_BYTES = 16 * 1024
-
 
 
 /** @param {unknown} raw @returns {string} the address normalized, or '' */
@@ -71,7 +70,8 @@ function isConvId(id) {
  */
 
 /**
- * A plugin tool's result must be text (or content blocks): the hub's answer goes back as JSON text.
+ * A plugin tool's result must be text (or content blocks): the hub's answer goes back as JSON text
+ * (link_peers, link_watch); link_send and link_reply answer in short lines instead.
  * @param {unknown} value
  * @returns {string}
  */
@@ -134,7 +134,7 @@ export async function runLinkTool(name, input, deps) {
       for (const r of results) {
         if (r?.ok === true && typeof r.conversation_id === 'string' && typeof r.to === 'string') await deps.rememberConversation(r.conversation_id, r.to)
       }
-      return { result: asText({ results: results.map(r => ({ ...r, nota: resultNote(r) })) }) }
+      return { result: results.length > 0 ? results.map(resultLine).join('\n') : 'El hub no devolvió resultados.' }
     }
 
     if (name === 'link_send') {
@@ -157,7 +157,7 @@ export async function runLinkTool(name, input, deps) {
 
     const sent = await deps.client.send(body)
     if (typeof sent?.conversation_id === 'string') await deps.rememberConversation(sent.conversation_id, String(body.to))
-    return { result: asText({ ...sent, nota: noteFor(sent) }) }
+    return { result: sendAnswer(sent, String(body.to)) }
   } catch (err) {
     const e = /** @type {{ code?: string, closedBy?: string, closedReason?: string }} */ (err ?? {})
     if (e.code === 'conversation_closed') return { result: closedConversationNote(e) }

@@ -97,6 +97,17 @@ Para que el modelo las use sin preguntarte cada vez, agrégalas a `permissions.a
 { "permissions": { "allow": ["mcp__sielay-link__link_send", "mcp__sielay-link__link_reply", "mcp__sielay-link__link_peers", "mcp__sielay-link__link_build_stage", "mcp__sielay-link__link_watch"] } }
 ```
 
+## Novedades de la 1.8.0
+
+- **Mensajes legibles en la conversación:** lo que ves de `link_send` y `link_reply` ya no es el JSON de la llamada. La llamada sale como «● link_send → emilio/sielay-2 · vps-sielay» con el texto detrás de una barra atenuada («│ ») y ajustado al ancho de la terminal (máximo 80 columnas), recortado a 3 líneas con «N líneas más · ctrl+o para ver todo». El mensaje que entra de otra sesión sale como «◆ emilio/sielay-3 · vps-sielay · sielay · turno 3/120», el cuerpo detrás de la barra y «↩ link_reply · conv 1a2b3c4d…». Si el renglón no cabe, se recorta el proyecto y luego la máquina, nunca la persona. El plugin tolera lo que el motor agrega alrededor del mensaje (saltos CRLF, su párrafo «This came from another Claude session»). Solo cambia lo que ves tú: el texto que lee el modelo (el encabezado con `conv=`) sigue igual. Con ctrl+o ves el texto completo.
+- **Respuestas cortas de las herramientas:** `link_send` y `link_reply` contestan en texto, por ejemplo `Enviado a emilio/vps-sielay/sielay-2 · turno 1 de 120 · corre solo` y en la línea siguiente `conv=<id completo>`; las variantes son «En la franja de …» y «Retenido para …»; con una señal de entrega desconocida solo dice «Enviado a …» y no afirma nada de la franja. Con varios destinatarios va una línea por destino, con su `conv=`. `link_peers`, `link_watch` y `link_build_stage` siguen en JSON.
+- **Conversación ya cerrada:** ahora dice «Ya cerrada por <persona>/<sesión> · no hace falta responder» y «para seguir, abre otra con link_send». Sigue siendo un resultado, no un error.
+- **Varios builds a la vez:** el plugin guarda todos los builds declarados que no han terminado. `session.build` sigue siendo el más reciente y los demás (máximo 12, los más recientes) viajan en `session.open_builds`, una lista de `build_id`, para que un hub nuevo no los dé por terminados cuando otro build toma el relevo. Un build declarado `done` sale de la lista después de enviarse una vez, y uno sin reporte en 24 h también. Un hub anterior ignora el campo. Decisiones aceptadas: de cada build abierto solo se guarda el id y el momento de su último reporte; un build cerrado en el hub sigue vivo en el plugin hasta 24 h; con el build actual ya enviado como `done` cada poll lleva `build: null`; el ancho de caracteres CJK se cuenta por carácter; y un cuerpo largo queda bajo «N líneas más».
+
+### Detalle técnico: cómo se dibujan las filas
+
+Se usan los `ui.render` de `ToolUse`, `ToolResult` y `UserMessage`. Un árbol devuelto por el hook de `ToolUse` es todo lo que se dibuja de esa fila: así lo describen los tipos del motor («una fila compacta propia se deja pasar con `isExpanded`») y lo confirma la prueba de motor con `mount`, donde el árbol del plugin es lo único que aparece. Lo que esa prueba no puede mostrar es la terminal real: falta ver una vez que la línea `sielay-link - link_send (MCP)(…)` no queda encima. Con `isExpanded` (ctrl+o) el plugin dibuja el texto completo. Si una fila no se puede leer (otra herramienta, un mensaje que no trae el encabezado de sielay-link), el hook la devuelve al motor con `next(e)`. Las funciones de texto (`mod/link-render-text.js`) son puras y reciben el ancho; el árbol se arma en `mod/link-render-rows.jsx`.
+
 ## Novedades de la 1.7.2
 
 - **Qué se entregó y qué quedó:** `retro` de `link_build_stage` acepta `entregado` y `pendientes`, listas de hasta 5 textos de 160 como `bien`, `mal` y `batallo`. Un hub que todavía no los conoce los ignora.
@@ -108,7 +119,7 @@ Para que el modelo las use sin preguntarte cada vez, agrégalas a `permissions.a
 ## Novedades de la 1.7.0
 
 - **Encabezado legible:** la tarjeta de arriba reemplaza el renglón `[sielay-link de=…]`.
-- **Conversación ya cerrada:** responder en una conversación que la otra sesión cerró ya no sale como error. La herramienta contesta «La conversación ya terminó: la cerró <dirección>. No hace falta responder; si quieres seguir, abre otra con link_send.»
+- **Conversación ya cerrada:** responder en una conversación que la otra sesión cerró ya no sale como error. La herramienta contestaba que la conversación ya terminó y que no hacía falta responder (desde la 1.8.0, con el texto más corto de arriba).
 - **Varios destinatarios:** `link_send` acepta `to` como lista de hasta 10 direcciones (sin `conversation`); abre una conversación con cada una y responde un resultado con su nota por destino.
 - **Solo sesiones en línea:** `link_peers` lista por defecto solo las sesiones en línea, de la más activa a la menos; `online_only: false` trae también las desconectadas.
 - **Avisos del hub:** el poll trae `notices` y el plugin los muestra como «Aviso del hub de sielay» (no es una persona ni otra sesión): empezó o terminó el merge de un PR en el repo de la sesión, o terminó el CI de una rama vigilada. La sesión reporta su `repo` (el remoto `origin` de GitHub, leído de `.git/config` sin correr git) y su proyecto (el del archivo `.claude/sielay-link.json` o el nombre de la carpeta).

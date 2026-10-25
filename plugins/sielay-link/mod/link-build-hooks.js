@@ -7,7 +7,7 @@
 // `session.end` (reason `clear`) and put back on the next write if the state
 // came back empty, so a /clear never drops the build.
 
-import { declareBuild, subagentUp, subagentSeen, subagentDown, addUsage, addActiveTime, forgetIfDone, buildReport, pruneExpired } from './link-build-state.js'
+import { declareBuild, subagentUp, subagentSeen, subagentDown, addUsage, addActiveTime, forgetIfDone, buildReport, pruneExpired, openBuildIds } from './link-build-state.js'
 
 // $.state reference: literal plugin/key, declared in each file that uses it.
 const BUILD = /** @type {const} */ ({ plugin: 'sielay-link', key: 'build' })
@@ -101,22 +101,37 @@ export async function carryOnClear($, rt, e) {
 }
 
 /**
- * The `session.build` for this poll, or undefined when there is no build or it
- * fails the hub's rules (then it is not sent, and the field is logged once).
+ * The build fields for this poll: `build` (the current one, or null when it
+ * already went out as done and others remain) and `open_builds` (the other open
+ * ones, newest first). Empty when there is nothing to report or the current
+ * build fails the hub's rules (then it is not sent, and the field is logged once).
  * @param {Engine} $ @param {BuildRuntime} rt
- * @returns {Promise<Record<string, unknown>|undefined>}
+ * @returns {Promise<{ build?: Record<string, unknown>|null, open_builds?: string[] }>}
  */
-export async function pollBuild($, rt) {
+export async function pollBuildFields($, rt) {
   const { state, now } = await update($, rt, (s, at) => pruneExpired(s, at))
-  if (!state) return undefined
+  if (!state) return {}
+  const ids = openBuildIds(state, now)
+  const open = ids.length > 0 ? { open_builds: ids } : {}
+  if (state.closed) return { build: null, ...open }
   const report = buildReport(state, now)
   if (report.error !== undefined) {
     if (rt.buildError !== report.error) $.ui.log(`sielay-link: build no enviado, campo inválido: ${report.error}`)
     rt.buildError = report.error
-    return undefined
+    return {}
   }
   rt.buildError = null
-  return report.build ?? undefined
+  return report.build ? { build: report.build, ...open } : {}
+}
+
+/**
+ * The `session.build` for this poll, or undefined when there is no build or it
+ * fails the hub's rules.
+ * @param {Engine} $ @param {BuildRuntime} rt
+ * @returns {Promise<Record<string, unknown>|undefined>}
+ */
+export async function pollBuild($, rt) {
+  return (await pollBuildFields($, rt)).build ?? undefined
 }
 
 /**
