@@ -180,10 +180,10 @@ export function register(on, options) {
     return entered
   }).catch(passThrough)
 
-  on('tool.call', { tool: 'mcp__sielay-link__link_send' }, ($, e) => callTool($, rt, 'link_send', e)).catch(toolFailed)
-  on('tool.call', { tool: 'mcp__sielay-link__link_reply' }, ($, e) => callTool($, rt, 'link_reply', e)).catch(toolFailed)
-  on('tool.call', { tool: 'mcp__sielay-link__link_peers' }, ($, e) => callTool($, rt, 'link_peers', e)).catch(toolFailed)
-  on('tool.call', { tool: 'mcp__sielay-link__link_build_stage' }, ($, e) => callTool($, rt, 'link_build_stage', e)).catch(toolFailed)
+  // One answer per registered tool, so a tool can never be listed without a hook behind it.
+  for (const { name } of LINK_TOOL_SPECS) {
+    on('tool.call', { tool: `mcp__sielay-link__${name}` }, ($, e) => callTool($, rt, name, e)).catch(toolFailed)
+  }
 
   on('command.run', { command: 'link' }, async ($, e) => runLinkCommand($, rt, e.args, e.origin))
 
