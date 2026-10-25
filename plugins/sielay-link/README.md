@@ -80,6 +80,7 @@ Si otra carpeta ya usa ese nombre y está en línea, el hub te asigna `nombre-2`
 | `/link` | Estado: hub, dirección, modo y si está fresco, adaptador y mensajes en franja. Abre el panel |
 | `/link name <x>` | Fija el nombre de la sesión para esta carpeta |
 | `/link off` / `on` | Apaga o enciende la recepción en esta sesión. `SIELAY_LINK_OFF=1 claude` lo apaga del todo, sin herramientas |
+| `SIELAY_LINK_MINIMAL=1` | Modo mínimo: solo `link_send`, `link_reply` y `link_peers`, sin la línea de descubrimiento (ver «Novedades de la 1.9.0») |
 | `/link peers` | Tu dirección y las sesiones con las que puedes hablar (solo pares) |
 | `/link pair <slot>` | Empareja la máquina |
 | `/link show <id>` | Abre en el panel el mensaje completo de la franja con ese id |
@@ -96,6 +97,13 @@ Para que el modelo las use sin preguntarte cada vez, agrégalas a `permissions.a
 ```json
 { "permissions": { "allow": ["mcp__sielay-link__link_send", "mcp__sielay-link__link_reply", "mcp__sielay-link__link_peers", "mcp__sielay-link__link_build_stage", "mcp__sielay-link__link_watch"] } }
 ```
+
+## Novedades de la 1.9.0
+
+- **Modo mínimo:** con `SIELAY_LINK_MINIMAL=1` la sesión solo registra `link_send`, `link_reply` y `link_peers`, y nunca recibe la línea «[sielay-link] Esta sesión está conectada…». Quedan fuera `link_build_stage` y `link_watch`, que son unas tres cuartas partes de los esquemas que el modelo carga en cada request. Sirve para un equipo que no usa `/si:build-auto` y solo quiere mensajes entre máquinas. Recibir no cambia: el poll sigue en el proceso del plugin, sin tokens, y un mensaje que llega despierta al modelo como siempre. Los avisos del hub tampoco cambian.
+- **Cómo activarlo:** para un proyecto, en su `.claude/settings.json`: `{ "env": { "SIELAY_LINK_MINIMAL": "1" } }`. Para toda la máquina, la misma línea en `~/.claude/settings.json`. Para una sola sesión: `SIELAY_LINK_MINIMAL=1 claude`. Toma efecto en la siguiente sesión que abras.
+- **El MCP `sielay` va aparte:** el plugin también trae el servidor MCP `sielay` (archivos, COMMS y herramientas de admin). La variable no lo toca. Si no lo usas, apágalo una vez en `/mcp` (elige `sielay` → Disable).
+- Sin la variable todo sigue igual que en la 1.8.2.
 
 ## Novedades de la 1.8.2
 

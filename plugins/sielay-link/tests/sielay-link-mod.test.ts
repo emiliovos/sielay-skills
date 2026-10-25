@@ -160,6 +160,33 @@ test('SIELAY_LINK_OFF=1: no tools, no polling', { options: { link_token: 'test-t
   expect(sent.length).toBe(0)
 })
 
+test('without SIELAY_LINK_MINIMAL every tool is registered', { options: { link_token: 'test-token' } }, async ($, on) => {
+  mock.clock(on, { now: 1 })
+  mock.store(on)
+  mock.env(on, { HOME: '/nowhere' })
+  const { tools: registered } = fakeHost(on)
+  fakeHub(on, () => ({ session: { id: 's' }, messages: [], strip: [], poll_after_ms: 60_000 }))
+  await $.session.start({ cwd: '/srv/p', surface: 'terminal', isInteractive: true })
+  expect(registered).toEqual(['link_send', 'link_reply', 'link_peers', 'link_build_stage', 'link_watch'])
+})
+
+test('SIELAY_LINK_MINIMAL=1: only the message tools, no discovery line, and it still polls', { options: { link_token: 'test-token' } }, async ($, on) => {
+  const clock = mock.clock(on, { now: 1 })
+  mock.store(on)
+  mock.env(on, { HOME: '/nowhere', SIELAY_LINK_MINIMAL: '1' })
+  const { tools: registered } = fakeHost(on)
+  const seen: any[] = []
+  on('prompt.submit', ($: any, e: any) => (seen.push(e), { text: e.text, context: e.context }))
+  const sent = fakeHub(on, path => (path === '/api/link/poll' ? { session: { id: 's', address: 'eva/box/p' }, messages: [], strip: [], poll_after_ms: 60_000 } : {}))
+  await $.session.start({ cwd: '/srv/p', surface: 'terminal', isInteractive: true })
+  await clock.advance(10)
+  await clock.settle()
+  await $.prompt.submit({ text: 'hola' } as any)
+  expect(registered).toEqual(['link_send', 'link_reply', 'link_peers'])
+  expect(seen.map(e => e.context ?? null)).toEqual([null])
+  expect(sent.some(s => s.url.endsWith('/api/link/poll'))).toBe(true)
+})
+
 test('link_send with a token answers text the model can read, and posts the contract body', { options: { link_token: 'test-token' } }, async ($, on) => {
   mock.clock(on, { now: 2_000_000 })
   mock.store(on)
