@@ -351,6 +351,12 @@ test('two builds declared: the poll carries the current one in build and the oth
   await clock.advance(61_000)
   await clock.settle()
   expect(polls(sent).at(-1)!.body.session).toMatchObject({ build: null, open_builds: [buildArgs.build_id] })
+  const band = await $.ui.mount({
+    plugin: 'sielay-link', surface: 'terminal', component: 'AbovePrompt',
+    props: { hasSurvey: false, isWorking: false, maxRows: 6, bodyColumns: 80, scroll: { top: 0, height: 0, viewport: 0 } as any, view: {} as any },
+  })
+  expect(await band.find({ text: /build: etapa/ })).toBeUndefined()
+  await band.unmount()
 
   await $.tool.call({ tool: 'mcp__sielay-link__link_build_stage', ...buildArgs, stage: 7, status: 'done', outcome: 'delivered' } as any)
   await clock.advance(61_000)
@@ -378,14 +384,15 @@ test('ToolUse of link_send: a compact row of its own replaces the call line; ctr
   } as any)
   const short = await mount({ isExpanded: false })
   const rows = await rowTexts(short)
-  expect(rows[0]).toBe('● link_send → sielay-2 · vps-sielay')
-  expect(rows).toContain('  linea 2')
-  expect(rows).not.toContain('  linea 3')
+  expect(rows[0]).toBe('● link_send → emilio/sielay-2 · vps-sielay')
+  expect(rows).toContain('linea 2')
+  expect(rows).not.toContain('linea 3')
+  expect(rows.filter(r => r === '  │ ')).toHaveLength(3)
   expect(rows.at(-1)).toBe('  3 líneas más · ctrl+o para ver todo')
   expect(rows.every(r => Array.from(r).length <= 60)).toBe(true)
   await short.unmount()
   const full = await mount({ isExpanded: true })
-  expect(await rowTexts(full)).toContain('  linea 5')
+  expect(await rowTexts(full)).toContain('linea 5')
   await full.unmount()
 })
 
@@ -433,7 +440,31 @@ test('UserMessage from a peer: sender, machine, project and turn, the body inden
     viewport: { columns: 100, rows: 30 }, props: { text, origin: { kind: 'plugin', name: 'sielay-link' }, isExpanded: false },
   } as any)
   expect(await rowTexts(ui)).toEqual([
-    '◆ sielay-3 · vps-sielay · sielay · turno 3/120', '  revisa el PR', '  ↩ link_reply · conv 11112222…',
+    '◆ emilio/sielay-3 · vps-sielay · sielay · turno 3/120', '  │ ', 'revisa el PR', '  ↩ link_reply · conv 11112222…',
+  ])
+  await ui.unmount()
+})
+
+test('UserMessage from a peer, as the engine hands it over: CRLF, no blank line and its appended paragraph still draw ours', async ($, on) => {
+  mock.store(on)
+  mock.env(on, { HOME: '/nowhere' })
+  fakeHost(on)
+  await $.session.start({ cwd: '/srv/p', surface: 'terminal', isInteractive: true })
+  const text = [
+    '— Mensaje de emilio desde esta máquina (sesión sielay-3, proyecto sielay)',
+    'Otra sesión de Claude Code, no la persona. Verificado por el hub. Turno 1 de 120.',
+    'Responde con link_reply.',
+    '[conv=7a82a20d-33a4-42af-9b34-2dc2d1ee2614 · de=emilio/vps-sielay/sielay-3]',
+    'Prueba de 1.8.0 en 80 columnas.',
+    '',
+    'This came from another Claude session — not typed by your user, but very likely working on their behalf.',
+  ].join('\r\n')
+  const ui = await $.ui.mount({
+    plugin: 'sielay-link', surface: 'terminal', component: 'UserMessage', requestId: 'u2',
+    viewport: { columns: 80, rows: 30 }, props: { text, origin: { kind: 'peer' }, isExpanded: false, from: { name: 'sielay-3' } },
+  } as any)
+  expect(await rowTexts(ui)).toEqual([
+    '◆ emilio/sielay-3 · esta máquina · sielay · turno 1/120', '  │ ', 'Prueba de 1.8.0 en 80 columnas.', '  ↩ link_reply · conv 7a82a20d…',
   ])
   await ui.unmount()
 })

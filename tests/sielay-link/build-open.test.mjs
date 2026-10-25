@@ -2,7 +2,7 @@
 // `build`, the others as `open_builds`, until done or 24 h without a report.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { declareBuild, forgetIfDone, openBuildIds, pruneExpired } from '../../plugins/sielay-link/mod/link-build-state.js'
+import { declareBuild, forgetIfDone, openBuildIds, pruneExpired, subagentUp, addUsage, addActiveTime } from '../../plugins/sielay-link/mod/link-build-state.js'
 import { OPEN_BUILD_EXPIRY_MS, OPEN_BUILDS_MAX } from '../../plugins/sielay-link/mod/link-build-open.js'
 
 const T0 = Date.parse('2026-10-25T12:00:00Z')
@@ -59,4 +59,12 @@ test('at most 12 others ride, the newest first', () => {
   assert.equal(ids.length, OPEN_BUILDS_MAX)
   assert.equal(ids[0], 'repo-build-13')
   assert.equal(ids.includes('repo-build-14'), false)
+})
+
+test('a closed shell ignores subagents, usage and active time', () => {
+  const b = declareBuild(declareBuild(null, decl('repo-a-one'), T0), decl('repo-b-two'), T0 + 1)
+  const shell = forgetIfDone(declareBuild(b, { ...decl('repo-b-two'), status: 'done' }, T0 + 2), { build_id: 'repo-b-two', status: 'done' })
+  assert.equal(subagentUp(shell, { id: 'a1' }, T0 + 3), shell)
+  assert.equal(addUsage(shell, { input_tokens: 5 }, true), shell)
+  assert.equal(addActiveTime(shell, 5000), shell)
 })

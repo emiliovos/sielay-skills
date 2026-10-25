@@ -69,11 +69,12 @@ export function oneLine(text, max) {
 }
 
 /**
- * The build line, or null without a build: "build: etapa 4/7 · implementar",
+ * The build line, or null without a build (or once it went out as done): "build: etapa 4/7 · implementar",
  * plus the status when it is not running.
  * @param {import('../types/index.js').LinkBuildState | null} build
  */
 export function buildLine(build) {
+  if (build?.closed) return null
   const stage = build?.declared.stage
   if (typeof stage !== 'number' || !Number.isInteger(stage) || stage < 1 || stage > BUILD_STAGES.length) return null
   const status = build?.declared.status

@@ -78,7 +78,7 @@ export function declareBuild(state, input, now) {
  * @returns {BuildState|null}
  */
 export function subagentUp(state, sub, now) {
-  if (!state || typeof sub.id !== 'string' || sub.id === '') return state
+  if (!state || state.closed || typeof sub.id !== 'string' || sub.id === '') return state
   const base = pruneExpired(state, now) ?? state
   const old = base.subagents[sub.id]
   /** @type {Subagent} */
@@ -133,7 +133,7 @@ export function pruneExpired(state, now) {
  * @returns {BuildState|null}
  */
 export function addUsage(state, usage, isMain) {
-  if (!state || !isObj(usage)) return state
+  if (!state || state.closed || !isObj(usage)) return state
   /** @param {unknown} n */
   const count = n => (typeof n === 'number' && Number.isFinite(n) && n > 0 ? Math.floor(n) : 0)
   const prev = state.usage ?? { ...ZERO_USAGE }
@@ -155,7 +155,7 @@ export function addUsage(state, usage, isMain) {
  * @returns {BuildState|null}
  */
 export function addActiveTime(state, durationMs) {
-  if (!state || typeof durationMs !== 'number' || !Number.isFinite(durationMs) || durationMs < 1) return state
+  if (!state || state.closed || typeof durationMs !== 'number' || !Number.isFinite(durationMs) || durationMs < 1) return state
   const prev = state.usage ?? { ...ZERO_USAGE }
   const active = Math.min(Number.MAX_SAFE_INTEGER, (prev.active_ms ?? 0) + Math.floor(durationMs))
   return { ...state, usage: { ...prev, active_ms: active } }

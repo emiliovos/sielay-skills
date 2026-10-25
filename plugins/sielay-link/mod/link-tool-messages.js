@@ -60,7 +60,8 @@ const CLOSED_REASONS = Object.freeze({ idle: 'por inactividad', admin: 'por un a
  * @returns {string}
  */
 export function closedConversationNote(e) {
-  const by = typeof e.closedBy === 'string' && ADDRESS.test(e.closedBy) ? e.closedBy.split('/')[2] : undefined
+  const parts = typeof e.closedBy === 'string' && ADDRESS.test(e.closedBy) ? e.closedBy.split('/') : undefined
+  const by = parts ? `${parts[0]}/${parts[2]}` : undefined
   const reason = e.closedReason && Object.hasOwn(CLOSED_REASONS, e.closedReason)
     ? CLOSED_REASONS[/** @type {keyof typeof CLOSED_REASONS} */ (e.closedReason)]
     : undefined
@@ -70,7 +71,7 @@ export function closedConversationNote(e) {
 
 /**
  * The first line of a send's answer: where it went, which turn of how many,
- * and what happens next (it runs by itself, waits for a person, or is held).
+ * and what happens next (it runs by itself, waits for a person, or is held; an unknown gate claims nothing).
  * @param {{ gate?: string, turn?: unknown, turns_left?: unknown }} sent @param {string} to the destination address
  * @returns {string}
  */
@@ -79,7 +80,8 @@ export function sentLine(sent, to) {
   const turns = Number.isInteger(turn) && Number.isInteger(left) ? ` · turno ${turn} de ${Number(turn) + Number(left)}` : ''
   if (sent.gate === 'held') return `Retenido para ${to}${turns} · espera que un admin lo libere`
   if (sent.gate === 'auto') return `Enviado a ${to}${turns} · corre solo`
-  return `En la franja de ${to}${turns} · espera que una persona lo acepte`
+  if (sent.gate === 'strip') return `En la franja de ${to}${turns} · espera que una persona lo acepte`
+  return `Enviado a ${to}${turns}`
 }
 
 /**

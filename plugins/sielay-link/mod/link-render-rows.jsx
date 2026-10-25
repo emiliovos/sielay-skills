@@ -24,7 +24,14 @@ function tree($, e, lines) {
   return (
     <Box flexDirection="column">
       {lines.map(l => (
-        <Text dimColor={l.dim} color={l.color}>{l.text}</Text>
+        l.bar ? (
+          <Box>
+            <Text dimColor>{'  │ '}</Text>
+            <Text>{l.text}</Text>
+          </Box>
+        ) : (
+          <Text dimColor={l.dim} color={l.color}>{l.text}</Text>
+        )
       ))}
     </Box>
   )
