@@ -139,7 +139,7 @@ test('active time: an aborted turn (duration, no usage) still counts; a new buil
 
 test('report: a too-big build sheds descriptions, then the oldest subagents, and still goes', () => {
   let s = declareBuild(null, { ...min, summary: 's'.repeat(600), links: Array.from({ length: 10 }, (_, i) => ({ label: 'l'.repeat(80), href: `p/${i}/` + 'x'.repeat(200) })) }, T0)
-  for (let i = 0; i < 50; i++) s = subagentUp(s, { id: `agent-${String(i).padStart(2, '0')}`, type: 't'.repeat(70), description: 'd'.repeat(160) }, T0 + i)
+  for (let i = 0; i < 50; i++) s = subagentUp(s, { id: `agent-${String(i).padStart(2, '0')}`, type: '€'.repeat(70), description: 'd'.repeat(160) }, T0 + i)
   const r = buildReport(s, T0 + 100)
   assert.equal(r.error, undefined)
   assert.ok(r.build.subagents.length < 50 && r.build.subagents.length > 0)
