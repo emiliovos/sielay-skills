@@ -12,7 +12,7 @@ La garantía va en la entrega, no en cada push, y el deploy solo comprueba un se
 Además: **un solo lock de suite por host**, tomado por los propios scripts (dos suites a la vez en pocos núcleos se vuelven inestables), y una **corrida nocturna de la suite completa** que cubre lo que el selector o los carriles dejan pasar.
 
 ## Variante `rama+PR`
-- Con rama de integración, la entrega es **un** PR `build/<slug>` → rama principal; los carriles no pasan por el script de merge, solo por su CI y su revisión.
+- Con rama de integración, la entrega es **un** PR `build/<slug>` → rama principal y **un** solo merge-pr por build; los carriles no pasan por el script de merge, solo por su CI y su revisión. Si el repo tiene cola de merge, el build entra con una sola entrada (`--enqueue` o el equivalente que el repo declare).
 - La entrega es un script de merge que corre, sobre la mezcla de la rama principal con el PR, lo que elige el selector (nada, afectadas o completa). Si el repo lo tiene, también con el **reloj adelantado** (por ejemplo +1 y +30 días). Si pasa, mergea y sella el SHA del merge commit.
 - Se lanza en segundo plano desde un **runner limpio**: un worktree aparte, al día con la rama principal antes de cada merge.
 - **El merge usa el head que está en el remoto.** Si falló el push del rebase, se mergea el head anterior: confirma que el push llegó antes de lanzar el merge.
@@ -26,7 +26,7 @@ Además: **un solo lock de suite por host**, tomado por los propios scripts (dos
 
 ## Variante CI remoto
 Cuando la ficha dice que las pruebas corren en CI remoto (un workflow en runners de otra máquina, y un comando de merge que reusa su corrida verde):
-- La verificación de cada carril es la corrida del workflow sobre su push (`gh run watch`, o `gh pr checks <N> --watch` si ya hay PR). No corras suites locales para verificar: duplican la carga y no cuentan para la entrega.
+- La verificación de cada carril es la corrida del workflow sobre su push. Espera como dice `ejecucion-autonoma.md` («Esperar la CI»): `link_watch` si existe, si no `gh pr checks <N> --watch --fail-fast` en segundo plano; nunca Monitor ni bucles `gh … --json | jq`. Verde es la corrida de `pull_request`, no la de `push`. No corras suites locales para verificar: duplican la carga y no cuentan para la entrega.
 - La rama de integración se empuja y su corrida es la que reusa el merge del PR final. Si la rama principal se movió y el merge ya no puede reusarla, rebasa una vez, empuja y espera la corrida nueva; no la fuerces localmente salvo que el repo lo prevea.
 - Si los runners quedan fuera de línea a media corrida, el build vuelve a concurrencia local (2) y sigue con la compuerta local del repo; dilo en una línea.
 - Un rojo del workflow sobre el mismo árbol bloquea la entrega igual que un rojo local.
