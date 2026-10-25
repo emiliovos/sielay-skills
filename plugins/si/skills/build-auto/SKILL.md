@@ -1,9 +1,9 @@
 ---
 name: build-auto
-description: "Lleva un proyecto de la idea a merge o a producción con un flujo de 8 etapas (Frame → Evidencia → Plan → Implementar → Verificar → Revisar → Entregar → Cierre): tú apruebas el rumbo y después la evidencia junto con el plan; luego los agentes implementan en carriles paralelos, prueban, revisan y entregan solos, siempre por la compuerta de pruebas del repo, y al final queda una retro con cifras que alimenta el siguiente build. Descubre del repo cómo prueba, entrega y despliega (CLAUDE.md, README, hooks, scripts) y solo pregunta lo que falte. Usa AgentKit (/ak:*) si está instalado y, si no, subagentes que producen los mismos artefactos. Actívalo cuando el usuario diga '/build-auto' o pida explícitamente llevar un proyecto en modo autónomo hasta merge o producción. Produce: contrato aprobado, plan con carriles y contrato congelado, un PR de integración o pushes revisados, evidencia de cada criterio, un reporte final y la retro."
+description: "Lleva un proyecto de la idea a merge o a producción con un flujo de 8 etapas (Frame → Evidencia → Plan → Implementar → Verificar → Revisar → Entregar → Cierre): tú apruebas el rumbo y después la evidencia junto con el plan; luego los agentes implementan en carriles paralelos, prueban, revisan y entregan solos, siempre por la compuerta de pruebas del repo, y al final queda una retro con cifras que alimenta el siguiente build. Con `--fix` corre el flujo corto de arreglo (Síntoma → Causa probada → Arreglo con prueba de regresión → Verificar → Revisar → Entregar) con una sola aprobación, la del diagnóstico. Descubre del repo cómo prueba, entrega y despliega (CLAUDE.md, README, hooks, scripts) y solo pregunta lo que falte. Usa AgentKit (/ak:*) si está instalado y, si no, subagentes que producen los mismos artefactos. Actívalo cuando el usuario diga '/build-auto' o pida explícitamente llevar un proyecto en modo autónomo hasta merge o producción. También ante un bug, una alerta, una prueba en rojo, una regresión o un «arregla X», aunque sea corto: propone `--fix`. Produce: contrato aprobado, plan con carriles y contrato congelado, un PR de integración o pushes revisados, evidencia de cada criterio, un reporte final y la retro."
 user-invocable: true
 when_to_use: "Invoke al arrancar trabajo de varias etapas en un repo (feature, integración, refactor grande) cuando el usuario quiere aprobar solo el rumbo y dejar que los agentes ejecuten hasta un alcance acordado (merge a la rama principal o producción). Sirve para repos con PRs y compuerta de merge y para repos que empujan directo a main y publican en el mismo servidor. No para un cambio de una línea ni para preguntas sueltas."
-argument-hint: "\"<objetivo>\" [--alcance merge|produccion] [--chico] [--pausas] [--terminales [N]] [--checkpoint]"
+argument-hint: "\"<objetivo>\" [--alcance merge|produccion] [--chico] [--fix] [--pausas] [--terminales [N]] [--checkpoint]"
 keywords: [autonomo, backbone, agentkit, plan, paralelo, terminales, compuerta, pruebas, deploy, red-team, workflow]
 metadata:
   category: workflow
@@ -11,7 +11,7 @@ metadata:
   deps: "git en el repo destino. Recomendado: AgentKit (skills /ak:*); sin él, cada etapa se hace con subagentes nativos. Opcional: /si:checkpoint para el cierre (--checkpoint) y red a context7.com (o su MCP) para consultar la doc de dependencias en las etapas 2 y 3."
   installs: []
   risk: none
-  version: "2.2.0"
+  version: "2.3.0"
 ---
 
 # Build-auto: backbone de proyecto autónomo
@@ -28,8 +28,9 @@ Tú (el agente) coordinas un proyecto completo en **8 etapas**. El usuario aprue
 | `"<objetivo>"` | Qué quiere el usuario y cómo se ve terminado. Si falta, es la primera pregunta del Frame. |
 | `--alcance merge\|produccion` | Hasta dónde llega la autonomía. `merge` = el cambio queda en la rama principal por la compuerta (merge del PR, o en `main directo` el push a main) y **no se publica**. `produccion` = además se publica. Sin el flag, se pregunta en el Frame; `produccion` nunca se asume. |
 | `--chico` | Variante corta **sin la etapa de Evidencia** (dos aprobaciones: Frame y plan): plan rápido (`/ak:plan --fast`; en modo nativo, un `planner` con plan de una o dos fases), sin red team ni paralelo, y `/ak:cook --auto` (o un `fullstack-developer`). |
+| `--fix` | Flujo de **arreglo** para un bug, una alerta, una prueba en rojo o una regresión, aunque sea corto. Seis etapas reales: 1 Síntoma, 2 Causa, 4 Arreglo, 5 Verificar, 6 Revisar y 7 Entregar; no hay Plan (etapa 3). **Una sola aprobación**: el diagnóstico (síntoma + causa + arreglo propuesto) al cerrar la etapa 2. Detalle en «Flujo `--fix`». Incompatible con `--terminales`: ese flag se ignora, y se dice en el Frame. |
 | `--pausas` | Vuelve a **tres aprobaciones** (Frame, Evidencia y Plan por separado). Sin el flag, la Evidencia y el Plan se presentan juntos en una sola aprobación. |
-| `--terminales [N]` | Apagado por defecto. Además de subagentes, reparte carriles a **otras sesiones de Claude Code** en la misma máquina: reusa sesiones `idle` y abre nuevas, hasta N (3 si no se da). Necesita mensajes entre sesiones y tmux; si faltan, se dice en la ficha y todo va a subagentes. Con `--chico` se ignora, y se dice en el Frame. Detalle en `references/terminales.md`. |
+| `--terminales [N]` | Apagado por defecto. Además de subagentes, reparte carriles a **otras sesiones de Claude Code** en la misma máquina: reusa sesiones `idle` y abre nuevas, hasta N (3 si no se da). Necesita mensajes entre sesiones y tmux; si faltan, se dice en la ficha y todo va a subagentes. Con `--chico` o `--fix` se ignora, y se dice en el Frame. Detalle en `references/terminales.md`. |
 | `--checkpoint` | Al cerrar, invoca `/si:checkpoint`. Sin el flag, solo se sugiere. |
 
 ## Paso 0: ficha del proyecto (descubrir, no preguntar)
@@ -81,7 +82,7 @@ Debajo de la ficha, en una lista de **hallazgos**, anota:
 
 Los reportes y planes van donde el repo los guarde. Si no declara un lugar, usa `plans/` (créalo) y dilo en la ficha. Salvo que el repo diga otra cosa, se commitean con la entrega: en `rama+PR`, dentro del mismo PR; en `main directo`, en un commit `docs:` aparte.
 
-Si el objetivo cabe en uno o dos archivos y no tiene carriles paralelos, sugiere `--chico` en el Frame.
+**Elegir el flujo.** Si el pedido es arreglar algo que ya existe (un bug, una alerta, una prueba en rojo, una regresión, «arregla X»), aunque sea corto, el Frame propone `--fix` y lo dice en una línea ("Propongo `--fix`: es un arreglo y queda registrado por etapas"); la persona lo cambia si quiere. `--chico` es para features chicas: si el objetivo cabe en uno o dos archivos y no tiene carriles paralelos, sugiere `--chico`. Con un `--fix` o `--chico` ya dado, no lo discutas.
 
 ## Contrato entre etapas
 Cada etapa recibe y deja este contrato compacto: **Goal · Scope y no-goals · Evidencia y decisiones · Artefactos · Criterios de aceptación · Riesgos abiertos · Estimado · Autoridad concedida.**
@@ -91,7 +92,7 @@ Los criterios de aceptación se escriben como JSON, `[{"id": "c1", "criterio": "
 **Estimado** = horas de **reloj** con carriles en paralelo, no la suma de las fases: la ruta crítica es el carril más largo, más la integración, el merge final y el deploy. Si la suma difiere, muestra las dos cifras: "reloj 3,5 h (suma 9 h): backend+migración 2 h ∥ menú y config 1 h ∥ vistas 1,5 h → integración y e2e 0,75 h → merge 0,25 h → deploy 0,5 h; supuesto: la CI remota está en línea". Si hay builds cerrados del mismo `kind` con estimado y real (los lee `builds_status`, o los del repo), multiplica el estimado por su razón real/estimado y dilo en una línea: "ajustado ×1,4 por 3 builds ui". En el Frame va grueso; en el Plan va por carril y es el **programado** que se aprueba. Si después se mueve, se reestima con un motivo (ver `references/reporte-sielay.md`); reestimar no es una enmienda.
 
 ## Reporte a sielay
-Si la sesión tiene la herramienta `link_build_stage` (plugin `sielay-link`), lee `references/reporte-sielay.md` antes del Frame (pide sielay-link 1.7.0 o posterior) y reporta en sus momentos: entrada a cada etapa, aprobaciones, cierre de cada carril, entrega, cada espera (`waiting`) y el fin con `outcome` y `retro`. Al cerrar cada etapa va un `summary` de 1 a 3 frases, y el Estimado va como `estimate` en los gates del Frame y del Plan y en cada reestimación. El `build_id` es `<repo>-<carpeta-del-plan>` (con `-r2`, `-r3`… en una corrida nueva sobre la misma carpeta). Si la herramienta no existe o no reporta, la skill sigue igual, sin error ni pregunta.
+Si la sesión tiene la herramienta `link_build_stage` (plugin `sielay-link`), lee `references/reporte-sielay.md` antes del Frame (pide sielay-link 1.7.0 o posterior; `flow`, `stage_detail`, `live` y `delivery.merge_queue`/`deploy` piden 1.8.2) y reporta en sus momentos: el `flow` en el arranque, entrada a cada etapa, la evidencia de cada etapa al cerrarla (`stage_detail`), el estado en vivo de las esperas largas (`live`), aprobaciones, cierre de cada carril, entrega, cada espera (`waiting`) y el fin con `outcome` y `retro`. Al cerrar cada etapa va un `summary` de 1 a 3 frases, y el Estimado va como `estimate` en los gates del Frame y del Plan y en cada reestimación. El `build_id` es `<repo>-<carpeta-del-plan>` (con `-r2`, `-r3`… en una corrida nueva sobre la misma carpeta). Si la herramienta no existe o no reporta, la skill sigue igual, sin error ni pregunta.
 
 ## Presupuesto de contexto
 El costo de un build crece con el tamaño del contexto por el número de turnos. Reglas por defecto:
@@ -128,6 +129,24 @@ El costo de un build crece con el tamaño del contexto por el número de turnos.
 - **Una ruta por etapa**, en este orden: si el repo fija su propio comando o skill para la etapa, se usa ese; si no, y las skills `/ak:*` de esa etapa aparecen en el catálogo de la sesión, se usa la de la tabla; si falta alguna, la etapa entera va en modo nativo (dilo en la ficha). Nunca mezcles dos rutas en una misma etapa.
 - **Modo nativo:** si no hay skills `/ak:*`, dilo en el Frame en una línea y haz cada etapa con subagentes que dejen los **mismos artefactos** (reportes, `plan.md`, `contracts.md`, fases). Si no hay subagentes con esos nombres, usa los de propósito general con el mismo encargo. Si un subagente no puede escribir (es de solo lectura, como `Explore`, o el entorno se lo impide), que devuelva el contenido en su respuesta y tú guardas el artefacto en su ruta.
 - Flags verificados contra AgentKit stable 2.19.0. Si un flag no existe en la versión instalada, revisa la ayuda de esa skill, usa el equivalente y repórtalo; no inventes uno.
+
+## Flujo `--fix`
+Para arreglar algo que ya existe. Reglas del Frame, la ficha y la precedencia iguales; cambian las etapas y la aprobación. El Frame (etapa 1) se vuelve **Síntoma** y no lleva gate propio: el estimado y la autoridad (alcance, comando de entrega) van en la tarjeta de diagnóstico.
+| # | Etapa | Con AgentKit | Modo nativo | Gate |
+|---|---|---|---|---|
+| 1 | Síntoma | tú: qué falla, cómo se reproduce y el alcance (qué entra y qué no) | igual | Autónomo |
+| 2 | Causa | `/ak:debug` | subagente `debugger` | **Aprobación única** del diagnóstico |
+| 4 | Arreglo | `/ak:fix`, con prueba de regresión | `fullstack-developer` | Autónomo |
+| 5 | Verificar | como la etapa 5 de las 8: la prueba de regresión y la compuerta del repo | igual | Autónomo |
+| 6 | Revisar | revisor fresco, con la profundidad del riesgo | `code-reviewer` | Autónomo; Critical/High se arreglan antes de entregar |
+| 7 | Entregar | el comando de entrega de la ficha | igual | Autónomo hasta el alcance |
+- **Causa probada antes de tocar código.** Lista de hipótesis (config, payload, estado de los datos, entorno) con una verificación por cada una; se corren y la causa queda confirmada con su evidencia. Si no queda probada, **para y reporta** lo descartado y lo que falta.
+- **Diagnóstico = la aprobación.** Se presenta en una tarjeta: síntoma y cómo reproducirlo, causa probada con su evidencia (archivo:línea), arreglo propuesto con los archivos que toca, la prueba de regresión, el riesgo, el alcance de entrega y el estimado. Es el gate de la etapa 2 y lo único que se aprueba; aprueba también la autoridad de la tarjeta, nunca más de lo que dice.
+- **Prueba de regresión** que falla sin el arreglo: se corre sin él (o se razona por qué falla) y se anota. Sin ella el criterio no pasa.
+- **Si el arreglo crece fuera de lo diagnosticado** (otro módulo, una migración, un archivo fuera de lo propuesto), para y pregunta antes de seguir.
+- **Un carril, sin paralelo ni red team.** Un PR (o push por la compuerta) por arreglo. Riesgo alto (datos, auth, compuerta, deploy) sube la profundidad de la revisión.
+- Se mantienen las "Reglas que nunca se rompen", la compuerta de pruebas y, con `produccion`, la receta de deploy. El cierre (etapa 8) es el de siempre, con retro corta.
+- Reporte a sielay con `flow: "fix"`: las etapas se reportan con su número real (1, 2, 4, 5, 6, 7), sin pasar por la 3.
 
 ## Etapa 3 por dentro: un plan listo para correr solo
 Plan en `plans/{fecha}-{slug}/` (o donde el repo guarde sus planes) con `plan.md`, `contracts.md` y `phase-NN-*.md` (un archivo por carril; la fase 0 es el spike, si hay).
@@ -170,6 +189,7 @@ Reglas que nunca se rompen:
 - Si tras el tope de revisión queda algún Critical/High, no entregues: para y reporta.
 - Cada agente detiene solo sus procesos y no toca la config de Claude Code ni sesiones ajenas. Con `--terminales`, el coordinador solo opera las sesiones que el reparto le asigna, como dice `references/terminales.md`.
 - Si una tarea parece cruzar un guardarraíl del repo: para y pregunta.
+- Con `--fix` valen todas las anteriores; el cambio que crece fuera del diagnóstico aprobado cuenta como cruzar el alcance.
 
 ## Etapa 8: Cierre
 Lee `references/cierre-y-retro.md`: `retro.yaml`, marcador y reporte. Después:

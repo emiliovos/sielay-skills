@@ -5,6 +5,8 @@ Si la sesión tiene la herramienta `link_build_stage` (la publica el plugin `sie
 ## Versión mínima
 Sielay-link 1.7.0. Con esa versión el estimado (en el Frame y el Plan) y la retro (al cerrar) son obligatorios en cada build, no opcionales. Si la ficha muestra una versión anterior, dilo en una línea.
 
+Los campos `flow`, `stage_detail`, `live` y `delivery.merge_queue`/`delivery.deploy` piden sielay-link 1.8.2. Con una versión anterior el plugin puede rechazarlos: repite la llamada sin el campo y no lo vuelvas a mandar en ese build (el build se reporta igual, sin esos detalles).
+
 ## Cuándo no aplica
 - **Sin la herramienta** (no está `sielay-link` o la sesión no la expone): no la llames ni la menciones. El flujo sigue igual, sin error y sin preguntar.
 - **`reported: false`**: sigue igual; no reintentes ni avises. Desde sielay-link 1.4.0 trae `reason`: `pending` (todavía no hay poll), `too_many_sessions`, `paused`, `unauthorized`, `unpaired`, `off` o `unreachable`. Con `too_many_sessions` (el dispositivo llegó al tope de sesiones), anótalo una vez en la ficha y sigue.
@@ -25,7 +27,7 @@ Sielay-link 1.7.0. Con esa versión el estimado (en el Frame y el Plan) y la ret
   Ejemplo: repo `_Mi.Repo` y carpeta `260101-Exportar PDF`, segunda corrida → `x_mi.repo-260101-exportar-pdf-r2`.
 
 ## Campos
-Cada llamada lleva siempre `build_id`, `role`, `stage` (1 a 7; la etapa 8, Cierre, se reporta como `stage: 7`) y `status` (`running`, `waiting_approval`, `blocked` o `done`). La herramienta mezcla cada llamada con las anteriores del mismo `build_id`: manda solo lo que cambió. Los subagentes, el uso de tokens y las fechas de inicio los pone el plugin; los subagentes no llaman la herramienta.
+Cada llamada lleva siempre `build_id`, `role`, `stage` (1 a 7, con el número real de la etapa en cualquier flujo; la etapa 8, Cierre, se reporta como `stage: 7`) y `status` (`running`, `waiting_approval`, `blocked` o `done`). La herramienta mezcla cada llamada con las anteriores del mismo `build_id`: manda solo lo que cambió. Los subagentes, el uso de tokens y las fechas de inicio los pone el plugin; los subagentes no llaman la herramienta.
 
 Toda fecha que mandes (`approved_at`) sale del reloj del sistema con `date -u +%Y-%m-%dT%H:%M:%SZ`, nunca escrita por ti.
 
@@ -34,14 +36,17 @@ Solo el coordinador (`role: "coordinator"`) manda `stage`, `status`, `outcome`, 
 ## Momentos
 | Momento | Campos (además de los obligatorios) |
 |---|---|
-| Arranque (entrada a la etapa 1) | `stage: 1`, `status: "running"`, `title` (el objetivo, máximo 120), `repo` (`<dueño>/<repo>`), `flags`; `branch` y `linear` (clave del issue) si ya se conocen |
+| Arranque (entrada a la etapa 1) | `stage: 1`, `status: "running"`, `flow` (`full`, `chico` o `fix`), `title` (el objetivo, máximo 120), `repo` (`<dueño>/<repo>`), `flags`; `branch` y `linear` (clave del issue) si ya se conocen |
 | Entrada a cada etapa | `stage: N`, `status: "running"`. En la 3, `plan` (ruta del `plan.md`). En la 4, `plan_progress: { done: 0, total: <carriles> }` y `phase` del primero |
+| Cierre de cada etapa | `stage_detail` con `items` de evidencia y enlaces (ver abajo), junto con el `summary` |
+| Espera larga (CI, cola de merge, e2e, deploy) | `stage_detail.live` (ver abajo) |
 | Pedir aprobación (etapa 1 y la conjunta en la 3; la 2 solo con `--pausas` o la pausa automática) | `status: "waiting_approval"` y el `summary` de lo que se presenta. En la 1, `estimate` con el estimado grueso del Frame; en la 3, `estimate` con el del plan por carril, con `stage: 3` todavía (ese es el programado, que se congela al entrar a la etapa 4) |
 | Aprobación recibida | `status: "running"`, `gate: { stage: N, approved_by: "<quien-aprobó>", approved_at: "<salida de date -u>" }` (`approved_by` es el nombre del usuario si lo conoces; si no, `usuario`); luego, la entrada a la etapa siguiente |
 | Cierre de cada carril (etapa 4) | `plan_progress` con `done` + 1 y `phase` del que sigue en curso (con varios en paralelo, el de número menor) |
 | PR abierto | `pr: <número>`, `branch`, `delivery: { merge_pr: "pending" }` |
 | Comando de entrega corriendo / terminado | `delivery.merge_pr`: `"running"`, luego `"merged"` o `"failed"`; `stamp` con el SHA del sello si la compuerta lo produce (si no, `null`) |
-| Deploy pendiente o hecho | `delivery.deploy_pending: true` mientras falte publicar; `false` cuando el comando de publicación termina bien |
+| Cola de merge | `delivery.merge_queue` (ver abajo) |
+| Deploy pendiente o hecho | `delivery.deploy_pending: true` mientras falte publicar; `false` cuando el comando de publicación termina bien. Si el build llega a producción, además `delivery.deploy` (ver abajo) |
 | Reestimación | `estimate` completo con `reason` (motivo corto, máximo 120); `stage` y `status` los vigentes |
 | Espera de cualquier tipo | `waiting` (ver abajo), junto con `waiting_approval` o `blocked` |
 | Bloqueo fuera de un gate | `status: "blocked"`, un `summary` con el motivo (un momento humano, un Critical/High tras el tope de revisión, un guardarraíl) y `waiting` |
@@ -51,7 +56,7 @@ Solo el coordinador (`role: "coordinator"`) manda `stage`, `status`, `outcome`, 
 Notas:
 - En `main directo` no hay PR: `pr` queda fuera y `merge_pr` sigue el push a main por la compuerta.
 - `pr` es siempre el PR final de `build/<slug>`. El estimado cuenta una sola ventana de integración, CI y merge.
-- Con `--chico` no hay etapa 2: se pasa de la 1 a la 3.
+- Con `--chico` no hay etapa 2: se pasa de la 1 a la 3. Con `--fix` no hay etapa 3: se pasa de la 2 a la 4 (Síntoma, Causa, Arreglo, Verificar, Revisar, Entregar), y el único `waiting_approval` es el del diagnóstico al cerrar la etapa 2, con su `gate: { stage: 2, … }`. El `estimate` va en ese mismo `waiting_approval`.
 - Aprobación conjunta (por defecto, Evidencia y Plan juntos): al pasar de la etapa 2 a la 3 no hay `waiting_approval`; al recibir la aprobación van dos `gate` con el mismo `approved_at`, primero el de la etapa 2 y luego el de la 3. Con `--pausas` o la pausa automática, la etapa 2 tiene su propio `waiting_approval` y su `gate`.
 - Volver a una etapa (por ejemplo, de Revisar a Implementar) es otra entrada: se reporta igual.
 - `links` es opcional: hasta 10 `{ label, href }` hacia reportes del plan, con ruta relativa (sin `/` inicial) o URL `https:`.
@@ -65,6 +70,41 @@ Cada vez que el build espera algo, manda `waiting` junto con el estado:
 - Al volver a `running` manda `waiting: null`. Al cerrar con `done` el servidor lo borra.
 - Límites: `on` obligatorio; `who` máximo 120; `what` y `next` máximo 160; `href` máximo 300, solo `https:` o ruta relativa. Sin secretos.
 - Un plugin que no conoce el campo lo rechaza: repite la llamada sin él y no lo vuelvas a mandar en ese build.
+
+## `flow`
+`"full" | "chico" | "fix"`, se manda en el arranque (`full` si no hay flag). `stage` sigue siendo 1 a 7; el flujo dice qué etapas existen y cómo se llaman:
+| stage | full | chico | fix |
+|---|---|---|---|
+| 1 | Frame | Frame | Síntoma |
+| 2 | Evidencia | — | Causa |
+| 3 | Plan | Plan | — |
+| 4 | Implementar | Implementar | Arreglo |
+| 5 | Verificar | Verificar | Verificar |
+| 6 | Revisar | Revisar | Revisar |
+| 7 | Entregar | Entregar | Entregar |
+
+## `stage_detail`
+Solo el coordinador. Al **cerrar cada etapa** manda la evidencia de esa etapa; reemplaza los `items` anteriores de la misma:
+```json
+{ "stage_detail": { "stage": 5,
+  "items": [ { "label": "CI", "value": "verde · 6 min", "href": "https://…/actions/runs/1" },
+             { "label": "Evidencia", "value": "reporte de verificación", "href": "plans/…/reports/verify.md" } ] } }
+```
+- `stage` es la etapa que se cierra. Hasta 8 `items`; `label` máximo 80, `value` máximo 160, `href` opcional (`https:` o ruta relativa, máximo 300).
+- Qué va como item: el reporte de la etapa, el PR, la corrida de CI, una captura o el archivo:línea de la causa. Cada uno con su enlace si lo tiene.
+- Sin secretos, con la misma disciplina que el `summary`.
+
+### `live` (esperas largas)
+Dentro de `stage_detail`, mientras el build espera la CI, la cola de merge, el e2e o el deploy:
+```json
+{ "stage_detail": { "stage": 5, "live": { "label": "gate corriendo", "done": 2, "total": 3, "at": "<salida de date -u>" } } }
+```
+- `label` dice qué pasa ahora; `done` y `total` son enteros opcionales; `at` sale de `date -u`.
+- Se actualiza **cuando cambia de fase** y nunca más de una vez por minuto; no es un latido. Al terminar la espera, o al cerrar la etapa, manda `live: null`.
+
+## `delivery.merge_queue` y `delivery.deploy`
+- `delivery.merge_queue`: `{ "position": 2, "total": 3, "since": "<iso>", "reason": "…" }`. Se lee de `--status` del comando de cola de merge del repo, si lo tiene; sin él, no se manda. `since` es la entrada a la fila; `reason` (máximo 120) solo si el PR salió de la cola; `position` y `total` pueden ir `null` si solo hay `reason`. Se actualiza cuando cambia la posición, con el tope de una vez por minuto, y cuando el PR sale de la fila se manda con el `merge_pr` final.
+- `delivery.deploy`: solo si el build llega a producción. `{ "state": "approval|publishing|verified|failed", "at": "<iso>" }`: `approval` mientras espera la aprobación de la persona, `publishing` al correr el comando de publicación, `verified` cuando la verificación posterior pasa y `failed` si algo falla. Convive con `deploy_pending`.
 
 ## `retro`
 Solo con `status: "done"`; sale de `retro.yaml` (`cierre-y-retro.md`):
