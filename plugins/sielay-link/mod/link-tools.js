@@ -7,6 +7,7 @@
 import { normalizeName } from './link-session-name-resolution.js'
 import { neutralizeBody } from './link-inbound-framing.js'
 import { BUILD_TOOL_SPEC, runBuildTool } from './link-build-tool.js'
+import { WATCH_TOOL_SPEC, watchBody } from './link-watch-tool.js'
 import { ownAddress, selfPrefixOf } from './link-discovery-context.js'
 import { ADDRESS } from './link-tool-address.js'
 import { CODE_MESSAGES, describeHubError, closedConversationNote, noteFor, resultNote } from './link-tool-messages.js'
@@ -76,6 +77,7 @@ export const LINK_TOOL_SPECS = Object.freeze([
     isDeferred: false,
   },
   BUILD_TOOL_SPEC,
+  WATCH_TOOL_SPEC,
 ])
 
 
@@ -102,7 +104,8 @@ function isConvId(id) {
 
 /**
  * @typedef {{
- *   client: { send: (b: object) => Promise<any>, peers: (o?: { onlineOnly?: boolean }) => Promise<any> } | null,
+ *   client: { send: (b: object) => Promise<any>, peers: (o?: { onlineOnly?: boolean }) => Promise<any>, watch?: (b: object) => Promise<any> } | null,
+ *   sessionRepo?: () => Promise<string|null|undefined>,
  *   sessionFrom: () => Promise<Record<string, unknown>>,
  *   conversationPeer: (id: string) => Promise<string|undefined>,
  *   rememberConversation: (id: string, address: string) => Promise<void>,
@@ -134,9 +137,16 @@ export async function runLinkTool(name, input, deps) {
     if (!deps.build) return { deny: 'link_build_stage no está disponible en esta sesión.' }
     return runBuildTool(input, deps.build)
   }
-  if (!['link_send', 'link_reply', 'link_peers'].includes(name)) return { deny: `herramienta desconocida: ${name}` }
+  if (!['link_send', 'link_reply', 'link_peers', 'link_watch'].includes(name)) return { deny: `herramienta desconocida: ${name}` }
   if (!deps.client) return { deny: 'sielay-link no está emparejado en esta máquina: corre /link pair <slot> (el slot lo crea un admin).' }
   try {
+    if (name === 'link_watch') {
+      const client = deps.client
+      if (!client.watch) return { deny: 'Este cliente no sabe vigilar ramas.' }
+      const w = await watchBody(input, { watch: client.watch, session: deps.sessionFrom, sessionRepo: deps.sessionRepo ?? (async () => null) })
+      if (w.error !== undefined) return { deny: w.error }
+      return { result: asText(await client.watch(w.body)) }
+    }
     if (name === 'link_peers') {
       if (input.online_only !== undefined && typeof input.online_only !== 'boolean') return { deny: 'online_only debe ser true o false.' }
       const answer = await deps.client.peers({ onlineOnly: input.online_only !== false })

@@ -164,6 +164,8 @@ export function createHubClient($, { hubUrl, token }) {
     /** @param {{ session: object }} body the terminal closing: the hub retires this session's row */
     endSession: async body => (await call('POST', '/sessions/self/end', body)).data,
     /** @param {{ onlineOnly?: boolean }} [opts] the hub lists only online sessions unless onlineOnly is false */
+    /** @param {object} body link_watch: { session, repo, branch, ttl_h?, off? } */
+    watch: async body => (await call('POST', '/watch', body)).data,
     peers: async (opts = {}) => (await call('GET', opts.onlineOnly === false ? '/peers?online_only=false' : '/peers')).data,
     /** @param {{ slot: string, hostname?: string, client_version?: string }} body */
     pairStart: async body => (await call('POST', '/pair/start', body, { auth: false })).data,

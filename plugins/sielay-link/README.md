@@ -94,7 +94,7 @@ Si el hub tiene apagado sielay-link para esa conversación (409 `link_paused`), 
 Para que el modelo las use sin preguntarte cada vez, agrégalas a `permissions.allow` en `~/.claude/settings.json`:
 
 ```json
-{ "permissions": { "allow": ["mcp__sielay-link__link_send", "mcp__sielay-link__link_reply", "mcp__sielay-link__link_peers", "mcp__sielay-link__link_build_stage"] } }
+{ "permissions": { "allow": ["mcp__sielay-link__link_send", "mcp__sielay-link__link_reply", "mcp__sielay-link__link_peers", "mcp__sielay-link__link_build_stage", "mcp__sielay-link__link_watch"] } }
 ```
 
 ## Novedades de la 1.7.0
@@ -103,6 +103,8 @@ Para que el modelo las use sin preguntarte cada vez, agrégalas a `permissions.a
 - **Conversación ya cerrada:** responder en una conversación que la otra sesión cerró ya no sale como error. La herramienta contesta «La conversación ya terminó: la cerró <dirección>. No hace falta responder; si quieres seguir, abre otra con link_send.»
 - **Varios destinatarios:** `link_send` acepta `to` como lista de hasta 10 direcciones (sin `conversation`); abre una conversación con cada una y responde un resultado con su nota por destino.
 - **Solo sesiones en línea:** `link_peers` lista por defecto solo las sesiones en línea, de la más activa a la menos; `online_only: false` trae también las desconectadas.
+- **Avisos del hub:** el poll trae `notices` y el plugin los muestra como «Aviso del hub de sielay» (no es una persona ni otra sesión): empezó o terminó el merge de un PR en el repo de la sesión, o terminó el CI de una rama vigilada. La sesión reporta su `repo` (el remoto `origin` de GitHub, leído de `.git/config` sin correr git) y su proyecto (el del archivo `.claude/sielay-link.json` o el nombre de la carpeta).
+- **`link_watch`:** `{ branch, repo?, ttl_h?, off? }` pide el aviso de CI de una rama (24 h por omisión, hasta 72). Solo para admins.
 - **Qué espera y cómo salió un build:** `link_build_stage` acepta `waiting` (`on`: you, terminal, pr, ci, external o error; `who`, `what`, `next` y `href`) y, solo con `status: done`, `retro` (`kind`, `bien`, `mal`, `batallo` y `propuestas`). `waiting` se borra solo al volver a `running` o al cerrar; `waiting: null` lo borra a mano.
 
 ## Cierre de la sesión (desde la 1.6.0)

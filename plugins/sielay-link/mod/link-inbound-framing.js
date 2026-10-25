@@ -36,7 +36,7 @@ export function sanitizeText(text) {
 }
 
 /** A line that opens like the header (`— Mensaje de …`, any dash) loses its dash. */
-const HEADER_DASH = /^([ \t]*)[-‐‑‒–—―−﹘﹣]+(?=[ \t]*mensaje[ \t]+de\b)/gim
+const HEADER_DASH = /^([ \t]*)[-‐‑‒–—―−﹘﹣]+(?=[ \t]*(?:mensaje|aviso)[ \t]+de\b)/gim
 
 /**
  * Sanitizes, then breaks every opener that could pass for a header or a
