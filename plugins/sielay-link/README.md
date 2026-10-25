@@ -97,6 +97,10 @@ Para que el modelo las use sin preguntarte cada vez, agrégalas a `permissions.a
 { "permissions": { "allow": ["mcp__sielay-link__link_send", "mcp__sielay-link__link_reply", "mcp__sielay-link__link_peers", "mcp__sielay-link__link_build_stage", "mcp__sielay-link__link_watch"] } }
 ```
 
+## Novedades de la 1.7.2
+
+- **Qué se entregó y qué quedó:** `retro` de `link_build_stage` acepta `entregado` y `pendientes`, listas de hasta 5 textos de 160 como `bien`, `mal` y `batallo`. Un hub que todavía no los conoce los ignora.
+
 ## Novedades de la 1.7.1
 
 - **`link_watch` responde:** la 1.7.0 la registraba sin el hook que la atiende y cada llamada fallaba con «no tool.call hook answered». Ahora cada herramienta registrada tiene su hook.
@@ -110,7 +114,7 @@ Para que el modelo las use sin preguntarte cada vez, agrégalas a `permissions.a
 - **Avisos del hub:** el poll trae `notices` y el plugin los muestra como «Aviso del hub de sielay» (no es una persona ni otra sesión): empezó o terminó el merge de un PR en el repo de la sesión, o terminó el CI de una rama vigilada. La sesión reporta su `repo` (el remoto `origin` de GitHub, leído de `.git/config` sin correr git) y su proyecto (el del archivo `.claude/sielay-link.json` o el nombre de la carpeta).
 - **Adjuntos:** `link_send` y `link_reply` aceptan `attachment: { name, text }` de hasta 64 KB (p. ej. `resumen.json`); llega después del cuerpo, marcado como texto de la otra sesión y neutralizado igual que el cuerpo.
 - **`link_watch`:** `{ branch, repo?, ttl_h?, off? }` pide el aviso de CI de una rama (24 h por omisión, hasta 72). Solo para admins.
-- **Qué espera y cómo salió un build:** `link_build_stage` acepta `waiting` (`on`: you, terminal, pr, ci, external o error; `who`, `what`, `next` y `href`) y, solo con `status: done`, `retro` (`kind`, `bien`, `mal`, `batallo` y `propuestas`). `waiting` se borra solo al volver a `running` o al cerrar; `waiting: null` lo borra a mano.
+- **Qué espera y cómo salió un build:** `link_build_stage` acepta `waiting` (`on`: you, terminal, pr, ci, external o error; `who`, `what`, `next` y `href`) y, solo con `status: done`, `retro` (`kind`, `bien`, `mal`, `batallo`, `propuestas` y, desde la 1.7.2, `entregado` y `pendientes`). `waiting` se borra solo al volver a `running` o al cerrar; `waiting: null` lo borra a mano.
 
 ## Cierre de la sesión (desde la 1.6.0)
 

@@ -2,6 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { validateBuild } from '../../plugins/sielay-link/mod/link-build-validate.js'
 import { declareBuild } from '../../plugins/sielay-link/mod/link-build-state.js'
+import { WAITING_RETRO_SCHEMA } from '../../plugins/sielay-link/mod/link-build-waiting-retro.js'
 
 const NOW = Date.parse('2026-10-24T22:00:00Z')
 const base = { build_id: 'sielay-x', role: 'coordinator', stage: 4, status: 'blocked' }
@@ -39,8 +40,26 @@ test('retro: only with done; lists cut to 5, proposals to 4, a bad kind becomes 
   assert.equal(validateBuild({ ...base, status: 'done', retro: { bien: 'x' } }, NOW).error, 'retro.bien')
 })
 
+test('retro: entregado and pendientes are lists like bien, cut to 5 and to 160 each; absent they are empty', () => {
+  const long = 'x'.repeat(200)
+  const { build } = validateBuild({ ...base, status: 'done', outcome: 'delivered', retro: { entregado: [long, 'PR 507', '', 'a', 'b', 'c', 'd'], pendientes: ['deploy'] } }, NOW)
+  assert.equal(build.retro.entregado.length, 5)
+  assert.ok(build.retro.entregado[0].length <= 160)
+  assert.equal(build.retro.entregado[1], 'PR 507')
+  assert.deepEqual(build.retro.pendientes, ['deploy'])
+  assert.deepEqual(validateBuild({ ...base, status: 'done', retro: { bien: ['b'] } }, NOW).build.retro.pendientes, [])
+  assert.equal(validateBuild({ ...base, status: 'done', retro: { entregado: 'x' } }, NOW).error, 'retro.entregado')
+  assert.equal(validateBuild({ ...base, status: 'done', retro: { pendientes: 3 } }, NOW).error, 'retro.pendientes')
+})
+
+test('the retro schema lists entregado and pendientes and still refuses unknown keys', () => {
+  const { properties, additionalProperties } = WAITING_RETRO_SCHEMA.retro
+  assert.equal(additionalProperties, false)
+  for (const k of ['entregado', 'pendientes']) assert.deepEqual([properties[k].type, properties[k].maxItems, properties[k].items.type], ['array', 5, 'string'])
+})
+
 test('a full retro fits in the build', () => {
   const full = Array.from({ length: 5 }, () => 'á'.repeat(160))
-  const retro = { kind: 'mixed', bien: full, mal: full, batallo: full, propuestas: Array.from({ length: 4 }, () => ({ text: 'á'.repeat(160), applies_to: 'plan' })) }
+  const retro = { kind: 'mixed', bien: full, mal: full, batallo: full, entregado: full, pendientes: full, propuestas: Array.from({ length: 4 }, () => ({ text: 'á'.repeat(160), applies_to: 'plan' })) }
   assert.equal(validateBuild({ ...base, status: 'done', summary: 's'.repeat(600), retro }, NOW).error, undefined)
 })
