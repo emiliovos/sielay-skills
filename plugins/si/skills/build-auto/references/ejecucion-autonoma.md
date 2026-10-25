@@ -13,7 +13,7 @@
 En `main directo` el aislamiento por worktree y el orden de integración se mantienen: el coordinador integra carril por carril en `build/<slug>` y al final empuja a main por la compuerta.
 
 ## Quién ejecuta
-- **Subagentes:** `fullstack-developer` (implementa y escribe las pruebas de su carril), `docs-manager` (docs), `code-reviewer` (revisión con contexto fresco y red team), `researcher` / `Explore` (evidencia, con el modelo más chico). Si no existen con esos nombres, usa los de propósito general con el mismo encargo. Los subagentes de una sesión comparten scratchpad: nombres de archivo únicos.
+- **Subagentes:** `fullstack-developer` (implementa y escribe las pruebas de su carril), `docs-manager` (docs), `code-reviewer` (revisión con contexto fresco y red team), `researcher` / `Explore` (evidencia). Cada llamada lleva su `model` de la tabla «Modelo fijo por rol» de `SKILL.md`: `sonnet` para implementar y docs, `haiku` para leer y explorar, `opus` para la revisión fresca y el red team; nunca se omite. Si no existen con esos nombres, usa los de propósito general con el mismo encargo. Los subagentes de una sesión comparten scratchpad: nombres de archivo únicos.
 - **Otra sesión de Claude Code** (otra terminal): con `--terminales`, según la tabla de reparto del plan y `terminales.md`. Sin el flag, solo si el usuario pide una sesión concreta en la conversación; si no, un subagente.
 - **Todo encargo es autocontenido:**
   - la tarea;
@@ -63,6 +63,7 @@ En `main directo` el aislamiento por worktree y el orden de integración se mant
 - Si reportas a sielay (`reporte-sielay.md`): `link_build_stage` con `plan_progress` (`done` + 1) y la `phase` que sigue en curso. Al entrar a la etapa 4, `total` es el número de carriles.
 - Si el carril pasó su tope de tokens, ya paró en un punto seguro y reportó: decide si sigue, se parte o se reasigna.
 - Compara las horas reales del carril contra su estimado. Si el total previsto se movió más que la tolerancia (±max(0,5 h, 10 % del programado)) o el carril se pasó, reestima con un motivo corto: en el contrato y, si reportas a sielay, con `estimate` completo y `reason` (`reporte-sielay.md`). No pide aprobación salvo que cambie el Goal, los criterios, los no-goals o la autoridad.
+- Mide el contexto (`medir-contexto.mjs`, ver «Presupuesto de contexto» en `SKILL.md`): anota en `plan.md` el modelo y el contexto máximo del subagente o la terminal del carril, y corta con checkpoint si el coordinador llegó al umbral.
 - Reporta al usuario en una línea.
-- Anota la hora de inicio y fin de cada tramo (espera humana, evidencia y plan, implementación, revisión, CI, integración, merge, deploy) en `plan.md`: alimenta la tabla «dónde se fue el tiempo» del reporte final.
+- Anota la hora de inicio y fin de cada tramo (espera humana, evidencia y plan, implementación, revisión, CI, integración, merge, deploy) en `plan.md`, en UTC con `date -u +%FT%TZ` (es la ventana `--desde/--hasta` de `medir-contexto.mjs`): alimenta la tabla «dónde se fue el tiempo» del reporte final.
 - Borra los worktrees y ramas locales de lo ya entregado; nunca una rama cuya entrega no confirmaste.

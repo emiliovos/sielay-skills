@@ -11,7 +11,7 @@ metadata:
   deps: "git en el repo destino. Recomendado: AgentKit (skills /ak:*); sin él, cada etapa se hace con subagentes nativos. Opcional: /si:checkpoint para el cierre (--checkpoint) y red a context7.com (o su MCP) para consultar la doc de dependencias en las etapas 2 y 3."
   installs: []
   risk: none
-  version: "2.3.2"
+  version: "2.4.0"
 ---
 
 # Build-auto: backbone de proyecto autónomo
@@ -96,11 +96,25 @@ Si la sesión tiene la herramienta `link_build_stage` (plugin `sielay-link`), le
 
 ## Presupuesto de contexto
 El costo de un build crece con el tamaño del contexto por el número de turnos. Reglas por defecto:
-- **Contexto corto.** El coordinador y las terminales de trabajo se cortan hacia **150 K**: checkpoint (`/si:checkpoint autonomo`), handoff escrito, `/clear` y retomar desde el archivo. Nunca autocompactar a ciegas en el coordinador. Una lectura grande se delega a un subagente; no se usa la ventana de 1 M en builds autónomos.
+- **Contexto medido, corte a 150 K.** El coordinador y las terminales de trabajo no pasan de **150 K** de contexto. No se estima a ojo: se mide con `node ${CLAUDE_SKILL_DIR}/scripts/medir-contexto.mjs` (si la variable no se expande, la carpeta es la «Base directory» que muestra la skill al cargarse). Lee el transcript de la sesión y devuelve `contexto_actual`, `contexto_max`, el modelo y lo mismo por subagente; `cortar: true` al llegar al umbral. Se corre al cerrar cada etapa, al volver cada subagente o carril y antes de una espera larga. Con `cortar: true`, en el siguiente punto seguro (nada a medio commitear, ningún subagente corriendo) y sin «terminar esto primero»:
+  1. `/si:checkpoint autonomo`: commit local y handoff en `~/handoffs/<sesion>.md` con el `build_id`, la etapa, lo hecho, lo que sigue y las decisiones vigentes;
+  2. solo el coordinador, si reporta a sielay: `link_build_stage` con `status: "blocked"` y `waiting: {on: "terminal", what: "corte de contexto a 150 K", next: "retomar desde <handoff>"}`. Una terminal de trabajo no toca `status` ni `waiting`: solo avisa (paso 3);
+  3. aviso al coordinador por `link_send` (o, si tú coordinas, a quien te lanzó; sin link, a la persona en pantalla): «listo para clear, handoff en <ruta>», con su modelo y su `contexto_max`. El coordinador le hace el `/clear` y la retoma como dice `references/terminales.md`;
+  4. termina el turno. Retoma una sesión limpia desde el handoff.
+  Nunca autocompactar a ciegas en el coordinador. Una lectura grande se delega a un subagente; no se usa la ventana de 1 M en builds autónomos.
 - **Tope de tokens por carril**, declarado en el plan. Si un carril lo pasa, para en un punto seguro y reporta; el coordinador decide si sigue. Si la persona fija un tope global de la corrida, también se respeta.
 - **Autocompactación solo en terminales autónomas.** Se lanzan con `claude --autocompact 200k` (el CLI acepta de 100k a 1M). Nunca va en la config global ni en sesiones interactivas.
-- **Concurrencia según dónde corren las pruebas.** Con CI remoto, hasta **4** carriles (subagentes o terminales) a la vez, cada uno por debajo de 100 K de contexto. Con pruebas locales, **2**. El número de carriles lo da el plan; la concurrencia es solo cuántos corren a la vez. Lo único que va en fila es lo que satura la máquina local: una instalación de dependencias a la vez.
-- **Modelo y esfuerzo por rol.** El coordinador, en el modelo más capaz disponible; los implementadores, en el intermedio (Sonnet) con esfuerzo medio; lectores y búsquedas, en el más chico (Haiku). Una terminal de carril mecánico (migraciones, docs, un cambio acotado) se lanza con `--model sonnet`. El modelo se fija al lanzar y nunca se cambia a mitad de sesión: cambiarlo invalida el caché. Si un rol no se puede fijar, dilo en la ficha.
+- **Concurrencia según dónde corren las pruebas.** Con CI remoto, hasta **4** carriles (subagentes o terminales) a la vez, cada uno con el mismo corte a 150 K (apunta a quedar por debajo de 100 K). Con pruebas locales, **2**. El número de carriles lo da el plan; la concurrencia es solo cuántos corren a la vez. Lo único que va en fila es lo que satura la máquina local: una instalación de dependencias a la vez.
+- **Modelo fijo por rol, en cada llamada.** Todo subagente se lanza pasando el parámetro `model` en la llamada (`Agent`/`Task`); omitirlo deja el modelo al azar de la definición del agente o lo hereda del coordinador, y el build entero termina en el más caro. Tabla fija:
+
+  | Rol | Agentes típicos | `model` |
+  |---|---|---|
+  | Coordinar | la sesión principal | `opus` (el de la sesión; se elige al abrirla) |
+  | Implementar (con sus pruebas), docs, depurar (lo difícil se consulta al asesor fuerte) | `fullstack-developer`, `docs-manager`, `debugger` | `sonnet` |
+  | Leer, explorar, buscar, git | `Explore`, `researcher`, scout, `git-manager` | `haiku` |
+  | Revisión fresca, red team, plan | `code-reviewer`, `planner` | `opus` |
+
+  Implementar va con esfuerzo medio. Una terminal de carril se lanza con `--model sonnet` (o `haiku` si solo lee). El modelo se fija al lanzar y nunca se cambia a mitad de sesión: cambiarlo invalida el caché. Si el entorno no deja fijar el modelo de un rol, dilo en la ficha. Al volver cada subagente, `medir-contexto.mjs` muestra con qué modelo corrió (`subagentes[].modelo`); uno que no coincide con la tabla es un hallazgo de la retro.
 - **Asesor fuerte** (`kongming` o equivalente): se consulta solo antes de algo irreversible (migración destructiva, borrar datos, deploy, cambio de compuerta), no por rutina.
 - **Menos subagentes: se divide por contexto, no por tipo de trabajo.** En cada carril, el mismo agente implementa y escribe sus pruebas; un revisor con contexto fresco revisa. Nada de cadenas implementador → tester → revisor con agentes distintos. Subagente solo para: carriles paralelos independientes, leer mucho y devolver la conclusión, y la revisión fresca.
 - **Pruebas remotas = ninguna local.** Si la compuerta corre en CI remoto, nunca corras pruebas locales, tampoco en subagentes: empuja y mira la corrida.

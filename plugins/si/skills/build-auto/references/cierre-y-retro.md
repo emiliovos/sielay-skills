@@ -21,7 +21,15 @@ marcador:
   reloj_idea_a_merge: ""      # de la primera línea del Frame al merge
   estimado_vs_real: ""        # programado contra real, con la razón real/estimado
   fallas_que_la_revision_no_vio: []   # lo que apareció después de la revisión (CI, e2e, producción)
+fases:          # una por etapa o carril que corrió, en orden
+  - fase: ""                  # "1 Frame", "4 carril backend", "6 revisión de integración"…
+    modelo: ""                # el que corrió de verdad, según medir-contexto.mjs
+    contexto_max: 0           # tokens, el máximo de esa fase
+    subagentes: []            # [{tipo, modelo, contexto_max}] de los que corrieron en la fase
+    cortes: 0                 # checkpoints por llegar a 150 K
 ```
+
+- **`fases` sale medido, no de memoria.** Con las horas de inicio y fin de cada tramo anotadas en `plan.md`, corre `node <carpeta de la skill>/scripts/medir-contexto.mjs --desde <inicio> --hasta <fin>` por fase (la carpeta es la de «Presupuesto de contexto» en `SKILL.md`; en cada sesión que coordinó, con `--sesion <id>` si hubo cortes; una terminal de carril reporta sus propias cifras al cerrar). Si un subagente corrió en otro modelo que el de la tabla «Modelo fijo por rol», o una fase pasó de 150 K sin cortar, va también en `mal` con su porqué.
 
 - **Redacción de cada lista:** un hecho por ítem, una línea (~100 caracteres, máximo 160), que empiece por lo que pasó o lo que se hizo, con PR o SHA cuando aplique. Sin adjetivos ni jerga ("robusto", "sinergia", "end-to-end"). Lo que no aplica va vacío; no se rellena.
 - Una propuesta es una regla concreta y accionable ("fijar el tope de tokens por carril desde el Frame"), no una queja.
@@ -29,7 +37,7 @@ marcador:
 
 ## Qué hacer
 1. Escribe `retro.yaml`.
-2. Manda `retro` a sielay (`reporte-sielay.md`) junto con `status: "done"`, `stage: 7` y `outcome`.
+2. Manda `retro` a sielay (`reporte-sielay.md`) junto con `status: "done"`, `stage: 7` y `outcome`. Si el campo `retro` del plugin no tiene lugar para `fases`, resúmelas en una línea del `summary` final («coordinador opus máx 140 K, 1 corte; carriles sonnet máx 90 K; revisión opus 60 K»).
 3. Si el entorno publica artifacts, publica el marcador como una página de cifras con su fuente (de dónde sale cada número). Sin eso, el marcador va en el reporte final.
 4. Escribe el reporte final estilo brief: primero lo que necesita a la persona (decisiones, momentos humanos, pendientes), luego lo que pasó.
 5. Commitea `retro.yaml` con los demás reportes del plan, según el modo de entrega.
