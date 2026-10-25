@@ -7,6 +7,7 @@ import { modeState } from './link-mode-freshness.js'
 import { resolveSessionName, cwdHash } from './link-session-name-resolution.js'
 import { claimInstanceId, instanceKey, socketOwnerAlive } from './link-instance-identity.js'
 import { pollBuild } from './link-build-hooks.js'
+import { sessionRepo } from './link-session-repo.js'
 
 // $.state references: literal plugin/key, declared in each file that uses them.
 const MODE_SAMPLES = /** @type {const} */ ({ plugin: 'sielay-link', key: 'modeSamples' })
@@ -85,6 +86,17 @@ export async function sessionDir($) {
     // an engine without root(), or one that does not answer it: the live cwd
     return $.session.cwd()
   }
+}
+
+/**
+ * The project a session reports: the project file's, else the folder's name.
+ * @param {string|undefined} fromFile
+ * @param {string} cwd
+ */
+function projectLabel(fromFile, cwd) {
+  if (fromFile) return fromFile
+  const base = cwd.replace(/[\\/]+$/, '').split(/[\\/]/).pop() ?? ''
+  return base.slice(0, 80) || undefined
 }
 
 /**
@@ -173,12 +185,13 @@ export async function buildSessionPayload($, rt, { withBuild = false } = {}) {
   if (rt.adapter && now - rt.tmux.at > TMUX_TTL_MS) {
     rt.tmux = { name: await rt.adapter.tmuxSessionName(tmuxEnv), at: now }
   }
-  const [project, saved, { value: title }, env, mode] = await Promise.all([
+  const [project, saved, { value: title }, env, mode, repo] = await Promise.all([
     readProjectFile($, cwd),
     $.store.get(`name.${liveHash}`),
     $.state.get(SESSION_TITLE),
     $.env.get('SIELAY_LINK_NAME'),
     readMode($),
+    sessionRepo($, cwd),
   ])
   const fresh = resolveSessionName({
     env,
@@ -201,7 +214,9 @@ export async function buildSessionPayload($, rt, { withBuild = false } = {}) {
       mode_fresh: mode.fresh ? 1 : 0,
       mode_age_s: mode.ageMs === null ? null : Math.floor(mode.ageMs / 1000),
       state: mode.state,
-      ...(project.project ? { project: project.project } : {}),
+      // the project file names it; otherwise the folder (what the header shows as «proyecto»)
+      ...(projectLabel(project.project, cwd) ? { project: projectLabel(project.project, cwd) } : {}),
+      ...(repo ? { repo } : {}),
       ...(build ? { build } : {}),
     },
     nameSource: resolved.source,

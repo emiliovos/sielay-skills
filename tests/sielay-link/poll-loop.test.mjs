@@ -70,7 +70,7 @@ test('a fresh-bypass run=1 message is injected once and acked inside the next po
   assert.equal(h.polls[0].wait_s, WAIT_S)
   assert.equal(h.polls[0].ack, undefined)
   assert.equal(h.injected.length, 1)
-  assert.match(h.injected[0], /^\[sielay-link de=ana\/laptop\/api conv=c1 turno=1\/10 /)
+  assert.match(h.injected[0], /^— Mensaje de ana desde laptop \(sesión api\)\n[\s\S]*\[conv=c1 · de=ana\/laptop\/api\]/)
   await h.step()
   assert.deepEqual(h.polls[1].ack, [{ id: 'm1', outcome: 'injected' }])
   assert.equal(h.injected.length, 1, 'the redelivered id is deduped, not injected again')

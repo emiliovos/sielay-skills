@@ -132,7 +132,14 @@ test('the tool refuses a bad estimate, or one that makes the merged build too bi
   const est = { total_h: 7, phases: [{ name: 'Hub', h: 2 }] }
   await declareFromTool(h.$, h.rt, { ...min, estimate: est })
   assert.deepEqual(await declareFromTool(h.$, h.rt, { ...min, estimate: { total_h: 0.04 } }), { error: 'estimate.total_h' })
-  const big = { title: 't'.repeat(120), plan: 'p'.repeat(200), branch: 'b'.repeat(120), phase: 'f'.repeat(80), summary: 's'.repeat(600), links: Array.from({ length: 10 }, (_, i) => ({ label: 'l'.repeat(80), href: `p/${i}/` + 'x'.repeat(290) })), flags: Array.from({ length: 20 }, (_, i) => `--f${i}`.padEnd(80, 'x')) }
+  // three-byte characters, so each part alone fits under BUILD_MAX_BYTES and both together do not
+  const E = '€'
+  const big = {
+    status: 'blocked', title: E.repeat(120), plan: E.repeat(200), branch: E.repeat(120), phase: E.repeat(80), summary: E.repeat(600),
+    links: Array.from({ length: 10 }, (_, i) => ({ label: E.repeat(80), href: `p/${i}/` + 'x'.repeat(290) })),
+    flags: Array.from({ length: 20 }, (_, i) => `--f${i}`.padEnd(80, E)),
+    waiting: { on: 'terminal', who: E.repeat(120), what: E.repeat(160), next: E.repeat(160) },
+  }
   const wide = { total_h: 9, phases: Array.from({ length: 12 }, (_, i) => ({ name: `f${i}`.padEnd(80, 'x'), h: 1 })), assumption: 'a'.repeat(200) }
   for (const alone of [{ estimate: wide }, big]) {
     const other = engine()

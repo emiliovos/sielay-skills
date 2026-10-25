@@ -12,6 +12,7 @@ import {
   Invalid, isObj, isCount, absent, hasSecret, text, date, stage, gate, delivery, links,
 } from './link-build-fields.js'
 import { estimate } from './link-build-estimate.js'
+import { waiting, retro } from './link-build-waiting-retro.js'
 
 export { BUILD_STAGES, BUILD_STATUSES, BUILD_ROLES, BUILD_MAX_BYTES, BUILD_TEXT_MAX, BUILD_SUBAGENTS_MAX }
 export { BUILD_LINKS_MAX, BUILD_FUTURE_SKEW_MS } from './link-build-fields.js'
@@ -108,6 +109,8 @@ export function validateBuild(input, now) {
       linear: text(input.linear, BUILD_TEXT_MAX.linear, 'linear'),
       links: links(input.links),
       estimate: estimate(input.estimate),
+      waiting: input.status === 'running' || input.status === 'done' ? undefined : waiting(input.waiting),
+      retro: retro(input.retro, input.status),
       outcome: input.status === 'done' && !absent(input.outcome) ? input.outcome : undefined,
       stage_since: date(input.stage_since, now, 'stage_since'),
       started_at: date(input.started_at, now, 'started_at'),

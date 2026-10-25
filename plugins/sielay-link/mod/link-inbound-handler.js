@@ -14,6 +14,7 @@
 // - The strip keeps arrival order: a newer message never takes the place of
 //   the one on screen.
 
+import { frameHubNotice, isHubNotice } from './link-hub-notice-framing.js'
 import { frameInbound, isDelivery } from './link-inbound-framing.js'
 import { shouldInject, onStripAccept, onStripReject } from './link-run-gate.js'
 import { createInboundStore } from './link-inbound-store.js'
@@ -60,13 +61,17 @@ export function createInboundHandler({ store, adapter, readMode, onStrip, onConv
     return [...all.values()].sort((a, b) => (arrival.get(a.id) ?? 0) - (arrival.get(b.id) ?? 0))
   }
 
+  /** This session's own address, from the last poll answer: the header names its machine «esta máquina». */
+  /** @type {string|undefined} */
+  let selfAddress
+
   async function publish() {
     await onStrip(currentStrip())
   }
 
   /** @param {Delivery} d */
   async function inject(d) {
-    await adapter.inject(frameInbound(d))
+    await adapter.inject(frameInbound(d, { self: selfAddress }))
   }
 
   return {
@@ -75,12 +80,13 @@ export function createInboundHandler({ store, adapter, readMode, onStrip, onConv
     /**
      * Handles one poll answer; returns the acks to send with the next poll.
      * @param {string} instanceId
-     * @param {{ messages?: unknown[], strip?: unknown[] }} data
+     * @param {{ messages?: unknown[], strip?: unknown[], notices?: unknown[], session?: { address?: unknown } }} data
      * @returns {Promise<Ack[]>}
      */
     async handlePoll(instanceId, data) {
       /** @type {Ack[]} */
       const acks = []
+      if (typeof data.session?.address === 'string') selfAddress = data.session.address
       for (const [id, d] of Object.entries(await readPending(instanceId))) {
         try {
           await inject(d)
@@ -116,6 +122,15 @@ export function createInboundHandler({ store, adapter, readMode, onStrip, onConv
         seen.set(d.id, outcome)
         await remember(instanceId, d.id, outcome)
         acks.push({ id: d.id, outcome })
+      }
+      for (const n of (Array.isArray(data.notices) ? data.notices : []).filter(isHubNotice)) {
+        const text = frameHubNotice(n)
+        if (!text) continue
+        try {
+          await adapter.inject(text)
+        } catch (err) {
+          log(`hub notice ${n.id} not injected: ${err instanceof Error ? err.message : String(err)}`)
+        }
       }
       if (Array.isArray(data.strip)) {
         serverStrip = data.strip.filter(isDelivery)

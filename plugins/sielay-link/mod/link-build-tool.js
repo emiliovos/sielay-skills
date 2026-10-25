@@ -5,6 +5,7 @@
 
 import { BUILD_STAGES, BUILD_STATUSES, BUILD_ROLES, BUILD_TEXT_MAX } from './link-build-validate.js'
 import { BUILD_ESTIMATE_PHASES_MAX, BUILD_ESTIMATE_H_MAX } from './link-build-fields.js'
+import { WAITING_RETRO_SCHEMA } from './link-build-waiting-retro.js'
 
 const str = (/** @type {string} */ description) => ({ type: 'string', description })
 
@@ -75,6 +76,7 @@ export const BUILD_TOOL_SPEC = Object.freeze({
           reason: str(`Motivo de la reestimación (máximo ${BUILD_TEXT_MAX.reason})`),
         },
       },
+      ...WAITING_RETRO_SCHEMA,
     },
   },
   isDeferred: /** @type {const} */ (false),

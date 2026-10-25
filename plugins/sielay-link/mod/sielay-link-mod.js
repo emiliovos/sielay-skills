@@ -51,6 +51,7 @@ async function callTool($, rt, name, input) {
       const s = await sessionPayload($, rt)
       return { name: s.name, instance_id: s.instance_id, cwd_hash: s.cwd_hash, mode: s.mode, mode_fresh: s.mode_fresh, mode_age_s: s.mode_age_s }
     },
+    sessionRepo: async () => (await sessionPayload($, rt)).repo,
     conversationPeer: async id => (await $.state.get(CONVERSATIONS)).value?.[id],
     rememberConversation: async (id, address) => {
       const { value = {} } = await $.state.get(CONVERSATIONS)

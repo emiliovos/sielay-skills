@@ -15,7 +15,7 @@ export const SEEN_REFRESH_MS = 60_000
 /** What link_build_stage may set: the contract minus what the mod itself fills. */
 export const DECLARED_KEYS = Object.freeze([
   'build_id', 'role', 'stage', 'status', 'outcome', 'title', 'repo', 'plan', 'branch', 'pr', 'flags',
-  'plan_progress', 'phase', 'gate', 'summary', 'delivery', 'linear', 'links', 'stage_since', 'estimate',
+  'plan_progress', 'phase', 'gate', 'summary', 'delivery', 'linear', 'links', 'stage_since', 'estimate', 'waiting', 'retro',
 ])
 const COUNTS = /** @type {const} */ (['input_tokens', 'output_tokens', 'cache_read_input_tokens', 'cache_creation_input_tokens'])
 const ZERO_USAGE = Object.freeze({ input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0, turns: 0 })
@@ -53,6 +53,8 @@ export function declareBuild(state, input, now) {
   const declared = { ...prev, ...picked }
   if (isObj(prev.delivery) && isObj(picked.delivery)) declared.delivery = { ...prev.delivery, ...picked.delivery }
   if (picked.stage_since === undefined && (!same || prev.stage !== declared.stage)) declared.stage_since = iso(now)
+  // waiting lives while the build waits: running or done drops it, as the hub does
+  if (declared.status === 'running' || declared.status === 'done') delete declared.waiting
   const subagents = pruneExpired(state, now)?.subagents ?? {}
   return {
     declared,

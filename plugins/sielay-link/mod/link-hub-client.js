@@ -18,7 +18,7 @@ export class HubError extends Error {
   /**
    * @param {HubErrorKind} kind
    * @param {string} message
-   * @param {{ status?: number, code?: string, field?: string, scope?: string, retryAfterMs?: number }} [extra]
+   * @param {{ status?: number, code?: string, field?: string, scope?: string, retryAfterMs?: number, closedBy?: string, closedReason?: string }} [extra]
    */
   constructor(kind, message, extra = {}) {
     super(message)
@@ -30,6 +30,9 @@ export class HubError extends Error {
     /** What a 409 link_paused names as off: person, line, device or session. */
     this.scope = extra.scope
     this.retryAfterMs = extra.retryAfterMs
+    /** Who closed the conversation a 409 conversation_closed names (an address), and why (end, idle, admin). */
+    this.closedBy = extra.closedBy
+    this.closedReason = extra.closedReason
   }
 }
 
@@ -138,7 +141,9 @@ export function createHubClient($, { hubUrl, token }) {
     }
     const field = typeof data?.field === 'string' ? data.field.slice(0, 64) : undefined
     const scope = typeof data?.scope === 'string' ? data.scope.slice(0, 16) : undefined
-    throw new HubError('http', `hub answered ${res.status}${code ? ` ${code}` : ''}`, { status: res.status, code, field, scope })
+    const closedBy = typeof data?.closed_by === 'string' ? data.closed_by.slice(0, 130) : undefined
+    const closedReason = typeof data?.closed_reason === 'string' ? data.closed_reason.slice(0, 16) : undefined
+    throw new HubError('http', `hub answered ${res.status}${code ? ` ${code}` : ''}`, { status: res.status, code, field, scope, closedBy, closedReason })
   }
 
   return {
@@ -158,7 +163,10 @@ export function createHubClient($, { hubUrl, token }) {
     },
     /** @param {{ session: object }} body the terminal closing: the hub retires this session's row */
     endSession: async body => (await call('POST', '/sessions/self/end', body)).data,
-    peers: async () => (await call('GET', '/peers')).data,
+    /** @param {{ onlineOnly?: boolean }} [opts] the hub lists only online sessions unless onlineOnly is false */
+    /** @param {object} body link_watch: { session, repo, branch, ttl_h?, off? } */
+    watch: async body => (await call('POST', '/watch', body)).data,
+    peers: async (opts = {}) => (await call('GET', opts.onlineOnly === false ? '/peers?online_only=false' : '/peers')).data,
     /** @param {{ slot: string, hostname?: string, client_version?: string }} body */
     pairStart: async body => (await call('POST', '/pair/start', body, { auth: false })).data,
     /**

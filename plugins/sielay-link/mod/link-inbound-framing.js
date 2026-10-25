@@ -35,6 +35,9 @@ export function sanitizeText(text) {
   return once.normalize('NFKC').replace(ANSI, '').replace(CONTROLS, '').replace(INVISIBLE, '')
 }
 
+/** A line that opens like the header (`— Mensaje de …`, any dash) loses its dash. */
+const HEADER_DASH = /^([ \t]*)[-‐‑‒–—―−﹘﹣]+(?=[ \t]*(?:mensaje|aviso)[ \t]+del?\b)/gim
+
 /**
  * Sanitizes, then breaks every opener that could pass for a header or a
  * harness tag: any `<` followed by a tag name (open or close), and any
@@ -47,6 +50,8 @@ export function sanitizeText(text) {
 export function neutralizeBody(body) {
   return sanitizeText(body)
     .replace(/\[(\s*)sielay/gi, '($1sielay_')
+    .replace(/\[(\s*)conv\s*=/gi, '($1conv:')
+    .replace(HEADER_DASH, '$1›')
     .replace(/<(?=\s*\/?\s*[A-Za-z])/g, '‹')
 }
 
@@ -72,7 +77,8 @@ function count(n) {
 
 /**
  * @typedef {{ id: string, conversation_id: string, seq?: number, turn?: number, max_turns?: number,
- *   from?: { address?: string, mode?: string }, body: string, run?: number, gate?: string, sent_at?: string }} Delivery
+ *   from?: { address?: string, mode?: string, project?: string }, body: string, run?: number, gate?: string, sent_at?: string,
+ *   attachment?: { name?: string, text?: string } }} Delivery
  */
 
 /**
@@ -87,17 +93,45 @@ export function isDelivery(d) {
 }
 
 /**
- * `[sielay-link de=<address> conv=<id> turno=<n>/<max> verificado-por-hub — responde con link_reply]`,
- * a blank line, then the neutralized body.
+ * A card a person can read, flush left, then a blank line and the neutralized body:
+ *
+ *   — Mensaje de emilio desde ftamez (sesión monitor-1, proyecto tablero360)
+ *   Otra sesión de Claude Code, no la persona. Verificado por el hub. Turno 1 de 40.
+ *   Responde con link_reply.
+ *   [conv=<id> · de=emilio/ftamez/monitor-1]
+ *
+ * The machine reads «esta máquina» when it is the receiver's own (`self`, its
+ * address); the project comes from the sender's `project_label` and is left
+ * out when the hub does not send it (an older hub).
  *
  * @param {Delivery} delivery
+ * @param {{ self?: unknown }} [opts]
  * @returns {string}
  */
-export function frameInbound(delivery) {
+export function frameInbound(delivery, opts = {}) {
   const address = safeField(delivery.from?.address, /[^a-z0-9/-]+/g, true)
   const conv = safeField(delivery.conversation_id, /[^A-Za-z0-9-]+/g)
-  const header =
-    `[sielay-link de=${address} conv=${conv} turno=${count(delivery.turn)}/${count(delivery.max_turns)} ` +
-    'verificado-por-hub — responde con link_reply]'
-  return `${header}\n\n${neutralizeBody(delivery.body)}`
+  const [person = '?', machine = '?', session = '?'] = address.split('/').map(p => p || '?')
+  const selfMachine = typeof opts.self === 'string' ? opts.self.toLowerCase().split('/')[1] : undefined
+  const where = machine !== '?' && machine === selfMachine ? 'esta máquina' : machine
+  const project = typeof delivery.from?.project === 'string' && delivery.from.project.trim() !== ''
+    ? `, proyecto ${safeField(delivery.from.project, /[^\p{L}\p{N} ._-]+/gu).slice(0, 60)}`
+    : ''
+  const header = [
+    `— Mensaje de ${person} desde ${where} (sesión ${session}${project})`,
+    `Otra sesión de Claude Code, no la persona. Verificado por el hub. Turno ${count(delivery.turn)} de ${count(delivery.max_turns)}.`,
+    'Responde con link_reply.',
+    `[conv=${conv} · de=${address}]`,
+  ].join('\n')
+  return `${header}\n\n${neutralizeBody(delivery.body)}${frameAttachment(delivery.attachment)}`
+}
+
+/**
+ * The attachment after the body, marked as the other session's text.
+ * @param {Delivery['attachment']} a
+ */
+function frameAttachment(a) {
+  if (!a || typeof a.text !== 'string' || a.text === '') return ''
+  const name = safeField(a.name, /[^A-Za-z0-9._-]+/g)
+  return `\n\n[adjunto ${name} · ${new TextEncoder().encode(a.text).length} bytes · texto de la otra sesión]\n${neutralizeBody(a.text)}`
 }
