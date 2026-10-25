@@ -97,6 +97,12 @@ Para que el modelo las use sin preguntarte cada vez, agrégalas a `permissions.a
 { "permissions": { "allow": ["mcp__sielay-link__link_send", "mcp__sielay-link__link_reply", "mcp__sielay-link__link_peers", "mcp__sielay-link__link_build_stage", "mcp__sielay-link__link_watch"] } }
 ```
 
+## Novedades de la 1.8.1
+
+- **Una línea por mensaje:** las tres filas (mensaje entrante, llamada de `link_send` / `link_reply` y su resultado) salen ahora en gris tenue, sin colores ni negritas, y en una sola línea recortada con «…» al ancho de la terminal (máximo 80 columnas). Entrante: «◇ sielay-5 · turno 3 · Recibido, voy con la A: POST …». Llamada: «◇ → sielay-2 · Turno #507, CI verde en …». Resultado: la primera línea, «Enviado a sielay-2 · turno 1 de 120 · corre solo». El cuerpo va siempre después del prefijo «◇ …», con los saltos de línea y los espacios colapsados.
+- **La persona solo cuando es otra:** el remitente o el destino se muestra como «ana/sielay-5» cuando su persona no es la de esta sesión, y como «sielay-5» cuando sí. Mientras no se conozca la dirección propia, la persona se muestra siempre. Así una sesión de otra persona con el mismo nombre no se ve igual que una propia.
+- **Con ctrl+o** se ve lo completo como en la 1.8.0: el encabezado del mensaje con su cuerpo entero, la llamada con todo el texto y el resultado completo. Lo que lee el modelo no cambia.
+
 ## Novedades de la 1.8.0
 
 - **Mensajes legibles en la conversación:** lo que ves de `link_send` y `link_reply` ya no es el JSON de la llamada. La llamada sale como «● link_send → emilio/sielay-2 · vps-sielay» con el texto detrás de una barra atenuada («│ ») y ajustado al ancho de la terminal (máximo 80 columnas), recortado a 3 líneas con «N líneas más · ctrl+o para ver todo». El mensaje que entra de otra sesión sale como «◆ emilio/sielay-3 · vps-sielay · sielay · turno 3/120», el cuerpo detrás de la barra y «↩ link_reply · conv 1a2b3c4d…». Si el renglón no cabe, se recorta el proyecto y luego la máquina, nunca la persona. El plugin tolera lo que el motor agrega alrededor del mensaje (saltos CRLF, su párrafo «This came from another Claude session»). Solo cambia lo que ves tú: el texto que lee el modelo (el encabezado con `conv=`) sigue igual. Con ctrl+o ves el texto completo.
@@ -106,7 +112,7 @@ Para que el modelo las use sin preguntarte cada vez, agrégalas a `permissions.a
 
 ### Detalle técnico: cómo se dibujan las filas
 
-Se usan los `ui.render` de `ToolUse`, `ToolResult` y `UserMessage`. Un árbol devuelto por el hook de `ToolUse` es todo lo que se dibuja de esa fila: así lo describen los tipos del motor («una fila compacta propia se deja pasar con `isExpanded`») y lo confirma la prueba de motor con `mount`, donde el árbol del plugin es lo único que aparece. Lo que esa prueba no puede mostrar es la terminal real: falta ver una vez que la línea `sielay-link - link_send (MCP)(…)` no queda encima. Con `isExpanded` (ctrl+o) el plugin dibuja el texto completo. Si una fila no se puede leer (otra herramienta, un mensaje que no trae el encabezado de sielay-link), el hook la devuelve al motor con `next(e)`. Las funciones de texto (`mod/link-render-text.js`) son puras y reciben el ancho; el árbol se arma en `mod/link-render-rows.jsx`.
+Se usan los `ui.render` de `ToolUse`, `ToolResult` y `UserMessage`. Un árbol devuelto por el hook de `ToolUse` es todo lo que se dibuja de esa fila: así lo describen los tipos del motor («una fila compacta propia se deja pasar con `isExpanded`») y lo confirma la prueba de motor con `mount`, donde el árbol del plugin es lo único que aparece. Lo que esa prueba no puede mostrar es la terminal real: falta ver una vez que la línea `sielay-link - link_send (MCP)(…)` no queda encima. Con `isExpanded` (ctrl+o) el plugin dibuja el texto completo. Si una fila no se puede leer (otra herramienta, un mensaje que no trae el encabezado de sielay-link), el hook la devuelve al motor con `next(e)`. Las funciones de texto (`mod/link-render-text.js` y `mod/link-render-compact.js`) son puras y reciben el ancho; el árbol se arma en `mod/link-render-rows.jsx`.
 
 ## Novedades de la 1.7.2
 

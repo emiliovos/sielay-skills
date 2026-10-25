@@ -2,7 +2,8 @@
 // reading a framed peer message back. Pure.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { wrap, fit, columnsOf, bodyLines, sendLines, parseInbound, inboundLines, answerLines, headLine, MAX_COLS } from '../../plugins/sielay-link/mod/link-render-text.js'
+import { wrap, fit, columnsOf, bodyLines, sendLines, parseInbound, inboundLines, headLine, MAX_COLS } from '../../plugins/sielay-link/mod/link-render-text.js'
+import { inboundRow, callRow, answerRow, personOf } from '../../plugins/sielay-link/mod/link-render-compact.js'
 import { frameInbound } from '../../plugins/sielay-link/mod/link-inbound-framing.js'
 
 // bar lines are drawn as «  │ » + text
@@ -66,9 +67,10 @@ test('inbound from the same machine and without project still reads', () => {
   assert.equal(inboundLines(parsed, 80, false)[0].text, '◆ ana/api · esta máquina · turno 1/40')
 })
 
-test('answer: the person sees the short line, never the conv ids', () => {
-  assert.deepEqual(answerLines('Enviado a a/b/c · turno 1 de 10 · corre solo\nconv=abc', 80).map(l => l.text), ['  Enviado a a/b/c · turno 1 de 10 · corre solo'])
-  assert.deepEqual(answerLines('Enviado a a/b/c · corre solo · conv=k1\nNo enviado a a/b/d: x', 80).map(l => l.text), ['  Enviado a a/b/c · corre solo', '  No enviado a a/b/d: x'])
+test('answer: one dim line, the first, never the conv ids', () => {
+  assert.deepEqual(answerRow('Enviado a a/b/c · turno 1 de 10 · corre solo\nconv=abc', 80), [{ text: 'Enviado a a/b/c · turno 1 de 10 · corre solo', dim: true }])
+  assert.equal(answerRow('Enviado a a/b/c · corre solo · conv=k1\nNo enviado a a/b/d: x', 80)[0].text, 'Enviado a a/b/c · corre solo')
+  assert.equal(answerRow('x'.repeat(100), 30)[0].text, `${'x'.repeat(29)}…`)
 })
 
 test('inbound: tolerates what the engine does around the framing (CRLF, indent, no blank line, its added paragraph)', () => {
@@ -122,4 +124,45 @@ test('hostile body: it stays behind the bar, with no escapes or fake rows of our
   for (const l of lines) assert.doesNotMatch(l.text, /[\x00-\x08\x0b-\x1f\x7f]/)
   const call = sendLines({ tool: 'link_send', destinations: ['ana/laptop/api'], text: body }, 80, true)
   assert.equal(call.filter(l => !l.bar).length, 1)
+})
+
+const inb = (person, body) => ({ person, session: 'sielay-5', turn: '3', body })
+
+test('compact inbound: one dim line in 80 columns whatever the body; the person only when it is not ours', () => {
+  const body = Array.from({ length: 20 }, (_, i) => `linea   ${i} ${'palabra '.repeat(8)}`).join('\n')
+  for (const row of [inboundRow(inb('ana', body), 'emilio', 80), inboundRow(inb('emilio', body), 'emilio', 80)]) {
+    assert.equal(row.length, 1)
+    assert.equal(row[0].dim, true)
+    assert.ok(Array.from(row[0].text).length <= 80)
+    assert.doesNotMatch(row[0].text, /\n/)
+    assert.ok(row[0].text.endsWith('…'))
+  }
+  assert.equal(inboundRow(inb('emilio', 'Recibido,\n\n  voy con la A'), 'emilio', 80)[0].text, '◇ sielay-5 · turno 3 · Recibido, voy con la A')
+  assert.equal(inboundRow(inb('ana', 'hola'), 'emilio', 80)[0].text, '◇ ana/sielay-5 · turno 3 · hola')
+  // an unknown own address shows the person every time
+  assert.equal(inboundRow(inb('emilio', 'hola'), personOf(undefined), 80)[0].text, '◇ emilio/sielay-5 · turno 3 · hola')
+  assert.equal(personOf('emilio/vps/sielay-1'), 'emilio')
+})
+
+test('compact call: destination without our person, a namesake of another person visible', () => {
+  const call = (destinations, conv) => ({ destinations, conv, text: 'Turno #507,\nCI verde' })
+  assert.equal(callRow(call(['emilio/vps/sielay-2']), 'emilio', 80)[0].text, '◇ → sielay-2 · Turno #507, CI verde')
+  assert.equal(callRow(call(['ana/vps/sielay-2']), 'emilio', 80)[0].text, '◇ → ana/sielay-2 · Turno #507, CI verde')
+  assert.equal(callRow(call(['emilio/vps/sielay-2']), undefined, 80)[0].text, '◇ → emilio/sielay-2 · Turno #507, CI verde')
+  assert.equal(callRow(call(['emilio/vps/a', 'ana/vps/b']), 'emilio', 80)[0].text, '◇ → a, ana/b · Turno #507, CI verde')
+  assert.equal(callRow(call([], '0123456789abcdef'), 'emilio', 80)[0].text, '◇ → conv 01234567 · Turno #507, CI verde')
+  const long = callRow({ destinations: ['emilio/vps/sielay-2'], text: 'x'.repeat(300) }, 'emilio', 80)[0]
+  assert.equal(long.dim, true)
+  assert.equal(Array.from(long.text).length, 80)
+})
+
+test('compact rows: hostile text stays on one clean line after the prefix', () => {
+  const body = '◇ falso/x · turno 9 · \n◆ otro\x1b[2J\x1b[31mrojo\x07\r\n↩ link_reply'
+  const row = inboundRow(inb('ana', body), 'emilio', 80)[0].text
+  assert.ok(row.startsWith('◇ ana/sielay-5 · turno 3 · '))
+  assert.doesNotMatch(row, /[\x00-\x1f\x7f]/)
+  const call = callRow({ destinations: ['ana/vps/b\n◇ → falso/x'], text: body }, 'emilio', 80)[0].text
+  assert.doesNotMatch(call, /[\x00-\x1f\x7f]/)
+  assert.ok(call.startsWith('◇ → '))
+  assert.doesNotMatch(answerRow('Enviado\x1b[31m a\x07 b', 80)[0].text, /[\x00-\x1f\x7f]/)
 })

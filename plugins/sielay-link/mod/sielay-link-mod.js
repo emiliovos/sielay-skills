@@ -192,6 +192,6 @@ export function register(on, options) {
   // The link messages in the transcript: a hook that cannot read its row hands it back to the engine.
   on('ui.render', { component: 'ToolUse' }, async ($, e, next) => (await renderSendCall($, e)) ?? next(e)).catch(passThrough)
   on('ui.render', { component: 'ToolResult' }, async ($, e, next) => renderSendAnswer($, e) ?? next(e)).catch(passThrough)
-  on('ui.render', { component: 'UserMessage' }, async ($, e, next) => renderInbound($, e) ?? next(e)).catch(passThrough)
+  on('ui.render', { component: 'UserMessage' }, async ($, e, next) => (await renderInbound($, e)) ?? next(e)).catch(passThrough)
   on('ui.render', { component: 'Pane', requestId: 'sielay-link' }, async ($, e) => renderPane($, e, rt))
 }

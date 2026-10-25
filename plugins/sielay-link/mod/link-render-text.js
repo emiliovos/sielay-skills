@@ -101,7 +101,7 @@ export function headLine(lead, parts, cols, cutOrder = []) {
 }
 
 /** An address as it is shown: the same characters the hub allows, anything else a dash. @param {unknown} v */
-const addressText = v => safeField(v, /[^a-z0-9/-]+/g, true)
+export const addressText = v => safeField(v, /[^a-z0-9/-]+/g, true)
 
 /** @param {unknown} address @returns {{ person: string, machine: string, session: string } | null} */
 export function splitAddress(address) {
@@ -174,15 +174,4 @@ export function inboundLines(m, cols, expanded) {
     ...bodyLines(m.body, cols, expanded),
     { text: fit(`${INDENT}↩ link_reply · conv ${m.conv.slice(0, 8)}…`, cols), dim: true },
   ]
-}
-
-/**
- * What the person sees of a link_send / link_reply answer: every line but the
- * `conv=` ones (the model needs the id, the person has the short one above).
- * @param {string} answer @param {number} cols
- * @returns {Line[]}
- */
-export function answerLines(answer, cols) {
-  const kept = answer.split('\n').filter(l => !l.startsWith('conv=')).map(l => l.replace(/ · conv=\S+$/, ''))
-  return kept.flatMap(l => wrap(l, cols - INDENT.length)).map(t => ({ text: INDENT + t, dim: true }))
 }
