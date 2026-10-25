@@ -7,6 +7,8 @@ Se escribe en la carpeta del plan:
 
 ```yaml
 kind: ui | backend | infra | docs | mixed
+entregado: []   # hasta 5: qué quedó en la rama principal o en producción, con PR o SHA
+pendientes: []  # hasta 5: qué falta y quién decide ("Deploy: lo decide <persona>")
 bien: []        # hasta 5, una línea cada una
 mal: []
 batallo: []     # donde se perdió tiempo o hubo que rehacer
@@ -21,6 +23,7 @@ marcador:
   fallas_que_la_revision_no_vio: []   # lo que apareció después de la revisión (CI, e2e, producción)
 ```
 
+- **Redacción de cada lista:** un hecho por ítem, una línea (~100 caracteres, máximo 160), que empiece por lo que pasó o lo que se hizo, con PR o SHA cuando aplique. Sin adjetivos ni jerga ("robusto", "sinergia", "end-to-end"). Lo que no aplica va vacío; no se rellena.
 - Una propuesta es una regla concreta y accionable ("fijar el tope de tokens por carril desde el Frame"), no una queja.
 - Las fallas que la revisión no vio son el dato más útil: di qué clase de bug era y qué lo habría atrapado.
 

@@ -32,7 +32,8 @@ En `main directo` el aislamiento por worktree y el orden de integración se mant
 - **Tope por agente:** tras 3 vueltas sobre el mismo error, reemplázalo por un agente nuevo desde el último commit de su rama, con el error y lo ya intentado en el encargo. No repitas el mismo encargo.
 
 ## Durante
-- **Verificar por carril:** las pruebas afectadas o, si la compuerta corre en CI remoto, la corrida del workflow sobre el push del carril (`gh run watch` o `gh pr checks --watch`); con CI remoto no corras pruebas locales, tampoco en subagentes.
+- **Verificar por carril:** las pruebas afectadas o, si la compuerta corre en CI remoto, la corrida del workflow sobre el push del carril; con CI remoto no corras pruebas locales, tampoco en subagentes. La CI que cuenta para la entrega es la de `build/<slug>`; la de un carril solo sirve si ese carril no comparte archivos con los demás.
+- **Esperar la CI:** con `link_watch` (sielay-link 1.7.0 o posterior), pide al hub que avise y sigue con otra cosa. Sin él, `gh pr checks <N> --watch --fail-fast` con `run_in_background`. Nunca Monitor ni bucles de `gh … --json | jq`. Verde es la corrida de `pull_request`, no la de `push`: con PR abierto, la de `push` salta la compuerta.
 - **Un solo coordinador integra y entrega**, en orden y siempre por la compuerta. Con la CI del carril en verde y su revisión pasada, lo mezcla en `build/<slug>` (`git merge --no-ff`) y empuja. Si un carril resulta malo después, revierte su merge en `build/<slug>` y los demás siguen. Nadie más integra ni entrega.
 - **Revisión adversarial por carril, según su riesgo** (`/ak:code-review` o un `code-reviewer`): alto, a fondo con confirmación; normal, a fondo; bajo, ligera. Antes de la entrega, una **revisión de integración** del PR final: cómo encajan los carriles, no repetir cada uno. Los detalles técnicos los decides tú y reportas qué decidiste; las decisiones de producto se preguntan.
 - **Evaluador (revisión del carril y del PR final).** Un revisor con contexto fresco, por riesgo: alto, a fondo con confirmación; normal, a fondo; bajo, ligero. Antes de la entrega, una revisión de integración del PR final: cómo encajan los carriles, no repetir cada uno. Reglas:
@@ -46,11 +47,12 @@ En `main directo` el aislamiento por worktree y el orden de integración se mant
   Lo que queda (pulido, Medium y Low) va al reporte o a un issue, no a otra vuelta. **Si tras la última vuelta sigue abierto algún Critical o High, no entregues**: para y reporta al usuario el hallazgo con las opciones. Los detalles técnicos los decides tú y reportas qué decidiste; las decisiones de producto se preguntan.
 - **Prueba real una vez, sobre la integración.** En cuanto `build/<slug>` tenga un camino de punta a punta, pruébalo con el sistema real en un entorno desechable (y repítelo al integrar el último carril):
   - build de producción, puerto propio, base de datos y datos temporales;
-  - datos sembrados por las rutas reales, no insertados a mano;
+  - datos sembrados por las rutas reales, no insertados a mano; una captura de pantalla vacía no es evidencia, así que las capturas se toman con datos sembrados;
   - un script reejecutable;
   - evidencia en `plans/{plan}/reports/e2e-*.md`.
 
   Antes de entregar, abre al menos una captura si hay UI; si no, revisa la salida del script e2e. Muchas pruebas unitarias en verde no sustituyen esto.
+- **Con UI, pasada «captura contra referencia, por pantalla»** antes de cerrar la etapa 5: compara cada pantalla de `build/<slug>` con su referencia aprobada (diseño, maqueta o captura previa). Cada diferencia se corrige o se acepta de forma explícita y va a la retro.
 - Después de rebasar, reinstala las dependencias antes de empujar. Antes de lanzar un merge, confirma que el push del rebase llegó al remoto.
 - Si la suite de otra sesión tiene el lock, espera tu turno; no la mates.
 - Nunca `--no-verify`; nunca `git push | head`; nunca envolver el push o el merge en otro lock si la compuerta ya toma el suyo.

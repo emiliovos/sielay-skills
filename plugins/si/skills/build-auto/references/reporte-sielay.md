@@ -2,12 +2,15 @@
 
 Si la sesión tiene la herramienta `link_build_stage` (la publica el plugin `sielay-link`), el coordinador le cuenta a sielay en qué va el build, para que se vea en su visor de builds. Solo informa: no aprueba, no entrega y no dispara nada. Una aprobación siempre viene del usuario, nunca de la herramienta.
 
+## Versión mínima
+Sielay-link 1.7.0. Con esa versión el estimado (en el Frame y el Plan) y la retro (al cerrar) son obligatorios en cada build, no opcionales. Si la ficha muestra una versión anterior, dilo en una línea.
+
 ## Cuándo no aplica
 - **Sin la herramienta** (no está `sielay-link` o la sesión no la expone): no la llames ni la menciones. El flujo sigue igual, sin error y sin preguntar.
 - **`reported: false`**: sigue igual; no reintentes ni avises. Desde sielay-link 1.4.0 trae `reason`: `pending` (todavía no hay poll), `too_many_sessions`, `paused`, `unauthorized`, `unpaired`, `off` o `unreachable`. Con `too_many_sessions` (el dispositivo llegó al tope de sesiones), anótalo una vez en la ficha y sigue.
 - **`reported: true`** significa que el hub acepta los polls de esta sesión, no que registró el build: puede ignorarlo (por ejemplo, por su tope de builds, un build ya cerrado o el visor apagado).
 - **Rechazo por un campo** (`el campo <x> no es válido`): corrige u omite ese campo una vez y sigue. Un reporte nunca detiene ni cambia el build.
-- **Plugin anterior a sielay-link 1.3.0** (no conoce `estimate`): si rechaza la llamada por ese campo, repítela sin `estimate` y no lo vuelvas a mandar en ese build; si la acepta, el campo se descarta sin aviso y el visor no muestra horario. En los dos casos el estimado queda solo en el contrato.
+- **Plugin anterior a sielay-link 1.3.0** (no conoce `estimate`; el mínimo exigido ya es 1.7.0): si rechaza la llamada por ese campo, repítela sin `estimate` y no lo vuelvas a mandar en ese build; si la acepta, el campo se descarta sin aviso y el visor no muestra horario. En los dos casos el estimado queda solo en el contrato.
 
 ## `build_id`
 - `<repo>-<carpeta-del-plan>`: el nombre del repo sin el dueño y la carpeta del plan (`{AAMMDD}-{slug}`).
@@ -47,7 +50,7 @@ Solo el coordinador (`role: "coordinator"`) manda `stage`, `status`, `outcome`, 
 
 Notas:
 - En `main directo` no hay PR: `pr` queda fuera y `merge_pr` sigue el push a main por la compuerta.
-- Con rama de integración, `pr` es el PR final; con varios PRs, el que se entrega ahora.
+- `pr` es siempre el PR final de `build/<slug>`. El estimado cuenta una sola ventana de integración, CI y merge.
 - Con `--chico` no hay etapa 2: se pasa de la 1 a la 3.
 - Aprobación conjunta (por defecto, Evidencia y Plan juntos): al pasar de la etapa 2 a la 3 no hay `waiting_approval`; al recibir la aprobación van dos `gate` con el mismo `approved_at`, primero el de la etapa 2 y luego el de la 3. Con `--pausas` o la pausa automática, la etapa 2 tiene su propio `waiting_approval` y su `gate`.
 - Volver a una etapa (por ejemplo, de Revisar a Implementar) es otra entrada: se reporta igual.
@@ -67,10 +70,13 @@ Cada vez que el build espera algo, manda `waiting` junto con el estado:
 Solo con `status: "done"`; sale de `retro.yaml` (`cierre-y-retro.md`):
 ```json
 { "retro": { "kind": "ui | backend | infra | docs | mixed",
+  "entregado": ["…"], "pendientes": ["…"],
   "bien": ["…"], "mal": ["…"], "batallo": ["…"],
   "propuestas": [{ "text": "…", "applies_to": "build-auto | repo | plan" }] } }
 ```
-- Hasta 5 elementos por lista y 4 propuestas; cada texto, máximo 160. Sin secretos ni datos de clientes.
+- Hasta 5 elementos por lista y 4 propuestas; cada texto, máximo 160, con la redacción de `cierre-y-retro.md`. Sin secretos ni datos de clientes.
+- `entregado` y `pendientes` necesitan sielay-link ≥ 1.7.2. Si el plugin rechaza la llamada por esos campos, repítela sin ellos y pon lo mismo en el `summary` final como dos bloques de líneas `- ` bajo los encabezados `Entregado:` y `Pendiente:`.
+- El `summary` final va en 1 a 3 frases cortas o en líneas que empiezan con `- ` (el visor respeta los saltos de línea y las pinta como lista).
 - `applies_to` dice dónde cae la propuesta: `build-auto` (la skill), `repo` (el repo) o `plan` (cómo planear este tipo de cambio). Las de `build-auto` y `plan` se aplican por defecto en el siguiente Frame.
 
 ## `estimate`
