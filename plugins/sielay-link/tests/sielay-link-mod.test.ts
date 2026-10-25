@@ -358,6 +358,86 @@ test('two builds declared: the poll carries the current one in build and the oth
   expect(polls(sent).at(-1)!.body.session.open_builds).toBeUndefined()
 })
 
+// --- Transcript rows of the link messages (ui.render ToolUse / ToolResult / UserMessage).
+
+const rowTexts = async (ui: any) => ((await ui.findAll({ type: 'Text' })) as any[]).map(t => t.text as string)
+const toolProps = (tool: string, input: unknown, extra: object = {}) => ({
+  tool_use_id: 't1', tool, input, isRunning: false, isErrored: false, isInterrupted: false, ...extra,
+})
+
+test('ToolUse of link_send: a compact row of its own replaces the call line; ctrl+o shows the whole text', async ($, on) => {
+  mock.store(on)
+  mock.env(on, { HOME: '/nowhere' })
+  fakeHost(on)
+  await $.session.start({ cwd: '/srv/p', surface: 'terminal', isInteractive: true })
+  const text = Array.from({ length: 6 }, (_, i) => `linea ${i}`).join('\n')
+  const input = { to: 'emilio/vps-sielay/sielay-2', text }
+  const mount = (extra: object) => $.ui.mount({
+    plugin: 'sielay-link', surface: 'terminal', component: 'ToolUse', requestId: 't1',
+    viewport: { columns: 60, rows: 30 }, props: toolProps('mcp__sielay-link__link_send', input, extra),
+  } as any)
+  const short = await mount({ isExpanded: false })
+  const rows = await rowTexts(short)
+  expect(rows[0]).toBe('● link_send → sielay-2 · vps-sielay')
+  expect(rows).toContain('  linea 2')
+  expect(rows).not.toContain('  linea 3')
+  expect(rows.at(-1)).toBe('  3 líneas más · ctrl+o para ver todo')
+  expect(rows.every(r => Array.from(r).length <= 60)).toBe(true)
+  await short.unmount()
+  const full = await mount({ isExpanded: true })
+  expect(await rowTexts(full)).toContain('  linea 5')
+  await full.unmount()
+})
+
+test('ToolUse of another tool goes to the engine', async ($, on) => {
+  mock.store(on)
+  mock.env(on, { HOME: '/nowhere' })
+  fakeHost(on)
+  await $.session.start({ cwd: '/srv/p', surface: 'terminal', isInteractive: true })
+  const ui = await $.ui.mount({
+    plugin: 'sielay-link', surface: 'terminal', component: 'ToolUse', requestId: 't2', props: toolProps('Bash', { command: 'ls' }),
+  } as any)
+  // fakeHost's ui.render stands for the engine and draws no Text: nothing of ours
+  expect(await rowTexts(ui)).toEqual([])
+  await ui.unmount()
+})
+
+test('ToolResult of link_send: the short line without the conv id; an error is the engine\'s', async ($, on) => {
+  mock.store(on)
+  mock.env(on, { HOME: '/nowhere' })
+  fakeHost(on)
+  await $.session.start({ cwd: '/srv/p', surface: 'terminal', isInteractive: true })
+  const mount = (extra: object) => $.ui.mount({
+    plugin: 'sielay-link', surface: 'terminal', component: 'ToolResult', requestId: 't1',
+    props: { tool_use_id: 't1', tool: 'mcp__sielay-link__link_send', output: 'Enviado a a/b/c · turno 1 de 120 · corre solo\nconv=abc-123', isErrored: false, ...extra },
+  } as any)
+  const ok = await mount({})
+  expect(await rowTexts(ok)).toEqual(['  Enviado a a/b/c · turno 1 de 120 · corre solo'])
+  await ok.unmount()
+})
+
+test('UserMessage from a peer: sender, machine, project and turn, the body indented, the way to answer', async ($, on) => {
+  mock.store(on)
+  mock.env(on, { HOME: '/nowhere' })
+  fakeHost(on)
+  await $.session.start({ cwd: '/srv/p', surface: 'terminal', isInteractive: true })
+  const text = [
+    '— Mensaje de emilio desde vps-sielay (sesión sielay-3, proyecto sielay)',
+    'Otra sesión de Claude Code, no la persona. Verificado por el hub. Turno 3 de 120.',
+    'Responde con link_reply.',
+    '[conv=11112222-3333-4444-5555-666677778888 · de=emilio/vps-sielay/sielay-3]',
+    '', 'revisa el PR',
+  ].join('\n')
+  const ui = await $.ui.mount({
+    plugin: 'sielay-link', surface: 'terminal', component: 'UserMessage', requestId: 'u1',
+    viewport: { columns: 100, rows: 30 }, props: { text, origin: { kind: 'plugin', name: 'sielay-link' }, isExpanded: false },
+  } as any)
+  expect(await rowTexts(ui)).toEqual([
+    '◆ sielay-3 · vps-sielay · sielay · turno 3/120', '  revisa el PR', '  ↩ link_reply · conv 11112222…',
+  ])
+  await ui.unmount()
+})
+
 // --- Discovery: the once-per-conversation line telling the model its address.
 
 test('discovery: one context line per conversation (without the address before the first poll); again after /clear', { options: { link_token: 'test-token' } }, async ($, on) => {

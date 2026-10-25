@@ -12,6 +12,7 @@ import { discoveryFor } from './link-discovery-context.js'
 import { endOnClose } from './link-session-end.js'
 import { renderBand } from './link-band.jsx'
 import { renderPane } from './link-pane.jsx'
+import { renderSendCall, renderSendAnswer, renderInbound } from './link-render-rows.jsx'
 import {
   declareFromTool, noteSubagentStart, noteSubagentSpawn, noteSubagentStop, noteToolUse, noteTurnComplete, carryOnClear,
 } from './link-build-hooks.js'
@@ -188,5 +189,9 @@ export function register(on, options) {
   on('command.run', { command: 'link' }, async ($, e) => runLinkCommand($, rt, e.args, e.origin))
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => (await renderBand($, e, rt)) ?? next(e))
+  // The link messages in the transcript: a hook that cannot read its row hands it back to the engine.
+  on('ui.render', { component: 'ToolUse' }, async ($, e, next) => (await renderSendCall($, e)) ?? next(e)).catch(passThrough)
+  on('ui.render', { component: 'ToolResult' }, async ($, e, next) => renderSendAnswer($, e) ?? next(e)).catch(passThrough)
+  on('ui.render', { component: 'UserMessage' }, async ($, e, next) => renderInbound($, e) ?? next(e)).catch(passThrough)
   on('ui.render', { component: 'Pane', requestId: 'sielay-link' }, async ($, e) => renderPane($, e, rt))
 }
