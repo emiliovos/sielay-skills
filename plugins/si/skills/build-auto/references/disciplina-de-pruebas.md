@@ -45,11 +45,11 @@ Si producción compara contra el reloj de la base de datos, la prueba siembra y 
 - `/ak:test optimize [scope]`: pruebas más rápidas y baratas, con mediciones.
 - `/ak:test optimize --ultra`: cinco enfoques independientes; un verificador elige el más fuerte.
 
-Sin AgentKit, haz lo mismo con un subagente `tester` y entrega la misma evidencia.
+Sin AgentKit, haz lo mismo con el agente del carril y entrega la misma evidencia.
 
 ---
 
-## Reporte final (al terminar la etapa 7)
+## Reporte final (etapa 8)
 - **Qué se entregó y dónde:** PRs o commits, URLs, issues, y qué quedó desplegado.
 - **Evidencia de cada criterio de aceptación:** pruebas, mutaciones que muerden, capturas, logs, prueba de humo.
 - **Cifras medidas** (tiempos, costos) contra los objetivos del plan.

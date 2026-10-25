@@ -21,6 +21,8 @@ Revisa cada área contra el objetivo. Un área que no aplica se marca «no aplic
 9. Tiempo y entorno: zonas horarias, relojes, versión del runtime, sistema operativo, host.
 10. UX, i18n y a11y: textos, idiomas, teclado, lectores de pantalla.
 
+Además, si el cambio exige algo en **otro host** (una versión, un permiso, una instalación, una aprobación), anótalo aquí como punto ciego, con quién lo hace y cuándo.
+
 ### Tabla por punto
 | # | Área | Supuesto | Cómo se verifica | Si falla | Importancia/evidencia | ¿Spike? |
 |---|---|---|---|---|---|---|
