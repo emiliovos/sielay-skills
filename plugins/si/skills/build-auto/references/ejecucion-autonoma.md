@@ -2,7 +2,7 @@
 
 ## Antes de lanzar agentes en paralelo
 1. Confirma que la compuerta de pruebas del repo existe y funciona (`compuerta-de-pruebas.md`). Si no existe, el plan la incluye como fase.
-2. Corre `/ak:test audit` (o un `tester`) acotado a las pruebas que tocará el plan. Arregla las inestables conocidas o acótalas con timeout: una prueba colgada con el lock de la suite frena a todos los carriles. Una inestable compartida la arregla el coordinador una vez, no cada carril.
+2. Corre `/ak:test audit` (o un agente de pruebas) acotado a las pruebas que tocará el plan. Arregla las inestables conocidas o acótalas con timeout: una prueba colgada con el lock de la suite frena a todos los carriles. Una inestable compartida la arregla el coordinador una vez, no cada carril.
 3. Red team del contrato y su enmienda (etapa 3).
 4. Crea la rama de integración `build/<slug>` desde la rama principal actualizada. Todos los carriles arrancan a la vez (hasta la concurrencia de la ficha) sobre `contracts.md` congelado; ninguno espera el merge de otro salvo una dependencia declarada en el contrato.
 5. Por carril:
@@ -13,7 +13,7 @@
 En `main directo` el aislamiento por worktree y el orden de integración se mantienen: el coordinador integra carril por carril en `build/<slug>` y al final empuja a main por la compuerta.
 
 ## Quién ejecuta
-- **Subagentes por tipo:** `fullstack-developer` (código), `docs-manager` (docs), `code-reviewer` (revisión y red team), `researcher` / `Explore` (evidencia), `tester` (verificación). Si no existen con esos nombres, usa los de propósito general con el mismo encargo. Los subagentes de una sesión comparten scratchpad: nombres de archivo únicos.
+- **Subagentes:** `fullstack-developer` (implementa y escribe las pruebas de su carril), `docs-manager` (docs), `code-reviewer` (revisión con contexto fresco y red team), `researcher` / `Explore` (evidencia, con el modelo más chico). Si no existen con esos nombres, usa los de propósito general con el mismo encargo. Los subagentes de una sesión comparten scratchpad: nombres de archivo únicos.
 - **Otra sesión de Claude Code** (otra terminal): con `--terminales`, según la tabla de reparto del plan y `terminales.md`. Sin el flag, solo si el usuario pide una sesión concreta en la conversación; si no, un subagente.
 - **Todo encargo es autocontenido:**
   - la tarea;
@@ -27,21 +27,23 @@ En `main directo` el aislamiento por worktree y el orden de integración se mant
   - "después de cada rebase, reinstala las dependencias antes de empujar";
   - que termine con `Status: DONE | DONE_WITH_CONCERNS | BLOCKED`.
 
-  Un tester tiene que entregar un artefacto (log, captura, salida de comandos); "revisé el código" no cuenta como verificación.
+  Quien verifica entrega un artefacto (log, captura, salida de comandos); "revisé el código" no cuenta como verificación.
+- **Un agente por carril, de punta a punta:** el que implementa escribe sus pruebas; no hay cadena implementador → tester → revisor. Solo el revisor es otro agente, con contexto fresco.
 - **Tope por agente:** tras 3 vueltas sobre el mismo error, reemplázalo por un agente nuevo desde el último commit de su rama, con el error y lo ya intentado en el encargo. No repitas el mismo encargo.
 
 ## Durante
-- **Verificar por carril:** las pruebas afectadas o, si la compuerta corre en CI remoto, la corrida del workflow sobre el push del carril (`gh run watch` o `gh pr checks --watch`); con CI remoto no corras suites locales.
+- **Verificar por carril:** las pruebas afectadas o, si la compuerta corre en CI remoto, la corrida del workflow sobre el push del carril (`gh run watch` o `gh pr checks --watch`); con CI remoto no corras pruebas locales, tampoco en subagentes.
 - **Un solo coordinador integra y entrega**, en orden y siempre por la compuerta. Con la CI del carril en verde y su revisión pasada, lo mezcla en `build/<slug>` (`git merge --no-ff`) y empuja. Si un carril resulta malo después, revierte su merge en `build/<slug>` y los demás siguen. Nadie más integra ni entrega.
 - **Revisión adversarial por carril, según su riesgo** (`/ak:code-review` o un `code-reviewer`): alto, a fondo con confirmación; normal, a fondo; bajo, ligera. Antes de la entrega, una **revisión de integración** del PR final: cómo encajan los carriles, no repetir cada uno. Los detalles técnicos los decides tú y reportas qué decidiste; las decisiones de producto se preguntan.
-- **Los revisores reportan solo lo que afecta la corrección, la seguridad o los requisitos.** El resto va como opcional: no bloquea la entrega ni se convierte en pruebas nuevas por defecto. Perseguir cada hallazgo lleva a pruebas para casos que no pueden ocurrir. Pon esta regla en el encargo de cada revisor.
-- **Tope de revisión por carril y por el PR final:**
-  - una revisión a fondo;
-  - corrige **en lote** todo lo Critical y High;
-  - confirma con una revisión ligera;
-  - máximo **dos vueltas**.
+- **Evaluador (revisión del carril y del PR final).** Un revisor con contexto fresco, por riesgo: alto, a fondo con confirmación; normal, a fondo; bajo, ligero. Antes de la entrega, una revisión de integración del PR final: cómo encajan los carriles, no repetir cada uno. Reglas:
+  - usa como rúbrica los criterios de aceptación en JSON del contrato, y marca cada `estado` con su evidencia;
+  - reporta solo lo que afecta la corrección, la seguridad o los requisitos; el resto va como opcional y no bloquea. Pon esto en su encargo;
+  - marca la **clase completa** del bug (todas las apariciones, con un grep), no una línea;
+  - no repite hallazgos ya reportados;
+  - máximo **3 vueltas** (1 en riesgo bajo). Cada vuelta corrige en lote todo lo Critical y High; desde la segunda, re-revisa **solo el diff nuevo**;
+  - antes de declarar que pasa, el verificador corre la **compuerta completa** del repo, no una o dos pruebas.
 
-  Lo que queda (pulido, Medium y Low) va al reporte o a un issue, no a otra vuelta. Revisar sin tope cuesta horas y la mayoría de las vueltas extra solo pulen. **Si tras la segunda vuelta sigue abierto algún Critical o High, no entregues**: para y reporta al usuario el hallazgo con las opciones.
+  Lo que queda (pulido, Medium y Low) va al reporte o a un issue, no a otra vuelta. **Si tras la última vuelta sigue abierto algún Critical o High, no entregues**: para y reporta al usuario el hallazgo con las opciones. Los detalles técnicos los decides tú y reportas qué decidiste; las decisiones de producto se preguntan.
 - **Prueba real una vez, sobre la integración.** En cuanto `build/<slug>` tenga un camino de punta a punta, pruébalo con el sistema real en un entorno desechable (y repítelo al integrar el último carril):
   - build de producción, puerto propio, base de datos y datos temporales;
   - datos sembrados por las rutas reales, no insertados a mano;
@@ -57,6 +59,7 @@ En `main directo` el aislamiento por worktree y el orden de integración se mant
 ## Al cerrar cada carril
 - Actualiza el estado en `plan.md` y en el tracker (*si aplica*).
 - Si reportas a sielay (`reporte-sielay.md`): `link_build_stage` con `plan_progress` (`done` + 1) y la `phase` que sigue en curso. Al entrar a la etapa 4, `total` es el número de carriles.
+- Si el carril pasó su tope de tokens, ya paró en un punto seguro y reportó: decide si sigue, se parte o se reasigna.
 - Compara las horas reales del carril contra su estimado. Si el total previsto se movió más que la tolerancia (±max(0,5 h, 10 % del programado)) o el carril se pasó, reestima con un motivo corto: en el contrato y, si reportas a sielay, con `estimate` completo y `reason` (`reporte-sielay.md`). No pide aprobación salvo que cambie el Goal, los criterios, los no-goals o la autoridad.
 - Reporta al usuario en una línea.
 - Anota la hora de inicio y fin de cada tramo (espera humana, evidencia y plan, implementación, revisión, CI, integración, merge, deploy) en `plan.md`: alimenta la tabla «dónde se fue el tiempo» del reporte final.

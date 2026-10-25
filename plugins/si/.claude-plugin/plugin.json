@@ -1,6 +1,6 @@
 {
   "name": "si",
-  "description": "Trae dos skills: /si:checkpoint (cierre de sesión con journal, docs, commit, push y handoff) y /si:build-auto (lleva un proyecto de la idea a merge o producción en 7 etapas con 2 aprobaciones y carriles paralelos, por la compuerta de pruebas del repo). Las skills nuevas solo te llegan cuando corres claude plugin update si@sielay.",
+  "description": "Trae dos skills: /si:checkpoint (cierre de sesión con journal, docs, commit, push y handoff) y /si:build-auto (lleva un proyecto de la idea a merge o producción en 8 etapas con 2 aprobaciones, carriles paralelos y una retro que alimenta el siguiente build, por la compuerta de pruebas del repo). Las skills nuevas solo te llegan cuando corres claude plugin update si@sielay.",
   "author": { "name": "emiliovos" },
   "homepage": "https://github.com/emiliovos/sielay-skills",
   "license": "MIT"
