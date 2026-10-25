@@ -2,9 +2,10 @@
 // sielay hub. Entry module (hooks/hooks.json). Every hook is registered here;
 // the work lives in the modules it imports, most of them pure.
 
-import { createRuntime, startLink, sessionPayload, isOff } from './link-runtime.js'
+import { createRuntime, startLink, sessionPayload, isOff, isMinimal } from './link-runtime.js'
 import { recordModeSample, recordSessionTitle, recordTurnEnd } from './link-session-payload.js'
 import { LINK_TOOL_SPECS, runLinkTool } from './link-tools.js'
+import { toolSpecsFor } from './link-tool-specs.js'
 import { reportState } from './link-build-tool.js'
 import { runLinkCommand } from './link-commands.js'
 import { PROMPT_FALLBACK_CONTEXT } from './link-inbound-framing.js'
@@ -26,7 +27,8 @@ const STATUS = /** @type {const} */ ({ plugin: 'sielay-link', key: 'status' })
 
 /**
  * Registers the tools and the command. Tools are left out entirely while
- * SIELAY_LINK_OFF=1, so the model never sees them.
+ * SIELAY_LINK_OFF=1, so the model never sees them; SIELAY_LINK_MINIMAL=1 keeps
+ * only the message tools.
  * @param {Engine} $ @param {Runtime} rt
  */
 async function setUp($, rt) {
@@ -36,7 +38,7 @@ async function setUp($, rt) {
     argumentHint: '[name <x> | off | on | peers | pair <slot>]',
   })
   if ((await $.env.get('SIELAY_LINK_OFF')) === '1') return
-  for (const spec of LINK_TOOL_SPECS) await $.tool.register(spec)
+  for (const spec of toolSpecsFor({ minimal: await isMinimal($) })) await $.tool.register(spec)
   await startLink($, rt)
 }
 
@@ -170,6 +172,7 @@ export function register(on, options) {
       announced: rt.discoveryAnnounced,
       connected: rt.client !== null,
       off: await isOff($),
+      minimal: await isMinimal($),
       ownPrompt,
       command: e.command !== undefined,
       address: (await $.state.get(STATUS)).value?.address,

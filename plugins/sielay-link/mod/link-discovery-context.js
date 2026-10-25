@@ -41,16 +41,16 @@ export function discoveryContext({ address, addressPrefix }) {
  * What one `prompt.submit` gets: the text once per conversation, or null.
  * Null leaves the conversation unmarked, so the next prompt tries again: no
  * token yet, sielay-link off, the plugin's own prompt, or a slash command (its
- * line may never reach the model). With a client and no address or prefix yet,
- * the text goes without the address clause.
+ * line may never reach the model). Minimal mode never sends it. With a client
+ * and no address or prefix yet, the text goes without the address clause.
  * @param {{
  *   announced: boolean, connected: boolean, off: boolean, ownPrompt: boolean, command: boolean,
- *   address?: unknown, addressPrefix?: unknown,
+ *   minimal?: boolean, address?: unknown, addressPrefix?: unknown,
  * }} s
  * @returns {string|null}
  */
 export function discoveryFor(s) {
-  if (s.announced || !s.connected || s.off || s.ownPrompt || s.command) return null
+  if (s.announced || !s.connected || s.off || s.minimal || s.ownPrompt || s.command) return null
   return discoveryContext(s)
 }
 

@@ -79,6 +79,11 @@ export async function isOff($) {
   return value
 }
 
+/** SIELAY_LINK_MINIMAL=1: messages only, no build tools and no discovery line. @param {Engine} $ */
+export async function isMinimal($) {
+  return (await $.env.get('SIELAY_LINK_MINIMAL')) === '1'
+}
+
 /** @param {Engine} $ @param {Runtime} rt */
 export async function sessionPayload($, rt) {
   return (await buildSessionPayload($, rt)).session

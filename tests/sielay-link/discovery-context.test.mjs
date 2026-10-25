@@ -68,3 +68,8 @@ test('ownAddress: status address, else prefix + session name, else null', async 
   assert.equal(await ownAddress({ sessionName }), null)
   assert.equal(await ownAddress({ addressPrefix: 'eva/box', sessionName: async () => 'Not Valid' }), null)
 })
+
+test('discoveryFor: minimal mode never sends the line', () => {
+  assert.equal(discoveryFor({ ...base, minimal: true }), null)
+  assert.equal(discoveryFor({ ...base, minimal: false }), discoveryContext({ address: 'eva/box/api' }))
+})

@@ -78,3 +78,15 @@ export const LINK_TOOL_SPECS = Object.freeze([
   BUILD_TOOL_SPEC,
   WATCH_TOOL_SPEC,
 ])
+
+/** What SIELAY_LINK_MINIMAL=1 leaves out: the build report and the CI watch, about 3/4 of the schemas' size. */
+export const MINIMAL_LEFT_OUT = Object.freeze(['link_build_stage', 'link_watch'])
+
+/**
+ * The tools a session registers: all of them, or in minimal mode only the
+ * three that send, reply and list peers.
+ * @param {{ minimal: boolean }} mode
+ */
+export function toolSpecsFor({ minimal }) {
+  return minimal ? LINK_TOOL_SPECS.filter(s => !MINIMAL_LEFT_OUT.includes(s.name)) : LINK_TOOL_SPECS
+}
