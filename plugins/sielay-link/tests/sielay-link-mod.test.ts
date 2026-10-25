@@ -426,6 +426,39 @@ test('link_peers gives the address the last poll assigned, even from an old hub 
   expect(JSON.parse(r.result)).toEqual({ tu_direccion: 'eva/box/p', peers })
 })
 
+test('link_watch answers: it posts the branch to the hub watch route and returns the hub answer', { options: { link_token: 'test-token' } }, async ($, on) => {
+  const clock = mock.clock(on, { now: 9_600_000 })
+  mock.store(on)
+  mock.env(on, { HOME: '/nowhere' })
+  fakeHost(on)
+  const sent = fakeHub(on, path => (path === '/api/link/poll'
+    ? { session: { id: 's', address: 'eva/box/p' }, messages: [], strip: [], poll_after_ms: 60_000 }
+    : { watching: true, expires_at: '2026-10-26T00:00:00Z' }))
+  await $.session.start({ cwd: '/srv/p', surface: 'terminal', isInteractive: true })
+  await clock.advance(10)
+  await clock.settle()
+  const r: any = await $.tool.call({ tool: 'mcp__sielay-link__link_watch', repo: 'eva/proyecto', branch: 'feat/x' } as any)
+  expect(r.deny).toBeUndefined()
+  expect(JSON.parse(r.result)).toEqual({ watching: true, expires_at: '2026-10-26T00:00:00Z' })
+  const watch = sent.find(s => new URL(s.url).pathname === '/api/link/watch')
+  expect([watch?.body.repo, watch?.body.branch]).toEqual(['eva/proyecto', 'feat/x'])
+})
+
+test('every registered tool has a tool.call hook that answers (unpaired, so each one denies or answers locally)', async ($, on) => {
+  const clock = mock.clock(on, { now: 9_700_000 })
+  mock.store(on)
+  mock.env(on, { HOME: '/nowhere' })
+  const { tools } = fakeHost(on) as any
+  await $.session.start({ cwd: '/srv/p', surface: 'terminal', isInteractive: true })
+  await clock.advance(10)
+  await clock.settle()
+  expect(tools.length).toBeGreaterThan(0)
+  for (const name of tools) {
+    const r: any = await $.tool.call({ tool: `mcp__sielay-link__${name}` } as any)
+    expect(r.result !== undefined || r.deny !== undefined).toBe(true)
+  }
+})
+
 test('link_build_stage: a 429 too_many_sessions poll answers reported false with that reason', { options: { link_token: 'test-token' } }, async ($, on) => {
   const clock = mock.clock(on, { now: 1_000_000 })
   mock.store(on)

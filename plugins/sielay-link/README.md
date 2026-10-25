@@ -97,6 +97,10 @@ Para que el modelo las use sin preguntarte cada vez, agrégalas a `permissions.a
 { "permissions": { "allow": ["mcp__sielay-link__link_send", "mcp__sielay-link__link_reply", "mcp__sielay-link__link_peers", "mcp__sielay-link__link_build_stage", "mcp__sielay-link__link_watch"] } }
 ```
 
+## Novedades de la 1.7.1
+
+- **`link_watch` responde:** la 1.7.0 la registraba sin el hook que la atiende y cada llamada fallaba con «no tool.call hook answered». Ahora cada herramienta registrada tiene su hook.
+
 ## Novedades de la 1.7.0
 
 - **Encabezado legible:** la tarjeta de arriba reemplaza el renglón `[sielay-link de=…]`.
