@@ -11,7 +11,7 @@ metadata:
   deps: "git en el repo destino. Recomendado: AgentKit (skills /ak:*); sin él, cada etapa se hace con subagentes nativos. Opcional: /si:checkpoint para el cierre (--checkpoint) y red a context7.com (o su MCP) para consultar la doc de dependencias en las etapas 2 y 3."
   installs: []
   risk: none
-  version: "2.3.1"
+  version: "2.3.2"
 ---
 
 # Build-auto: backbone de proyecto autónomo
