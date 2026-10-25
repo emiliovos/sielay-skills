@@ -173,7 +173,7 @@ test('link_send with a token answers text the model can read, and posts the cont
   const r: any = await $.tool.call({ tool: 'mcp__sielay-link__link_send', to: 'ana/laptop/api', text: 'hola' } as any)
   expect(r.deny).toBeUndefined()
   expect(typeof r.result).toBe('string')
-  expect(JSON.parse(r.result).conversation_id).toBe('c1')
+  expect(r.result).toMatch(/^Enviado a .* · turno 1 de 10 · corre solo\nconv=c1$/)
   const send = sent.find(s => s.url.endsWith('/api/link/send'))!
   expect(send.body).toMatchObject({ to: 'ana/laptop/api', body: 'hola', from: { mode: 'bypassPermissions', mode_fresh: 1 } })
   expect(typeof send.body.client_msg_id).toBe('string')
