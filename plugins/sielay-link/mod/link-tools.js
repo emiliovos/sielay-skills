@@ -6,79 +6,17 @@
 
 import { normalizeName } from './link-session-name-resolution.js'
 import { neutralizeBody } from './link-inbound-framing.js'
-import { BUILD_TOOL_SPEC, runBuildTool } from './link-build-tool.js'
-import { WATCH_TOOL_SPEC, watchBody } from './link-watch-tool.js'
+import { runBuildTool } from './link-build-tool.js'
+import { watchBody } from './link-watch-tool.js'
+import { LINK_TOOL_SPECS, MAX_RECIPIENTS } from './link-tool-specs.js'
 import { ownAddress, selfPrefixOf } from './link-discovery-context.js'
 import { ADDRESS } from './link-tool-address.js'
 import { CODE_MESSAGES, describeHubError, closedConversationNote, noteFor, resultNote } from './link-tool-messages.js'
 
-export { describeHubError, closedConversationNote }
+export { describeHubError, closedConversationNote, LINK_TOOL_SPECS }
 
 const MAX_BODY_BYTES = 16 * 1024
-/** The hub's cap for `to` as a list (one conversation per address). */
-const MAX_RECIPIENTS = 10
 
-/** @type {ReadonlyArray<{ name: string, description: string, inputSchema: Record<string, unknown>, isDeferred: false }>} */
-export const LINK_TOOL_SPECS = Object.freeze([
-  {
-    name: 'link_send',
-    description:
-      'Envía un mensaje a otra sesión de Claude Code emparejada por sielay-link (dirección persona/máquina/sesión; ' +
-      'usa link_peers para verlas). Abre una conversación nueva salvo que pases `conversation`. Con `to` como lista ' +
-      `(hasta ${MAX_RECIPIENTS} direcciones, sin conversation) abre una conversación con cada una y responde un resultado por destino. ` +
-      'El hub decide si el receptor lo ejecuta solo o lo deja en su franja para que una persona lo acepte.',
-    inputSchema: {
-      type: 'object',
-      additionalProperties: false,
-      required: ['to', 'text'],
-      properties: {
-        to: {
-          anyOf: [
-            { type: 'string' },
-            { type: 'array', items: { type: 'string' }, minItems: 1, maxItems: MAX_RECIPIENTS },
-          ],
-          description: 'Dirección destino persona/máquina/sesión, o una lista de hasta 10',
-        },
-        text: { type: 'string', description: 'Texto del mensaje (máximo 16 KB)' },
-        conversation: { type: 'string', description: 'Id de una conversación existente (opcional)' },
-      },
-    },
-    isDeferred: false,
-  },
-  {
-    name: 'link_reply',
-    description:
-      'Responde en una conversación de sielay-link que llegó con el encabezado [sielay-link de=… conv=…]. ' +
-      'Usa el valor de conv como `conversation`. Pon end=true para cerrar la conversación.',
-    inputSchema: {
-      type: 'object',
-      additionalProperties: false,
-      required: ['conversation', 'text'],
-      properties: {
-        conversation: { type: 'string', description: 'El conv= del encabezado' },
-        text: { type: 'string', description: 'Texto de la respuesta (máximo 16 KB)' },
-        end: { type: 'boolean', description: 'Cierra la conversación después de esta respuesta' },
-      },
-    },
-    isDeferred: false,
-  },
-  {
-    name: 'link_peers',
-    description:
-      'Lista las sesiones de Claude Code con las que esta sesión puede hablar por sielay-link (las de tus máquinas y las de ' +
-      'máquinas conectadas) y tu propia dirección. Úsala antes de link_send cuando te pidan escribirle a otra sesión.',
-    inputSchema: {
-      type: 'object',
-      additionalProperties: false,
-      properties: {
-        online_only: { type: 'boolean', description: 'Solo las sesiones en línea, de la más activa a la menos (por defecto). false trae también las desconectadas' },
-      },
-    },
-    isDeferred: false,
-  },
-  BUILD_TOOL_SPEC,
-  WATCH_TOOL_SPEC,
-])
 
 
 /** @param {unknown} raw @returns {string} the address normalized, or '' */
@@ -92,6 +30,21 @@ function checkText(text) {
   if (typeof text !== 'string' || text.trim() === '') return 'El texto no puede ir vacío.'
   if (new TextEncoder().encode(text).length > MAX_BODY_BYTES) return CODE_MESSAGES.too_large ?? 'too large'
   return null
+}
+
+const ATTACHMENT_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/
+
+/**
+ * @param {unknown} a
+ * @returns {{ name: string, text: string } | null | string} the attachment, null when absent, or an error
+ */
+function checkAttachment(a) {
+  if (a === undefined) return null
+  const o = /** @type {{ name?: unknown, text?: unknown }} */ (a ?? {})
+  if (typeof o.name !== 'string' || !ATTACHMENT_NAME.test(o.name)) return 'El adjunto necesita un nombre simple (letras, números, punto, guion).'
+  if (typeof o.text !== 'string' || o.text === '') return 'El adjunto va vacío.'
+  if (new TextEncoder().encode(o.text).length > 64 * 1024) return 'El adjunto pasa de 64 KB.'
+  return { name: o.name, text: o.text }
 }
 
 /**
@@ -165,6 +118,8 @@ export async function runLinkTool(name, input, deps) {
 
     const textError = checkText(input.text)
     if (textError) return { deny: textError }
+    const attachment = checkAttachment(input.attachment)
+    if (typeof attachment === 'string') return { deny: attachment }
     /** @type {Record<string, unknown>} */
     const body = { from: await deps.sessionFrom() }
 
@@ -174,7 +129,7 @@ export async function runLinkTool(name, input, deps) {
       if (to.length === 0 || to.length > MAX_RECIPIENTS) return { deny: `Pon entre 1 y ${MAX_RECIPIENTS} direcciones.` }
       const bad = to.find(a => !ADDRESS.test(a))
       if (bad !== undefined) return { deny: 'Cada dirección debe ser persona/máquina/sesión (mira link_peers).' }
-      const sent = await deps.client.send({ ...body, to, client_msg_id: deps.newId(), body: input.text })
+      const sent = await deps.client.send({ ...body, to, client_msg_id: deps.newId(), body: input.text, ...(attachment ? { attachment } : {}) })
       const results = Array.isArray(sent?.results) ? sent.results : []
       for (const r of results) {
         if (r?.ok === true && typeof r.conversation_id === 'string' && typeof r.to === 'string') await deps.rememberConversation(r.conversation_id, r.to)
@@ -197,6 +152,7 @@ export async function runLinkTool(name, input, deps) {
     }
     body.client_msg_id = deps.newId()
     body.body = input.text
+    if (attachment) body.attachment = attachment
     if (name === 'link_reply' && input.end === true) body.end = true
 
     const sent = await deps.client.send(body)

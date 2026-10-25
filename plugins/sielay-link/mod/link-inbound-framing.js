@@ -77,7 +77,8 @@ function count(n) {
 
 /**
  * @typedef {{ id: string, conversation_id: string, seq?: number, turn?: number, max_turns?: number,
- *   from?: { address?: string, mode?: string, project?: string }, body: string, run?: number, gate?: string, sent_at?: string }} Delivery
+ *   from?: { address?: string, mode?: string, project?: string }, body: string, run?: number, gate?: string, sent_at?: string,
+ *   attachment?: { name?: string, text?: string } }} Delivery
  */
 
 /**
@@ -122,5 +123,15 @@ export function frameInbound(delivery, opts = {}) {
     'Responde con link_reply.',
     `[conv=${conv} · de=${address}]`,
   ].join('\n')
-  return `${header}\n\n${neutralizeBody(delivery.body)}`
+  return `${header}\n\n${neutralizeBody(delivery.body)}${frameAttachment(delivery.attachment)}`
+}
+
+/**
+ * The attachment after the body, marked as the other session's text.
+ * @param {Delivery['attachment']} a
+ */
+function frameAttachment(a) {
+  if (!a || typeof a.text !== 'string' || a.text === '') return ''
+  const name = safeField(a.name, /[^A-Za-z0-9._-]+/g)
+  return `\n\n[adjunto ${name} · ${new TextEncoder().encode(a.text).length} bytes · texto de la otra sesión]\n${neutralizeBody(a.text)}`
 }

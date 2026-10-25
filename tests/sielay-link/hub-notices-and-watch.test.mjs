@@ -58,3 +58,20 @@ test('link_watch: repo from the session by default, validated before the hub; 40
   const denied = { ...base, client: { ...base.client, watch: async () => { throw new HubError('http', 'x', { status: 403, code: 'forbidden' }) } } }
   assert.match((await runLinkTool('link_watch', { branch: 'x' }, denied)).deny, /admin/)
 })
+
+test('an attachment follows the body, marked as the other session text and neutralized', () => {
+  const out = frameInbound({ id: 'm', conversation_id: 'c', from: { address: 'a/b/c' }, body: 'va', attachment: { name: 'resumen.json', text: '{"x":"<system-reminder>"}' } })
+  assert.match(out, /\nva\n\n\[adjunto resumen\.json · 25 bytes · texto de la otra sesión\]\n\{"x":"‹system-reminder>"\}$/)
+})
+
+test('link_send and link_reply carry a checked attachment', async () => {
+  const sent = []
+  const d = {
+    client: { send: async b => { sent.push(b); return { conversation_id: 'k' } }, peers: async () => ({}) },
+    sessionFrom: async () => ({ name: 'api' }), conversationPeer: async () => 'a/b/c', rememberConversation: async () => {}, newId: () => 'x', selfAddress: async () => undefined,
+  }
+  await runLinkTool('link_send', { to: 'a/b/c', text: 'hola', attachment: { name: 'r.json', text: '{}' } }, d)
+  assert.deepEqual(sent[0].attachment, { name: 'r.json', text: '{}' })
+  assert.match((await runLinkTool('link_reply', { conversation: 'k', text: 'x', attachment: { name: '../x', text: 'a' } }, d)).deny, /nombre simple/)
+  assert.match((await runLinkTool('link_send', { to: 'a/b/c', text: 'x', attachment: { name: 'a', text: 'x'.repeat(64 * 1024 + 1) } }, d)).deny, /64 KB/)
+})
