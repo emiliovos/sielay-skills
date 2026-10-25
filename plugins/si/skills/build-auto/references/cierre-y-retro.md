@@ -21,6 +21,10 @@ marcador:
   reloj_idea_a_merge: ""      # de la primera línea del Frame al merge
   estimado_vs_real: ""        # programado contra real, con la razón real/estimado
   fallas_que_la_revision_no_vio: []   # lo que apareció después de la revisión (CI, e2e, producción)
+  propuestas_previas:         # de la tabla «Retros previas» del Frame
+    leidas: 0                 # filas de la tabla (propuestas y problemas leídos)
+    aplicadas: 0              # filas con «sí» que de verdad se aplicaron
+    no_aplicadas: 0           # filas con «no», más los «sí» que al final no se aplicaron
 fases:          # una por etapa o carril que corrió, en orden
   - fase: ""                  # "1 Frame", "4 carril backend", "6 revisión de integración"…
     modelo: ""                # el que corrió de verdad, según medir-contexto.mjs
@@ -34,10 +38,11 @@ fases:          # una por etapa o carril que corrió, en orden
 - **Redacción de cada lista:** un hecho por ítem, una línea (~100 caracteres, máximo 160), que empiece por lo que pasó o lo que se hizo, con PR o SHA cuando aplique. Sin adjetivos ni jerga ("robusto", "sinergia", "end-to-end"). Lo que no aplica va vacío; no se rellena.
 - Una propuesta es una regla concreta y accionable ("fijar el tope de tokens por carril desde el Frame"), no una queja.
 - Las fallas que la revisión no vio son el dato más útil: di qué clase de bug era y qué lo habría atrapado.
+- **`propuestas_previas` se cuenta de la tabla del Frame**, fila por fila: `leidas` = aplicadas + no aplicadas. Un «sí» que no llegó a aplicarse cuenta como no aplicado y va en `mal` con su porqué. Sin retros previas, los tres en 0.
 
 ## Qué hacer
 1. Escribe `retro.yaml`.
-2. Manda `retro` a sielay (`reporte-sielay.md`) junto con `status: "done"`, `stage: 7` y `outcome`. Si el campo `retro` del plugin no tiene lugar para `fases`, resúmelas en una línea del `summary` final («coordinador opus máx 140 K, 1 corte; carriles sonnet máx 90 K; revisión opus 60 K»).
+2. Manda `retro` a sielay (`reporte-sielay.md`) junto con `status: "done"`, `stage: 7` y `outcome`. Si el campo `retro` del plugin no tiene lugar para `fases`, resúmelas en una línea del `summary` final («coordinador opus máx 140 K, 1 corte; carriles sonnet máx 90 K; revisión opus 60 K»). Además, siempre, una línea con `propuestas_previas` (`- Retros previas: 5 leídas, 3 aplicadas, 2 no`), porque el campo `retro` no la lleva.
 3. Si el entorno publica artifacts, publica el marcador como una página de cifras con su fuente (de dónde sale cada número). Sin eso, el marcador va en el reporte final.
 4. Escribe el reporte final estilo brief: primero lo que necesita a la persona (decisiones, momentos humanos, pendientes), luego lo que pasó.
 5. Commitea `retro.yaml` con los demás reportes del plan, según el modo de entrega.
