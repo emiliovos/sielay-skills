@@ -71,6 +71,8 @@ export function retro(v, status) {
     bien: list(v.bien, 'retro.bien'),
     mal: list(v.mal, 'retro.mal'),
     batallo: list(v.batallo, 'retro.batallo'),
+    entregado: list(v.entregado, 'retro.entregado'),
+    pendientes: list(v.pendientes, 'retro.pendientes'),
     propuestas,
   }
 }
@@ -96,6 +98,8 @@ export const WAITING_RETRO_SCHEMA = Object.freeze({
       bien: { type: 'array', maxItems: RETRO_LIST_MAX, items: { type: 'string' }, description: `Salió bien (cada uno máximo ${RETRO_TEXT_MAX})` },
       mal: { type: 'array', maxItems: RETRO_LIST_MAX, items: { type: 'string' }, description: 'Salió mal' },
       batallo: { type: 'array', maxItems: RETRO_LIST_MAX, items: { type: 'string' }, description: 'Con qué se batalló' },
+      entregado: { type: 'array', maxItems: RETRO_LIST_MAX, items: { type: 'string' }, description: 'Qué se entregó (PRs, versiones, cambios visibles)' },
+      pendientes: { type: 'array', maxItems: RETRO_LIST_MAX, items: { type: 'string' }, description: 'Qué quedó pendiente y de quién' },
       propuestas: {
         type: 'array', maxItems: RETRO_PROPOSALS_MAX, description: 'Propuestas para el siguiente build',
         items: {
