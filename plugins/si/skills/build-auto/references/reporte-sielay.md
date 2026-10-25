@@ -22,11 +22,11 @@ Si la sesión tiene la herramienta `link_build_stage` (la publica el plugin `sie
   Ejemplo: repo `_Mi.Repo` y carpeta `260101-Exportar PDF`, segunda corrida → `x_mi.repo-260101-exportar-pdf-r2`.
 
 ## Campos
-Cada llamada lleva siempre `build_id`, `role`, `stage` (1 a 7) y `status` (`running`, `waiting_approval`, `blocked` o `done`). La herramienta mezcla cada llamada con las anteriores del mismo `build_id`: manda solo lo que cambió. Los subagentes, el uso de tokens y las fechas de inicio los pone el plugin; los subagentes no llaman la herramienta.
+Cada llamada lleva siempre `build_id`, `role`, `stage` (1 a 7; la etapa 8, Cierre, se reporta como `stage: 7`) y `status` (`running`, `waiting_approval`, `blocked` o `done`). La herramienta mezcla cada llamada con las anteriores del mismo `build_id`: manda solo lo que cambió. Los subagentes, el uso de tokens y las fechas de inicio los pone el plugin; los subagentes no llaman la herramienta.
 
 Toda fecha que mandes (`approved_at`) sale del reloj del sistema con `date -u +%Y-%m-%dT%H:%M:%SZ`, nunca escrita por ti.
 
-Solo el coordinador (`role: "coordinator"`) manda `stage`, `status`, `outcome`, `gate`, `summary`, `delivery`, `plan_progress`, `title` y `estimate`. Una terminal trabajadora usa `role: "worker"` y solo aporta `phase` (ver `terminales.md`). A las terminales solo les das el `build_id` si recibiste `reported: true`; si no, no reportan.
+Solo el coordinador (`role: "coordinator"`) manda `stage`, `status`, `outcome`, `gate`, `summary`, `delivery`, `plan_progress`, `title`, `estimate`, `waiting` y `retro`. Una terminal trabajadora usa `role: "worker"` y solo aporta `phase` (ver `terminales.md`). A las terminales solo les das el `build_id` si recibiste `reported: true`; si no, no reportan.
 
 ## Momentos
 | Momento | Campos (además de los obligatorios) |
@@ -40,8 +40,10 @@ Solo el coordinador (`role: "coordinator"`) manda `stage`, `status`, `outcome`, 
 | Comando de entrega corriendo / terminado | `delivery.merge_pr`: `"running"`, luego `"merged"` o `"failed"`; `stamp` con el SHA del sello si la compuerta lo produce (si no, `null`) |
 | Deploy pendiente o hecho | `delivery.deploy_pending: true` mientras falte publicar; `false` cuando el comando de publicación termina bien |
 | Reestimación | `estimate` completo con `reason` (motivo corto, máximo 120); `stage` y `status` los vigentes |
-| Bloqueo fuera de un gate | `status: "blocked"` y un `summary` con el motivo (un momento humano, un Critical/High tras el tope de revisión, un guardarraíl) |
-| Fin | `status: "done"`, `outcome` y el `summary` final; `stage` es la etapa donde terminó |
+| Espera de cualquier tipo | `waiting` (ver abajo), junto con `waiting_approval` o `blocked` |
+| Bloqueo fuera de un gate | `status: "blocked"`, un `summary` con el motivo (un momento humano, un Critical/High tras el tope de revisión, un guardarraíl) y `waiting` |
+| Vuelta a `running` | `waiting: null` |
+| Fin (etapa 8) | `stage: 7`, `status: "done"`, `outcome`, el `summary` final (estilo brief) y `retro`. Si el build paró antes, `stage` es la etapa donde terminó y `retro` va igual si hay qué contar |
 
 Notas:
 - En `main directo` no hay PR: `pr` queda fuera y `merge_pr` sigue el push a main por la compuerta.
@@ -50,6 +52,26 @@ Notas:
 - Aprobación conjunta (por defecto, Evidencia y Plan juntos): al pasar de la etapa 2 a la 3 no hay `waiting_approval`; al recibir la aprobación van dos `gate` con el mismo `approved_at`, primero el de la etapa 2 y luego el de la 3. Con `--pausas` o la pausa automática, la etapa 2 tiene su propio `waiting_approval` y su `gate`.
 - Volver a una etapa (por ejemplo, de Revisar a Implementar) es otra entrada: se reporta igual.
 - `links` es opcional: hasta 10 `{ label, href }` hacia reportes del plan, con ruta relativa (sin `/` inicial) o URL `https:`.
+
+## `waiting`
+Cada vez que el build espera algo, manda `waiting` junto con el estado:
+```json
+{ "waiting": { "on": "you", "who": "<persona, terminal, PR o servicio>", "what": "Aprobar el plan", "next": "Al aprobar, arranca la etapa 4", "href": "https://…" } }
+```
+- `waiting_approval` → siempre `on: "you"`. `blocked` → `on` según a quién o qué se espera: `you` (decisión o guardarraíl), `terminal` (otra sesión), `pr`, `ci`, `external` o `error` (solo una falla real).
+- Al volver a `running` manda `waiting: null`. Al cerrar con `done` el servidor lo borra.
+- Límites: `on` obligatorio; `who` máximo 120; `what` y `next` máximo 160; `href` máximo 300, solo `https:` o ruta relativa. Sin secretos.
+- Un plugin que no conoce el campo lo rechaza: repite la llamada sin él y no lo vuelvas a mandar en ese build.
+
+## `retro`
+Solo con `status: "done"`; sale de `retro.yaml` (`cierre-y-retro.md`):
+```json
+{ "retro": { "kind": "ui | backend | infra | docs | mixed",
+  "bien": ["…"], "mal": ["…"], "batallo": ["…"],
+  "propuestas": [{ "text": "…", "applies_to": "build-auto | repo | plan" }] } }
+```
+- Hasta 5 elementos por lista y 4 propuestas; cada texto, máximo 160. Sin secretos ni datos de clientes.
+- `applies_to` dice dónde cae la propuesta: `build-auto` (la skill), `repo` (el repo) o `plan` (cómo planear este tipo de cambio). Las de `build-auto` y `plan` se aplican por defecto en el siguiente Frame.
 
 ## `estimate`
 ```json

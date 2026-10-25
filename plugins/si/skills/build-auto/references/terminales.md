@@ -9,13 +9,13 @@ Con `--terminales [N]`, el coordinador reparte carriles a otras sesiones de Clau
 - Si falta alguno, dilo en la ficha y repártelo todo a subagentes. Las sesiones de otra máquina (Remote Control, nube) no cuentan: no comparten disco ni worktrees.
 
 ## Modelos por rol
-Planear y revisión final, el más fuerte; implementar y revisar por carril, Sonnet; tester, exploración y git, el más ligero. Fíjalo en el encargo del subagente o en el `--model` de la terminal. Una terminal de carril mecánico (pruebas, migraciones, docs, un cambio acotado) se abre con `--model sonnet`; diseño, depuración difícil y el coordinador siguen en el más fuerte. El modelo se fija al abrir la terminal y no se cambia a mitad de sesión, porque cambiarlo invalida el caché: si un carril resulta más difícil, ciérralo con checkpoint y ábrelo de nuevo con otro modelo. La concurrencia (terminales y subagentes juntos) es la de la ficha: hasta 4 con CI remoto, 2 con pruebas locales.
+Coordinador, el más capaz; implementar (con sus pruebas), Sonnet con esfuerzo medio; revisión con contexto fresco, Sonnet o el más capaz según el riesgo; exploración y git, el más ligero. Fíjalo en el encargo del subagente o en el `--model` de la terminal. Una terminal de carril mecánico (pruebas, migraciones, docs, un cambio acotado) se abre con `--model sonnet`; diseño, depuración difícil y el coordinador siguen en el más fuerte. El modelo se fija al abrir la terminal y no se cambia a mitad de sesión, porque cambiarlo invalida el caché: si un carril resulta más difícil, ciérralo con checkpoint y ábrelo de nuevo con otro modelo. La concurrencia (terminales y subagentes juntos) es la de la ficha: hasta 4 con CI remoto, 2 con pruebas locales.
 
 ## Terminal o subagente
 | Va a una terminal | Va a un subagente |
 |---|---|
 | Fase con varias rondas de corrección (implementar, revisar, corregir, empujar) | Tarea corta o de una sola vuelta |
-| Fase que necesita sus propios subagentes (su tester, su revisor, su `/ak:cook --parallel`) | Evidencia, red team, revisión de solo lectura |
+| Fase que necesita sus propios subagentes (su revisor, su `/ak:cook --parallel`) | Evidencia, red team, revisión de solo lectura |
 | Fase larga que no debe llenar tu contexto | Fase que depende de lo que estás decidiendo ahora |
 
 El reparto va en el plan (etapa 3), con el porqué de cada fila, y se aprueba con él. Cada fila de "terminal reusada" nombra **la sesión concreta**: su nombre en `ListAgents` y su pane tmux (`sesión:ventana.pane`). Una sesión que no está en el plan aprobado no se toca. La coordinación, los contratos, las entregas y el deploy siguen contigo.
