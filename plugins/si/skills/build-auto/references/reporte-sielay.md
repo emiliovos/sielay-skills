@@ -117,8 +117,8 @@ Solo con `status: "done"`; sale de `retro.yaml` (`cierre-y-retro.md`):
 ```
 - Hasta 5 elementos por lista y 4 propuestas; cada texto, máximo 160, con la redacción de `cierre-y-retro.md`. Sin secretos ni datos de clientes.
 - `entregado` y `pendientes` necesitan sielay-link ≥ 1.7.2. Si el plugin rechaza la llamada por esos campos, repítela sin ellos y pon lo mismo en el `summary` final como dos bloques de líneas `- ` bajo los encabezados `Entregado:` y `Pendiente:`.
-- El `summary` final va en 1 a 3 frases cortas o en líneas que empiezan con `- ` (el visor respeta los saltos de línea y las pinta como lista).
-- `applies_to` dice dónde cae la propuesta: `build-auto` (la skill), `repo` (el repo) o `plan` (cómo planear este tipo de cambio). Las de `build-auto` y `plan` se aplican por defecto en el siguiente Frame.
+- El `summary` final va en 1 a 3 frases cortas o en líneas que empiezan con `- ` (el visor respeta los saltos de línea y las pinta como lista); las líneas de cifras (fases, retros previas, `Entregado:`/`Pendiente:`) no cuentan en ese tope, y todo cabe en los 600 caracteres. Incluye siempre una línea con `marcador.propuestas_previas` de `retro.yaml`, porque el campo `retro` no la lleva: `- Retros previas: 5 leídas, 3 aplicadas, 2 no`.
+- `applies_to` dice dónde cae la propuesta: `build-auto` (la skill), `repo` (el repo) o `plan` (cómo planear este tipo de cambio). Las de `build-auto` y `plan` entran como «sí» por defecto en la tabla «Retros previas» del siguiente Frame (`SKILL.md`).
 
 ## `estimate`
 ```json
