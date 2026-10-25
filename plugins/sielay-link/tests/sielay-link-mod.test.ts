@@ -327,6 +327,37 @@ test('the band shows the build line; /clear keeps the build; after done went out
   expect(polls(sent).at(-1)!.body.session.build).toBeUndefined()
 })
 
+test('two builds declared: the poll carries the current one in build and the other in open_builds; done removes it', { options: { link_token: 'test-token' } }, async ($, on) => {
+  const clock = mock.clock(on, { now: Date.parse('2026-10-20T23:00:00.000Z') })
+  mock.store(on)
+  mock.env(on, { HOME: '/nowhere' })
+  fakeHost(on)
+  fakeAgents(on)
+  const sent = pollHub(on)
+  const second = { ...buildArgs, build_id: 'sielay-261025-tope-link' }
+  await $.session.start({ cwd: '/srv/p', surface: 'terminal', isInteractive: true })
+  await $.tool.call({ tool: 'mcp__sielay-link__link_build_stage', ...buildArgs } as any)
+  await $.tool.call({ tool: 'mcp__sielay-link__link_build_stage', ...second } as any)
+  await clock.advance(61_000)
+  await clock.settle()
+  const session = polls(sent).at(-1)!.body.session
+  expect(session.build.build_id).toBe(second.build_id)
+  expect(session.open_builds).toEqual([buildArgs.build_id])
+
+  await $.tool.call({ tool: 'mcp__sielay-link__link_build_stage', ...second, stage: 7, status: 'done', outcome: 'delivered' } as any)
+  await clock.advance(61_000)
+  await clock.settle()
+  expect(polls(sent).at(-1)!.body.session).toMatchObject({ build: { status: 'done' }, open_builds: [buildArgs.build_id] })
+  await clock.advance(61_000)
+  await clock.settle()
+  expect(polls(sent).at(-1)!.body.session).toMatchObject({ build: null, open_builds: [buildArgs.build_id] })
+
+  await $.tool.call({ tool: 'mcp__sielay-link__link_build_stage', ...buildArgs, stage: 7, status: 'done', outcome: 'delivered' } as any)
+  await clock.advance(61_000)
+  await clock.settle()
+  expect(polls(sent).at(-1)!.body.session.open_builds).toBeUndefined()
+})
+
 // --- Discovery: the once-per-conversation line telling the model its address.
 
 test('discovery: one context line per conversation (without the address before the first poll); again after /clear', { options: { link_token: 'test-token' } }, async ($, on) => {

@@ -4,7 +4,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  declareFromTool, noteSubagentStart, noteSubagentSpawn, noteSubagentStop, noteToolUse, noteTurnComplete, carryOnClear, pollBuild, afterPoll,
+  declareFromTool, noteSubagentStart, noteSubagentSpawn, noteSubagentStop, noteToolUse, noteTurnComplete, carryOnClear, pollBuild, pollBuildFields, afterPoll,
 } from '../../plugins/sielay-link/mod/link-build-hooks.js'
 
 const T0 = Date.parse('2026-10-20T23:00:00.000Z')
@@ -191,4 +191,16 @@ test('a write that loses the version race is retried, not lost', async () => {
   const h = engine({ contend: 2 })
   assert.deepEqual(await declareFromTool(h.$, h.rt, min), {})
   assert.equal(h.raw().declared.build_id, min.build_id)
+})
+
+test('the poll carries the other open builds; with the current one gone it sends build null with them', async () => {
+  const h = engine()
+  await declareFromTool(h.$, h.rt, min)
+  await declareFromTool(h.$, h.rt, { ...min, build_id: 'sielay-261025-otro' })
+  const fields = await pollBuildFields(h.$, h.rt)
+  assert.equal(fields.build.build_id, 'sielay-261025-otro')
+  assert.deepEqual(fields.open_builds, [min.build_id])
+  await declareFromTool(h.$, h.rt, { ...min, build_id: 'sielay-261025-otro', status: 'done', outcome: 'delivered' })
+  await afterPoll(h.$, h.rt, { build: (await pollBuildFields(h.$, h.rt)).build })
+  assert.deepEqual(await pollBuildFields(h.$, h.rt), { build: null, open_builds: [min.build_id] })
 })

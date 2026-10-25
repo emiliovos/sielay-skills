@@ -173,7 +173,7 @@ export async function startLink($, rt) {
     buildSession: async () => {
       const built = await buildSessionPayload($, rt, { withBuild: true })
       await patchStatus($, { name: built.session.name, nameSource: built.nameSource })
-      const { build: _build, ...identity } = built.session
+      const { build: _build, open_builds: _open, ...identity } = built.session
       rt.lastSession = identity
       return built.session
     },

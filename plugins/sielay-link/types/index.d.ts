@@ -55,6 +55,12 @@ export type LinkBuildState = {
   subagents: Record<string, LinkBuildSubagent>
   peak: number
   usage: LinkBuildUsage | null
+  /** Other builds of this session still open, build_id -> ms of their last report (24 h expiry). */
+  open?: Record<string, number>
+  /** ms of the last link_build_stage call that touched the current build. */
+  touched_at?: number
+  /** The current build went out as done; the state only holds `open` until they end. */
+  closed?: true
 }
 
 declare module 'claude-code' {

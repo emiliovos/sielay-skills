@@ -6,7 +6,7 @@
 import { modeState } from './link-mode-freshness.js'
 import { resolveSessionName, cwdHash } from './link-session-name-resolution.js'
 import { claimInstanceId, instanceKey, socketOwnerAlive } from './link-instance-identity.js'
-import { pollBuild } from './link-build-hooks.js'
+import { pollBuildFields } from './link-build-hooks.js'
 import { sessionRepo } from './link-session-repo.js'
 
 // $.state references: literal plugin/key, declared in each file that uses them.
@@ -144,10 +144,10 @@ async function instanceIdFor($, hash, name, sessionId, now) {
  */
 async function safePollBuild($, rt) {
   try {
-    return await pollBuild($, rt)
+    return await pollBuildFields($, rt)
   } catch (err) {
     $.ui.log(`sielay-link: build no enviado, falló al leerlo (${err instanceof Error ? err.name : typeof err})`)
-    return undefined
+    return {}
   }
 }
 
@@ -204,7 +204,7 @@ export async function buildSessionPayload($, rt, { withBuild = false } = {}) {
   const resolved = pinName(rt, { ...fresh, hash: liveHash }, Boolean(tmuxEnv) && !rt.tmux.name)
   const hash = resolved.hash
   const instanceId = await instanceIdFor($, hash, resolved.name, sessionId, now)
-  const build = withBuild ? await safePollBuild($, rt) : undefined
+  const buildFields = withBuild ? await safePollBuild($, rt) : {}
   return {
     session: {
       name: resolved.name,
@@ -217,7 +217,7 @@ export async function buildSessionPayload($, rt, { withBuild = false } = {}) {
       // the project file names it; otherwise the folder (what the header shows as «proyecto»)
       ...(projectLabel(project.project, cwd) ? { project: projectLabel(project.project, cwd) } : {}),
       ...(repo ? { repo } : {}),
-      ...(build ? { build } : {}),
+      ...buildFields,
     },
     nameSource: resolved.source,
     mode,
