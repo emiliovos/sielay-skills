@@ -8,6 +8,7 @@ import { resolveSessionName, cwdHash } from './link-session-name-resolution.js'
 import { claimInstanceId, instanceKey, socketOwnerAlive } from './link-instance-identity.js'
 import { pollBuildFields } from './link-build-hooks.js'
 import { sessionRepo } from './link-session-repo.js'
+import { restoreModeCarry } from './link-mode-carry.js'
 
 // $.state references: literal plugin/key, declared in each file that uses them.
 const MODE_SAMPLES = /** @type {const} */ ({ plugin: 'sielay-link', key: 'modeSamples' })
@@ -179,6 +180,7 @@ function pinName(rt, resolved, tmuxUnread) {
  * @param {{ withBuild?: boolean }} [options] withBuild: the poll's payload, which carries the build
  */
 export async function buildSessionPayload($, rt, { withBuild = false } = {}) {
+  await restoreModeCarry($, rt) // after a /clear, before the mode is read
   const [sessionId, cwd, now] = await Promise.all([$.session.id(), sessionDir($), $.clock.now()])
   const liveHash = await cwdHash(cwd)
   const tmuxEnv = await $.env.get('TMUX')

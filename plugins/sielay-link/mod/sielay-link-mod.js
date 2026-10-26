@@ -11,6 +11,7 @@ import { runLinkCommand } from './link-commands.js'
 import { PROMPT_FALLBACK_CONTEXT } from './link-inbound-framing.js'
 import { discoveryFor } from './link-discovery-context.js'
 import { endOnClose } from './link-session-end.js'
+import { carryModeOnClear, restoreModeCarry } from './link-mode-carry.js'
 import { renderBand } from './link-band.jsx'
 import { renderPane } from './link-pane.jsx'
 import { renderSendCall, renderSendAnswer, renderInbound } from './link-render-rows.jsx'
@@ -147,14 +148,16 @@ export function register(on, options) {
     await noteSubagentSpawn($, rt, e, spawned)
     return spawned
   }).catch(passThrough)
-  // /clear keeps the build (the rest of the session state is the host's).
+  // /clear keeps the build and the last mode seen (the rest of the session state is the host's).
   on('session.end', async ($, e, next) => {
     rt.discoveryAnnounced = false
     await carryOnClear($, rt, e)
+    await carryModeOnClear($, rt, e)
     await endOnClose($, rt, e, () => isOff($))
     return next(e)
   }).catch(passThrough)
   on('classic.SessionStart', async ($, e, next) => {
+    await restoreModeCarry($, rt)
     await recordSessionTitle($, e.session_title)
     return next(e)
   }).catch(passThrough)

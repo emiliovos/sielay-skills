@@ -10,6 +10,7 @@ import { createPairingFlow } from './link-pairing.js'
 import { buildSessionPayload, readMode } from './link-session-payload.js'
 import { PANE_ID } from './link-state-refs.js'
 import { afterPoll } from './link-build-hooks.js'
+import { restoreModeCarry } from './link-mode-carry.js'
 
 // $.state references: literal plugin/key, declared in each file that uses them.
 const STRIP = /** @type {const} */ ({ plugin: 'sielay-link', key: 'strip' })
@@ -47,6 +48,8 @@ export function createRuntime(options) {
     loopCode: /** @type {import('./link-poll-loop.js').LoopCode|null} */ (null),
     /** The session object of the last poll sent, without its build: the goodbye reuses it. */
     lastSession: /** @type {Record<string, unknown>|null} */ (null),
+    /** The last mode sample held across a /clear (link-mode-carry.js). */
+    modeCarry: /** @type {import('./link-mode-carry.js').ModeCarry|null} */ (null),
     /** The build held across a /clear (link-build-hooks.js). */
     buildCarry: /** @type {import('../types/index.js').LinkBuildState|null} */ (null),
     /** The last invalid build field logged, so it is logged once. */
@@ -162,7 +165,7 @@ export async function startLink($, rt) {
   rt.handler = createInboundHandler({
     store: { get: key => $.store.get(key), set: (key, value) => $.store.set(key, value) },
     adapter,
-    readMode: () => readMode($),
+    readMode: async () => (await restoreModeCarry($, rt), readMode($)),
     onStrip: async items => void (await $.state.set(STRIP, items)),
     onConversation: async d => {
       const address = d.from?.address
