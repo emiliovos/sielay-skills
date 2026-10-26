@@ -100,14 +100,14 @@ Para que el modelo las use sin preguntarte cada vez, agrégalas a `permissions.a
 
 ## Novedades de la 1.9.2
 
-- **El modo auto también corre solo:** una sesión en modo `auto` de Claude Code cuenta igual que una en `bypassPermissions` para la auto-ejecución, al enviar y al recibir, siempre que el par tenga auto-ejecución. Claude Code sigue filtrando cada acción en ese modo. `default`, `plan` y `acceptEdits` siguen yendo a la franja. Hace falta el hub del 26-oct o posterior, que aplica la misma regla; con un hub anterior, un mensaje de una sesión en auto queda retenido como antes.
+- **El modo auto también corre solo:** una sesión en modo `auto` de Claude Code cuenta igual que una en `bypassPermissions` para la auto-ejecución, al enviar y al recibir, siempre que el par tenga auto-ejecución. Claude Code sigue filtrando cada acción en ese modo. `default`, `plan` y `acceptEdits` siguen yendo a la franja. Un modo `auto` pedido al arrancar (`--permission-mode auto` o `defaultMode`) cuenta solo cuando un hook lo confirma, porque una organización o un plan sin auto arranca en `default`. Hace falta el hub del 26-oct o posterior, que aplica la misma regla; con un hub anterior, un mensaje de una sesión en auto queda retenido como antes.
 - **La lectura del modo en idle vale 24 h:** antes eran 12 h, y una sesión en bypass que pasaba la noche sin tocarse mandaba a la franja lo que le llegaba. El tope vale igual para bypass y auto, y para un turno que quedó abierto sin fin.
 - **Para tomarla:** `claude plugin update sielay-link@sielay` y `/reload-plugins` en cada sesión abierta (o reiniciarla). Una sesión sigue con la versión que cargó al arrancar.
 
 ## Novedades de la 1.9.1
 
 - **El modo sobrevive a un /clear:** antes, una sesión en bypass recién limpiada con `/clear` y ociosa reportaba `unknown` hasta su primer prompt, y un mensaje de un par con auto-ejecución caía en la franja. Al hacer `/clear` el host empieza una sesión nueva con el estado vacío y no vuelve a correr `session.start`, así que la muestra de arranque no se repetía. Ahora el plugin guarda en memoria la última muestra de modo al cerrar con `/clear` y la pone en la conversación nueva si esta no tiene una propia, marcada como ociosa.
-- **Lo que no cambia:** se lleva la última muestra vista, no una lectura nueva: un shift+tab visto antes del `/clear` sigue ganando, la muestra conserva su edad (el tope, hoy de 24 h, cuenta desde que se vio) y un modo distinto de bypass sigue sin auto-ejecutar. Salir, `/resume` o reiniciar no llevan nada.
+- **Lo que no cambia:** se lleva la última muestra vista, no una lectura nueva: un shift+tab visto antes del `/clear` sigue ganando, la muestra conserva su edad (el tope, hoy de 24 h, cuenta desde que se vio) y un modo distinto de bypass (o de auto, desde la 1.9.2) sigue sin auto-ejecutar. Salir, `/resume` o reiniciar no llevan nada.
 
 ## Novedades de la 1.9.0
 

@@ -14,7 +14,7 @@
 // keeps redelivering it until the ack arrives. It is injected as-is, in any
 // mode; the dedupe by id keeps it from running twice.
 
-import { AUTO_RUN_MODES } from './link-mode-freshness.js'
+import { isAutoRunMode } from './link-mode-freshness.js'
 
 /**
  * @param {{ delivery: { run?: unknown, gate?: unknown }, mode: { mode?: unknown, fresh?: unknown } }} input
@@ -23,7 +23,7 @@ import { AUTO_RUN_MODES } from './link-mode-freshness.js'
 export function shouldInject({ delivery, mode }) {
   if (delivery.run !== 1) return false
   if (delivery.gate === 'accepted') return true
-  return delivery.gate === 'auto' && AUTO_RUN_MODES.has(/** @type {string} */ (mode.mode)) && mode.fresh === true
+  return delivery.gate === 'auto' && isAutoRunMode(mode.mode) && mode.fresh === true
 }
 
 /**

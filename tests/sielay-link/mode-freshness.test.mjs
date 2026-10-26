@@ -83,6 +83,15 @@ test('[last seen] idle auto mode counts like bypass: fresh up to 24 h, then stal
   assert.equal(stale.fresh, false)
 })
 
+test('[last seen] auto asked for at launch is not fresh until a hook shows it; bypass at launch is', () => {
+  const launchAuto = modeState({ samples: [{ mode: 'auto', at: 5, event: 'SessionStart' }], lastStopAt: 5, now: 6, policy: IDLE_POLICY_LAST_SEEN })
+  assert.deepEqual([launchAuto.mode, launchAuto.fresh], ['auto', false])
+  const seenAuto = modeState({ samples: [{ mode: 'auto', at: 5, event: 'SessionStart' }, { mode: 'auto', at: 9, event: 'Stop' }], lastStopAt: 9, now: 10, policy: IDLE_POLICY_LAST_SEEN })
+  assert.equal(seenAuto.fresh, true)
+  const launchBypass = modeState({ samples: [bypass(5, 'SessionStart')], lastStopAt: 5, now: 6, policy: IDLE_POLICY_LAST_SEEN })
+  assert.equal(launchBypass.fresh, true)
+})
+
 test('[last seen] a bypass session idle for a night (14 h) stays fresh', () => {
   const s = modeState({ samples: [bypass(0, 'Stop')], lastStopAt: 0, now: 14 * H, policy: IDLE_POLICY_LAST_SEEN })
   assert.equal(s.fresh, true)

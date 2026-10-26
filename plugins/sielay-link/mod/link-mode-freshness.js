@@ -16,9 +16,13 @@ export const IDLE_POLICY_LAST_SEEN = 'last-seen'
 /**
  * The modes a peer's message may run in on its own: bypass, and Claude Code's
  * `auto`, whose classifier still screens every action. `default`, `plan` and
- * `acceptEdits` never auto-run. The hub applies the same set.
+ * `acceptEdits` never auto-run. The hub applies the same rule.
+ * @param {unknown} mode
  */
-export const AUTO_RUN_MODES = new Set(['bypassPermissions', 'auto'])
+export const isAutoRunMode = (mode) => mode === 'bypassPermissions' || mode === 'auto'
+
+/** The launch sample's event (link-launch-mode.js): read from the command line or settings, not from a hook. */
+const LAUNCH_EVENT = 'SessionStart'
 
 /** The policy in force. Switching policies is this one line. */
 export const IDLE_POLICY = IDLE_POLICY_LAST_SEEN
@@ -82,7 +86,10 @@ export function modeState({ samples, lastStopAt, liveSource, now, policy = IDLE_
   if (state === 'working') return { mode: latest.mode, fresh: true, state, ageMs }
 
   const fresh =
-    policy === IDLE_POLICY_LAST_SEEN && AUTO_RUN_MODES.has(latest.mode)
+    policy === IDLE_POLICY_LAST_SEEN && isAutoRunMode(latest.mode) &&
+    // `auto` asked for at launch may not be granted (an organization or plan
+    // without it starts in default): it counts once a hook has shown it.
+    !(latest.mode === 'auto' && latest.event === LAUNCH_EVENT)
   return { mode: latest.mode, fresh, state, ageMs }
 }
 

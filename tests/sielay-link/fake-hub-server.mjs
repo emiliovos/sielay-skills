@@ -47,7 +47,7 @@ export async function startFakeHub({ token }) {
             continue
           }
           if (m.gate !== 'auto') continue
-          const run = receiver.mode === 'bypassPermissions' && receiver.mode_fresh === 1 ? 1 : 0
+          const run = (receiver.mode === 'bypassPermissions' || receiver.mode === 'auto') && receiver.mode_fresh === 1 ? 1 : 0
           if (!run) m.gate = 'strip'
           m.status = 'delivered'
           out.push({ ...m.delivery, run, gate: m.gate })
