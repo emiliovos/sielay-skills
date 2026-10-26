@@ -6,8 +6,9 @@
 // Uso: node medir-contexto.mjs [--sesion <id|ruta.jsonl>] [--desde <ISO>] [--hasta <ISO>] [--umbral <tokens>]
 // Salida: JSON en stdout. Sin dependencias.
 import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs';
-import { join, basename, dirname } from 'node:path';
+import { join, basename, dirname, resolve } from 'node:path';
 import { homedir } from 'node:os';
+import { fileURLToPath } from 'node:url';
 
 function parseArgs(argv) {
   const out = { umbral: 150000 };
@@ -36,7 +37,7 @@ const projectsDir = () => join(process.env.CLAUDE_CONFIG_DIR || join(homedir(), 
 
 // Encuentra el transcript: ruta explícita, id de sesión (del flag o de CLAUDE_CODE_SESSION_ID)
 // buscado en todas las carpetas de proyecto, o el más reciente del proyecto del cwd.
-function findTranscript(sesion) {
+export function findTranscript(sesion) {
   if (sesion && sesion.endsWith('.jsonl')) return existsSync(sesion) ? sesion : null;
   const id = sesion || process.env.CLAUDE_CODE_SESSION_ID;
   const root = projectsDir();
@@ -64,7 +65,7 @@ function contextOf(usage) {
 }
 
 // Recorre los turnos del asistente dentro de la ventana y devuelve máximo, último y modelos.
-function measure(file, { desde, hasta }) {
+export function measure(file, { desde, hasta } = {}) {
   const seen = new Set();
   const res = { turnos: 0, contexto_max: 0, contexto_actual: 0, modelos: {}, inicio: null, fin: null };
   let raw;
@@ -167,4 +168,5 @@ function main() {
   }, null, 2));
 }
 
-main();
+// Solo corre como CLI; corte-contexto.mjs lo importa por `measure`.
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main();

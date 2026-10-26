@@ -30,7 +30,7 @@ fases:          # una por etapa o carril que corrió, en orden
     modelo: ""                # el que corrió de verdad, según medir-contexto.mjs
     contexto_max: 0           # tokens, el máximo de esa fase
     subagentes: []            # [{tipo, modelo, contexto_max}] de los que corrieron en la fase
-    cortes: 0                 # checkpoints por llegar a 150 K
+    cortes: 0                 # checkpoints por llegar a 150 K (líneas «limpio» del build en ~/.cache/si-build-auto/corte/bitacora.log, más los cortes sin tmux que avisaron «listo para clear»; un «limpiar-fallo» va en `mal`)
 ```
 
 - **`fases` sale medido, no de memoria.** Con las horas de inicio y fin de cada tramo anotadas en `plan.md`, corre `node <carpeta de la skill>/scripts/medir-contexto.mjs --desde <inicio> --hasta <fin>` por fase (la carpeta es la de «Presupuesto de contexto» en `SKILL.md`; en cada sesión que coordinó, con `--sesion <id>` si hubo cortes; una terminal de carril reporta sus propias cifras al cerrar). Si un subagente corrió en otro modelo que el de la tabla «Modelo fijo por rol», o una fase pasó de 150 K sin cortar, va también en `mal` con su porqué.
