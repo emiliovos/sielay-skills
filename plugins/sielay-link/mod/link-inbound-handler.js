@@ -18,6 +18,7 @@ import { frameHubNotice, isHubNotice } from './link-hub-notice-framing.js'
 import { frameInbound, isDelivery } from './link-inbound-framing.js'
 import { shouldInject, onStripAccept, onStripReject } from './link-run-gate.js'
 import { createInboundStore } from './link-inbound-store.js'
+import { compactLine } from './link-inbox.js'
 
 /**
  * @typedef {import('./link-inbound-framing.js').Delivery} Delivery
@@ -32,10 +33,12 @@ import { createInboundStore } from './link-inbound-store.js'
  *   readMode: () => Promise<{ mode: string, fresh: boolean }>,
  *   onStrip: (items: Delivery[]) => Promise<void>,
  *   onConversation?: (d: Delivery) => Promise<void>,
+ *   inbox?: import('./link-inbox.js').Inbox,
+ *   compact?: () => Promise<boolean>,
  *   log?: (msg: string) => void,
  * }} deps
  */
-export function createInboundHandler({ store, adapter, readMode, onStrip, onConversation, log = () => {} }) {
+export function createInboundHandler({ store, adapter, readMode, onStrip, onConversation, inbox, compact = async () => false, log = () => {} }) {
   /** Strip items this client showed and the hub may not list yet, by id. */
   /** @type {Map<string, Delivery>} */
   const shownLocally = new Map()
@@ -69,8 +72,16 @@ export function createInboundHandler({ store, adapter, readMode, onStrip, onConv
     await onStrip(currentStrip())
   }
 
-  /** @param {Delivery} d */
-  async function inject(d) {
+  /**
+   * The whole card, or in compact mode the sender's line with the card kept for link_read.
+   * @param {Delivery} d @param {string} instanceId
+   */
+  async function inject(d, instanceId) {
+    if (inbox && (await compact())) {
+      await inbox.add(instanceId, d)
+      await adapter.inject(compactLine(d, selfAddress))
+      return
+    }
     await adapter.inject(frameInbound(d, { self: selfAddress }))
   }
 
@@ -89,7 +100,7 @@ export function createInboundHandler({ store, adapter, readMode, onStrip, onConv
       if (typeof data.session?.address === 'string') selfAddress = data.session.address
       for (const [id, d] of Object.entries(await readPending(instanceId))) {
         try {
-          await inject(d)
+          await inject(d, instanceId)
         } catch (err) {
           log(`accepted ${id} still not delivered: ${err instanceof Error ? err.message : String(err)}`)
           continue
@@ -110,7 +121,7 @@ export function createInboundHandler({ store, adapter, readMode, onStrip, onConv
         let outcome = 'shown'
         if (shouldInject({ delivery: d, mode: await readMode() })) {
           try {
-            await inject(d)
+            await inject(d, instanceId)
             outcome = 'injected'
           } catch (err) {
             log(`delivery ${d.id} not injected: ${err instanceof Error ? err.message : String(err)}`)
@@ -164,7 +175,7 @@ export function createInboundHandler({ store, adapter, readMode, onStrip, onConv
           await updatePending(ctx.instanceId, p => void (p[id] = d))
         }
         try {
-          await inject(d)
+          await inject(d, ctx.instanceId)
         } catch (err) {
           return { ok: false, error: `aceptado, pero no se pudo entregar (se reintenta solo): ${err instanceof Error ? err.message : String(err)}` }
         }

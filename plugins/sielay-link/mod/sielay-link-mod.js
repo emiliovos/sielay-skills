@@ -64,6 +64,11 @@ async function callTool($, rt, name, input) {
     newId: () => crypto.randomUUID(),
     selfAddress: async () => (await $.state.get(STATUS)).value?.address,
     notePrefix: prefix => void (rt.addressPrefix = prefix),
+    read: {
+      inbox: rt.inbox,
+      instanceId: async () => (await sessionPayload($, rt)).instance_id,
+      selfAddress: async () => (await $.state.get(STATUS)).value?.address,
+    },
     build: {
       declare: fields => declareFromTool($, rt, fields),
       canReport: async () => reportState({ paired: rt.client !== null, off: await isOff($), code: rt.loopCode }),
@@ -197,7 +202,7 @@ export function register(on, options) {
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => (await renderBand($, e, rt)) ?? next(e))
   // The link messages in the transcript: a hook that cannot read its row hands it back to the engine.
   on('ui.render', { component: 'ToolUse' }, async ($, e, next) => (await renderSendCall($, e)) ?? next(e)).catch(passThrough)
-  on('ui.render', { component: 'ToolResult' }, async ($, e, next) => renderSendAnswer($, e) ?? next(e)).catch(passThrough)
+  on('ui.render', { component: 'ToolResult' }, async ($, e, next) => (await renderSendAnswer($, e)) ?? next(e)).catch(passThrough)
   on('ui.render', { component: 'UserMessage' }, async ($, e, next) => (await renderInbound($, e)) ?? next(e)).catch(passThrough)
   on('ui.render', { component: 'Pane', requestId: 'sielay-link' }, async ($, e) => renderPane($, e, rt))
 }

@@ -8,6 +8,7 @@ import { normalizeName } from './link-session-name-resolution.js'
 import { neutralizeBody } from './link-inbound-framing.js'
 import { runBuildTool } from './link-build-tool.js'
 import { watchBody } from './link-watch-tool.js'
+import { runReadTool } from './link-read-tool.js'
 import { LINK_TOOL_SPECS, MAX_RECIPIENTS } from './link-tool-specs.js'
 import { ownAddress, selfPrefixOf } from './link-discovery-context.js'
 import { ADDRESS } from './link-tool-address.js'
@@ -65,6 +66,7 @@ function isConvId(id) {
  *   selfAddress: () => Promise<unknown>,
  *   notePrefix?: (prefix: string) => void,
  *   build?: import('./link-build-tool.js').BuildToolDeps,
+ *   read?: import('./link-read-tool.js').ReadToolDeps,
  * }} ToolDeps
  * @typedef {{ deny: string, result?: undefined } | { result: string, deny?: undefined }} ToolAnswer
  */
@@ -89,6 +91,10 @@ export async function runLinkTool(name, input, deps) {
   if (name === 'link_build_stage') {
     if (!deps.build) return { deny: 'link_build_stage no está disponible en esta sesión.' }
     return runBuildTool(input, deps.build)
+  }
+  if (name === 'link_read') {
+    if (!deps.read) return { deny: 'link_read no está disponible en esta sesión.' }
+    return runReadTool(input, deps.read)
   }
   if (!['link_send', 'link_reply', 'link_peers', 'link_watch'].includes(name)) return { deny: `herramienta desconocida: ${name}` }
   if (!deps.client) return { deny: 'sielay-link no está emparejado en esta máquina: corre /link pair <slot> (el slot lo crea un admin).' }

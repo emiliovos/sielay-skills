@@ -167,7 +167,7 @@ test('without SIELAY_LINK_MINIMAL every tool is registered', { options: { link_t
   const { tools: registered } = fakeHost(on)
   fakeHub(on, () => ({ session: { id: 's' }, messages: [], strip: [], poll_after_ms: 60_000 }))
   await $.session.start({ cwd: '/srv/p', surface: 'terminal', isInteractive: true })
-  expect(registered).toEqual(['link_send', 'link_reply', 'link_peers', 'link_build_stage', 'link_watch'])
+  expect(registered).toEqual(['link_send', 'link_reply', 'link_peers', 'link_read', 'link_build_stage', 'link_watch'])
 })
 
 test('SIELAY_LINK_MINIMAL=1: only the message tools, no discovery line, and it still polls', { options: { link_token: 'test-token' } }, async ($, on) => {
@@ -182,7 +182,7 @@ test('SIELAY_LINK_MINIMAL=1: only the message tools, no discovery line, and it s
   await clock.advance(10)
   await clock.settle()
   await $.prompt.submit({ text: 'hola' } as any)
-  expect(registered).toEqual(['link_send', 'link_reply', 'link_peers'])
+  expect(registered).toEqual(['link_send', 'link_reply', 'link_peers', 'link_read'])
   expect(seen.map(e => e.context ?? null)).toEqual([null])
   expect(sent.some(s => s.url.endsWith('/api/link/poll'))).toBe(true)
 })
