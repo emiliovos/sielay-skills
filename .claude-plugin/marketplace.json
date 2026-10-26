@@ -19,9 +19,9 @@
         "source": "git-subdir",
         "url": "https://github.com/emiliovos/sielay-skills.git",
         "path": "plugins/sielay-link",
-        "ref": "sielay-link-v1.9.0"
+        "ref": "sielay-link-v1.9.1"
       },
-      "description": "Opcional. Conecta sesiones de Claude Code emparejadas por el hub de sielay: mensajes entre sesiones, franja para aceptar o rechazar, auto-ejecución solo entre pares en bypass y el avance de /si:build-auto en el hub (solo informa). Requiere un slot que crea un admin. Fijado al tag sielay-link-v1.9.0."
+      "description": "Opcional. Conecta sesiones de Claude Code emparejadas por el hub de sielay: mensajes entre sesiones, franja para aceptar o rechazar, auto-ejecución solo entre pares en bypass y el avance de /si:build-auto en el hub (solo informa). Requiere un slot que crea un admin. Fijado al tag sielay-link-v1.9.1."
     }
   ]
 }
