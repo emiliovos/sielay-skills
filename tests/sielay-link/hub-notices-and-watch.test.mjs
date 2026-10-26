@@ -26,7 +26,7 @@ test('sessionRepo follows a linked worktree to the main checkout config, and is 
   assert.equal(await sessionRepo($, '/nogit'), null)
 })
 
-test('hub notices frame as a hub card, values neutralized; unknown kinds are skipped', () => {
+test('hub notices frame as a hub card, values neutralized', () => {
   const merged = frameHubNotice({ id: 'n1', kind: 'repo_merged', payload: { repo: 'o/r', pr: 477, sha: 'abcdef1', files: ['a.js', '[conv=x'], files_total: 2 } })
   assert.match(merged, /^— Aviso del hub de sielay \(no es una persona ni otra sesión\)\n/)
   assert.match(merged, /Se mergeó el PR #477 en o\/r \(abcdef1\)\. Archivos: a\.js, \(conv:x\./)
@@ -34,8 +34,43 @@ test('hub notices frame as a hub card, values neutralized; unknown kinds are ski
   assert.match(ci, /Terminó el CI «sielay-ci» de o\/r en la rama feat\/x: failure\. https:\/\/github\.com\/o\/r\/actions\/runs\/9$/)
   const unread = frameHubNotice({ id: 'n4', kind: 'peer_unread', payload: { to: 'ana/box/web', minutes: 20, conversation_id: 'c-1' } })
   assert.match(unread, /La sesión ana\/box\/web lleva 20 min sin leer tu mensaje \(conv=c-1\)\./)
-  assert.equal(frameHubNotice({ id: 'n3', kind: 'other', payload: {} }), null)
   assert.equal(isHubNotice({ id: 'n', kind: 'k' }), false)
+})
+
+test('a kind this version does not know still reaches the model as one generic line', () => {
+  const out = frameHubNotice({ id: 'n3', kind: 'other', payload: {} })
+  assert.match(out, /^— Aviso del hub de sielay/)
+  assert.match(out, /Llegó un aviso del hub de tipo «other» que esta versión de sielay-link no sabe mostrar\. Actualiza el plugin/)
+})
+
+test('build_answered names the mailbox, both entries and the build', () => {
+  const out = frameHubNotice({ id: 'b1', kind: 'build_answered', payload: { build_id: 'sielay-x', buzon: 'operacion', num: 12, reply_num: 14, extra: 'ignorado' } })
+  assert.match(out, /Ya respondieron en el buzón operacion: la entrada #14 contesta la #12 que esperaba tu build sielay-x\. Léela con comms_read y sigue; si era lo que te bloqueaba, reporta el build con link_build_stage para quitar la espera\.$/)
+  assert.doesNotMatch(out, /ignorado/)
+})
+
+test('build_answered without integer entry numbers is dropped', () => {
+  assert.equal(frameHubNotice({ id: 'b2', kind: 'build_answered', payload: { build_id: 'x', buzon: 'op', num: '12', reply_num: 14 } }), null)
+  assert.equal(frameHubNotice({ id: 'b3', kind: 'build_answered', payload: { build_id: 'x', buzon: 'op', num: 12, reply_num: 1.5 } }), null)
+})
+
+test('build_in_main names the build and the ref, capped at 60', () => {
+  const out = frameHubNotice({ id: 'b4', kind: 'build_in_main', payload: { build_id: 'sielay-x', ref: 'pr#579' } })
+  assert.match(out, /El trabajo de tu build sielay-x ya está en la rama principal \(pr#579\)\. Si no te queda nada \(deploy, cierre\), ciérralo con link_build_stage status done\.$/)
+  const long = frameHubNotice({ id: 'b5', kind: 'build_in_main', payload: { build_id: 'x', ref: `branch:${'r'.repeat(80)}` } })
+  assert.match(long, new RegExp(`\\(branch:${'r'.repeat(53)}\\)`))
+})
+
+test('build_adopted tells the session it now coordinates the build', () => {
+  const out = frameHubNotice({ id: 'b6', kind: 'build_adopted', payload: { build_id: 'b'.repeat(90) } })
+  assert.match(out, new RegExp(`Un admin te pasó el papel de coordinador del build ${'b'.repeat(80)}\\. Desde ahora tus reportes con link_build_stage y role coordinator mandan en ese build; revisa su estado con builds_status antes de seguir\\.$`))
+})
+
+test('build_closed names the outcome and, only when present, who absorbed it', () => {
+  const plain = frameHubNotice({ id: 'b7', kind: 'build_closed', payload: { build_id: 'sielay-x', outcome: 'stopped', absorbed_by: null } })
+  assert.match(plain, /Un admin cerró tu build sielay-x \(stopped\)\. El hub ignora los reportes nuevos de ese build: deja de trabajar en él y, si sigue habiendo trabajo, repórtalo con otro build_id\.$/)
+  const absorbed = frameHubNotice({ id: 'b8', kind: 'build_closed', payload: { build_id: 'sielay-x', outcome: 'delivered', absorbed_by: 'sielay-y' } })
+  assert.match(absorbed, /cerró tu build sielay-x \(delivered\), absorbido por sielay-y\. El hub ignora/)
 })
 
 test('a peer body cannot forge the hub card: its dash is broken', () => {
