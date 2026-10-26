@@ -12,18 +12,24 @@ const NOW = 10_000_000
 
 function engine({ samples = [], lastStopAt = null, now = NOW, getThrows = false } = {}) {
   const state = { modeSamples: samples, lastStopAt }
+  const versions = { modeSamples: 1, lastStopAt: 1 }
   const logs = []
   const clock = { at: now }
   const $ = {
     clock: { now: async () => clock.at },
     state: {
-      get: async ref => { if (getThrows) throw new Error('boom'); return { value: state[ref.key] ?? undefined, version: 0 } },
-      set: async (ref, value) => { state[ref.key] = value; return { isSet: true, version: 1 } },
+      get: async ref => { if (getThrows) throw new Error('boom'); return { value: state[ref.key] ?? undefined, version: versions[ref.key] ?? 0 } },
+      set: async (ref, value, opts = {}) => {
+        if (opts.ifVersion !== undefined && opts.ifVersion !== (versions[ref.key] ?? 0)) return { isSet: false, version: versions[ref.key] }
+        state[ref.key] = value
+        versions[ref.key] = (versions[ref.key] ?? 0) + 1
+        return { isSet: true, version: versions[ref.key] }
+      },
     },
     ui: { log: t => void logs.push(t) },
   }
-  /** What the host does on /clear: a new session with empty state. */
-  const clear = () => { state.modeSamples = undefined; state.lastStopAt = undefined }
+  /** What the host does on /clear or /resume: another session, its state empty. */
+  const clear = () => { state.modeSamples = undefined; state.lastStopAt = undefined; versions.modeSamples = 0; versions.lastStopAt = 0 }
   return { $, state, logs, clock, clear }
 }
 const runtime = () => ({ modeCarry: null })
@@ -95,25 +101,61 @@ test('nothing seen before /clear: nothing is restored', async () => {
   assert.equal((await readMode(h.$)).mode, 'unknown')
 })
 
-test('a session that already has a sample keeps it, and the carry waits for the swap', async () => {
+test('before the host swaps the session the carry waits; a new conversation that spoke first drops it', async () => {
   const h = engine({ samples: [{ mode: 'bypassPermissions', at: NOW - 1_000, event: 'Stop' }], lastStopAt: NOW - 1_000 })
   const rt = runtime()
   await carryModeOnClear(h.$, rt, { reason: 'clear' })
-  await restoreModeCarry(h.$, rt) // a poll before the host swapped the session
+  await restoreModeCarry(h.$, rt) // a poll before the swap: the old conversation's samples
   assert.notEqual(rt.modeCarry, null)
   h.clear()
-  h.state.modeSamples = [{ mode: 'default', at: NOW, event: 'UserPromptSubmit' }] // the new conversation spoke first
+  h.state.modeSamples = [{ mode: 'default', at: NOW, event: 'UserPromptSubmit' }]
   await restoreModeCarry(h.$, rt)
   assert.deepEqual(h.state.modeSamples, [{ mode: 'default', at: NOW, event: 'UserPromptSubmit' }])
+  assert.equal(rt.modeCarry, null)
 })
 
-test('a failed state read never throws and carries nothing', async () => {
+test('a carry never reaches a later /resume: the conversation resumed reports unknown', async () => {
+  const h = engine({ samples: [{ mode: 'bypassPermissions', at: NOW - 1_000, event: 'Stop' }], lastStopAt: NOW - 1_000 })
+  const rt = runtime()
+  await carryModeOnClear(h.$, rt, { reason: 'clear' })
+  h.clear()
+  h.state.modeSamples = [{ mode: 'default', at: NOW, event: 'UserPromptSubmit' }] // spoke before any restore, then shift+tab
+  await carryModeOnClear(h.$, rt, { reason: 'resume' })
+  h.clear()
+  await restoreModeCarry(h.$, rt)
+  assert.equal((await readMode(h.$)).mode, 'unknown')
+})
+
+test('a sample recorded while restoring wins over the carried one', async () => {
+  const h = engine({ samples: [{ mode: 'bypassPermissions', at: NOW - 1_000, event: 'Stop' }], lastStopAt: NOW - 1_000 })
+  const rt = runtime()
+  await carryModeOnClear(h.$, rt, { reason: 'clear' })
+  h.clear()
+  const prompt = [{ mode: 'default', at: NOW, event: 'UserPromptSubmit' }]
+  const get = h.$.state.get
+  h.$.state.get = async ref => {
+    const read = await get(ref)
+    if (ref.key === 'modeSamples') {
+      h.$.state.get = get
+      await h.$.state.set(ref, prompt) // the prompt lands between the read and the write
+    }
+    return read
+  }
+  await restoreModeCarry(h.$, rt)
+  assert.deepEqual(h.state.modeSamples, prompt)
+  assert.equal(h.state.lastStopAt, undefined)
+  assert.equal(rt.modeCarry, null)
+})
+
+test('a failed state read never throws, carries nothing and logs once', async () => {
   const h = engine({ getThrows: true })
   const rt = { modeCarry: { sample: { mode: 'bypassPermissions', at: NOW, event: 'Stop' }, lastStopAt: NOW } }
   await carryModeOnClear(h.$, rt, { reason: 'clear' })
   assert.equal(rt.modeCarry, null)
   rt.modeCarry = { sample: { mode: 'bypassPermissions', at: NOW, event: 'Stop' }, lastStopAt: NOW }
   await restoreModeCarry(h.$, rt)
+  await restoreModeCarry(h.$, rt)
+  assert.equal(rt.modeCarry, null)
   assert.equal(h.logs.length, 2)
 })
 

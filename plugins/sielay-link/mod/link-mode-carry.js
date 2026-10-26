@@ -35,12 +35,13 @@ export function latestSample(samples) {
 
 /**
  * session.end: on a /clear, keeps the last sample in memory for the next
- * conversation. Never throws: a failed reading carries nothing.
+ * conversation; any other end drops what was kept. Never throws: a failed
+ * reading carries nothing.
  * @param {Engine} $ @param {CarryRuntime} rt @param {{ reason?: string }} e
  */
 export async function carryModeOnClear($, rt, e) {
+  rt.modeCarry = null // any end drops an older carry: it never reaches a /resume
   if (e.reason !== 'clear') return
-  rt.modeCarry = null
   try {
     const [{ value: samples = [] }, { value: lastStopAt = null }] = await Promise.all([$.state.get(MODE_SAMPLES), $.state.get(LAST_STOP_AT)])
     const sample = latestSample(samples)
@@ -52,21 +53,29 @@ export async function carryModeOnClear($, rt, e) {
 
 /**
  * Puts the carried sample back when the session has none, and marks it idle
- * (nothing runs right after a /clear). A session that still holds samples (the
- * old conversation, before the host swaps it) keeps the carry for later.
- * Never throws.
+ * (nothing runs right after a /clear). While the session still holds the
+ * carried sample it is the old conversation, before the host swaps it: the
+ * carry waits. Any other sample means the new conversation already reported
+ * its own mode, and the carry is dropped. The write is versioned, so a sample
+ * recorded meanwhile wins. Never throws; a failure drops the carry.
  * @param {Engine} $ @param {CarryRuntime} rt
  */
 export async function restoreModeCarry($, rt) {
   const carry = rt.modeCarry
   if (!carry) return
   try {
-    const { value: samples = [] } = await $.state.get(MODE_SAMPLES)
-    if (Array.isArray(samples) && samples.length > 0) return
-    await $.state.set(MODE_SAMPLES, [carry.sample])
-    await $.state.set(LAST_STOP_AT, Math.max(carry.lastStopAt ?? carry.sample.at, carry.sample.at))
+    const held = await $.state.get(MODE_SAMPLES)
+    const samples = Array.isArray(held.value) ? held.value : []
+    if (samples.length > 0) {
+      const oldConversation = samples.some(s => s?.at === carry.sample.at && s?.mode === carry.sample.mode)
+      if (!oldConversation) rt.modeCarry = null
+      return
+    }
     rt.modeCarry = null
+    const put = await $.state.set(MODE_SAMPLES, [carry.sample], { ifVersion: held.version })
+    if (put.isSet) await $.state.set(LAST_STOP_AT, Math.max(carry.lastStopAt ?? carry.sample.at, carry.sample.at))
   } catch (err) {
+    rt.modeCarry = null
     $.ui.log(`sielay-link: no se restauró el modo tras /clear (${err instanceof Error ? err.name : typeof err})`)
   }
 }
