@@ -36,6 +36,8 @@ export function sanitizeText(text) {
 }
 
 /** A line that opens like the header (`— Mensaje de …`, any dash) loses its dash. */
+/** A line of only box-drawing dashes, like the separator between cards in a link_read answer. */
+const SEPARATOR_LINE = /^[ \t]*─+[ \t]*$/gm
 const HEADER_DASH = /^([ \t]*)[-‐‑‒–—―−﹘﹣]+(?=[ \t]*(?:mensaje|aviso)[ \t]+del?\b)/gim
 
 /**
@@ -52,6 +54,7 @@ export function neutralizeBody(body) {
     .replace(/\[(\s*)sielay/gi, '($1sielay_')
     .replace(/\[(\s*)conv\s*=/gi, '($1conv:')
     .replace(HEADER_DASH, '$1›')
+    .replace(SEPARATOR_LINE, line => line.replace(/─/g, '-'))
     .replace(/<(?=\s*\/?\s*[A-Za-z])/g, '‹')
 }
 

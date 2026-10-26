@@ -32,8 +32,36 @@ export function compactLine(d, selfAddress) {
   return `📨 mensaje de ${who(person, session, splitAddress(selfAddress)?.person)}`
 }
 
-/** @param {StoreLike} store @param {() => number | Promise<number>} now the engine's clock is async */
+/**
+ * Over INBOX_MAX, the oldest messages already read go first; an unread one is
+ * dropped only when every kept message is unread.
+ * @param {Entry[]} entries @returns {Entry[]}
+ */
+function trim(entries) {
+  let extra = entries.length - INBOX_MAX
+  if (extra <= 0) return entries
+  const kept = entries.filter(e => !(e.read && extra > 0 && extra-- > 0))
+  return kept.slice(-INBOX_MAX)
+}
+
+/**
+ * One inbox per plugin process, so per session. Every add and take runs one
+ * after another: link_read and an accept from the strip run outside the poll,
+ * and two read-modify-writes of the same key at once would lose a message the
+ * hub already has as injected.
+ * @param {StoreLike} store @param {() => number | Promise<number>} now the engine's clock is async
+ */
 export function createInbox(store, now) {
+  /** The instance ids this session stored under: a /link name changes the id, and what came before must still be read. */
+  const written = new Set()
+  let queue = Promise.resolve()
+  /** @template T @param {() => Promise<T>} fn @returns {Promise<T>} */
+  function serial(fn) {
+    const run = queue.then(fn)
+    queue = run.then(() => {}, () => {})
+    return run
+  }
+
   /** @param {string} instanceId @returns {Promise<Entry[]>} */
   async function load(instanceId) {
     const v = await store.get(`inbox.${instanceId}`)
@@ -42,30 +70,40 @@ export function createInbox(store, now) {
   }
 
   /** @param {string} instanceId @param {Entry[]} entries */
-  const save = (instanceId, entries) => store.set(`inbox.${instanceId}`, entries.slice(-INBOX_MAX))
+  const save = (instanceId, entries) => store.set(`inbox.${instanceId}`, trim(entries))
 
   return {
     /** @param {string} instanceId @param {Delivery} d */
-    async add(instanceId, d) {
-      const entries = (await load(instanceId)).filter(e => e.d.id !== d.id)
-      entries.push({ d, at: await now(), read: false })
-      await save(instanceId, entries)
+    add(instanceId, d) {
+      return serial(async () => {
+        written.add(instanceId)
+        const entries = (await load(instanceId)).filter(e => e.d.id !== d.id)
+        entries.push({ d, at: await now(), read: false })
+        await save(instanceId, entries)
+      })
     },
 
     /**
-     * The unread messages (of one conversation, or all), marked read. A
+     * The unread messages (of one conversation, or all), marked read, from the
+     * current instance id and every earlier one of this session. A
      * conversation with nothing unread gives its last message again.
      * @param {string} instanceId @param {string} [conv]
      * @returns {Promise<Delivery[]>}
      */
-    async take(instanceId, conv) {
-      const entries = await load(instanceId)
-      const mine = entries.filter(e => conv === undefined || e.d.conversation_id === conv)
-      let picked = mine.filter(e => !e.read)
-      if (picked.length === 0 && conv !== undefined && mine.length > 0) picked = [mine[mine.length - 1]]
-      for (const e of picked) e.read = true
-      if (picked.length > 0) await save(instanceId, entries)
-      return picked.map(e => e.d)
+    take(instanceId, conv) {
+      return serial(async () => {
+        const boxes = []
+        for (const id of new Set([instanceId, ...written])) boxes.push({ id, entries: await load(id) })
+        const mine = boxes
+          .flatMap(b => b.entries.map(e => ({ b, e })))
+          .filter(({ e }) => conv === undefined || e.d.conversation_id === conv)
+          .sort((x, y) => x.e.at - y.e.at)
+        let picked = mine.filter(({ e }) => !e.read)
+        if (picked.length === 0 && conv !== undefined && mine.length > 0) picked = [mine[mine.length - 1]]
+        for (const { e } of picked) e.read = true
+        for (const b of new Set(picked.map(p => p.b))) await save(b.id, b.entries)
+        return picked.map(({ e }) => e.d)
+      })
     },
   }
 }

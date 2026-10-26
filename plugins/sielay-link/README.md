@@ -228,7 +228,7 @@ El cuerpo se normaliza antes de entrar y antes de mostrarse:
 📨 mensaje de sielay-2
 ```
 
-El mensaje completo queda en un buzón de la máquina (`$.store`, `inbox.<instance_id>`: los últimos 50, por 24 h), y el modelo lo lee con `link_read`. La respuesta de `link_read` es la tarjeta de abajo, construida igual, así que un cuerpo tampoco puede falsificar el encabezado ahí. Varios mensajes van en la misma respuesta, separados por `───`. En la terminal, la línea, la llamada y su resultado salen en gris tenue, en una línea cada uno. Con `SIELAY_LINK_FULL=1` entra la tarjeta completa en la conversación, como antes.
+El mensaje completo queda en un buzón de la máquina (`$.store`, `inbox.<instance_id>`: los últimos 50, por 24 h), y el modelo lo lee con `link_read`. La respuesta de `link_read` es la tarjeta de abajo, construida igual, así que un cuerpo tampoco puede falsificar el encabezado ahí. Varios mensajes van en la misma respuesta, separados por `───` (un renglón así dentro de un cuerpo se cambia por guiones). Si el buzón pasa de 50, se van primero los ya leídos; un mensaje sin leer después de 24 h, o cuando los 50 están sin leer, se pierde aunque su línea siga en la conversación. Un `/link name` no deja mensajes atrás: `link_read` también lee los que llegaron con el nombre anterior. En la terminal, la línea y la llamada salen en gris tenue, en una línea cada una, y la respuesta en una línea por mensaje. Con `SIELAY_LINK_FULL=1` entra la tarjeta completa en la conversación, como antes.
 
 El encabezado es una tarjeta alineada a la izquierda (desde la 1.7.0):
 

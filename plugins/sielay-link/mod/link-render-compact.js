@@ -74,8 +74,12 @@ export function parseNotice(text) {
   return line || null
 }
 
-/** The compact line (link-inbox.js compactLine), alone or with the engine's paragraph after it. */
-const COMPACT = /^(?:[^\n]*\n){0,2}?[ \t]*(📨 mensaje de [a-z0-9?/-]{1,120})[ \t]*$/
+/**
+ * The compact line (link-inbox.js compactLine), alone or after the engine's
+ * own first line, with the engine's paragraph after it. Nothing else may come
+ * before it: the row hides the text, so any other line must be drawn whole.
+ */
+const COMPACT = /^(?:[ \t]*Another Claude session sent a message:[ \t]*\n)?[ \t]*(📨 mensaje de [a-z0-9?/-]{1,120})[ \t]*$/
 
 /**
  * Reads the compact line back, or null for any other text.
