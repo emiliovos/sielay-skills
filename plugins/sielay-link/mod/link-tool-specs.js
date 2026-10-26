@@ -3,6 +3,7 @@
 
 import { BUILD_TOOL_SPEC } from './link-build-tool.js'
 import { WATCH_TOOL_SPEC } from './link-watch-tool.js'
+import { READ_TOOL_SPEC } from './link-read-tool.js'
 
 /** The hub's cap for `to` as a list (one conversation per address). */
 export const MAX_RECIPIENTS = 10
@@ -75,6 +76,7 @@ export const LINK_TOOL_SPECS = Object.freeze([
     },
     isDeferred: false,
   },
+  READ_TOOL_SPEC,
   BUILD_TOOL_SPEC,
   WATCH_TOOL_SPEC,
 ])

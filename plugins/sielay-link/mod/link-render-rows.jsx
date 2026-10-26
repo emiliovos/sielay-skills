@@ -5,8 +5,8 @@
 // shows the whole body, and a message this file cannot read goes to the
 // engine's own drawing.
 
-import { columnsOf, sendLines, parseInbound, inboundLines } from './link-render-text.js'
-import { inboundRow, callRow, answerRow, personOf, parseNotice, noticeRow } from './link-render-compact.js'
+import { columnsOf, sendLines, parseInbound, inboundLines, fit } from './link-render-text.js'
+import { inboundRow, callRow, answerRow, personOf, parseNotice, noticeRow, readCallRow, readAnswerRows, parseCompact } from './link-render-compact.js'
 
 // $.state reference: literal plugin/key, declared in each file that uses it.
 const CONVERSATIONS = /** @type {const} */ ({ plugin: 'sielay-link', key: 'conversations' })
@@ -22,6 +22,7 @@ async function selfPersonOf($) {
 
 /** The tool name as the engine reports it (with or without the mcp prefix). */
 const LINK_SEND_OR_REPLY = /(?:^|__)(link_send|link_reply)$/
+const LINK_READ = /(?:^|__)link_read$/
 
 /**
  * @param {Engine} $ @param {{ surface: any, component: any }} e @param {Line[]} lines
@@ -59,6 +60,7 @@ export function outputText(output) {
  * @returns {Promise<import('claude-code').RenderElement | null>}
  */
 export async function renderSendCall($, e) {
+  if (LINK_READ.test(e.props.tool)) return e.props.isExpanded === true ? null : tree($, e, readCallRow(columnsOf(e)))
   const tool = LINK_SEND_OR_REPLY.exec(e.props.tool)?.[1]
   const input = /** @type {Record<string, unknown>|null} */ (e.props.input)
   if (!tool || !input || typeof input.text !== 'string') return null
@@ -77,9 +79,14 @@ export async function renderSendCall($, e) {
 /**
  * The answer under the call: the short line without the `conv=` ids.
  * @param {Engine} $ @param {import('claude-code').RenderInput<'ToolResult'>} e
- * @returns {import('claude-code').RenderElement | null}
+ * @returns {Promise<import('claude-code').RenderElement | null>}
  */
-export function renderSendAnswer($, e) {
+export async function renderSendAnswer($, e) {
+  if (LINK_READ.test(e.props.tool)) {
+    if (e.props.isErrored || e.props.isExpanded === true) return null
+    const read = outputText(e.props.output)
+    return read ? tree($, e, readAnswerRows(read, await selfPersonOf($), columnsOf(e))) : null
+  }
   if (!LINK_SEND_OR_REPLY.test(e.props.tool) || e.props.isErrored || e.props.isExpanded === true) return null
   const text = outputText(e.props.output)
   return text ? tree($, e, answerRow(text, columnsOf(e))) : null
@@ -94,8 +101,11 @@ export function renderSendAnswer($, e) {
 export async function renderInbound($, e) {
   const parsed = parseInbound(e.props.text)
   if (!parsed) {
-    const notice = e.props.isExpanded === true ? null : parseNotice(e.props.text)
-    return notice ? tree($, e, noticeRow(notice, columnsOf(e))) : null
+    if (e.props.isExpanded === true) return null
+    const notice = parseNotice(e.props.text)
+    if (notice) return tree($, e, noticeRow(notice, columnsOf(e)))
+    const compact = parseCompact(e.props.text)
+    return compact ? tree($, e, [{ text: fit(`◇ ${compact}`, columnsOf(e)), dim: true }]) : null
   }
   if (e.props.isExpanded === true) return tree($, e, inboundLines(parsed, columnsOf(e), true))
   return tree($, e, inboundRow(parsed, await selfPersonOf($), columnsOf(e)))

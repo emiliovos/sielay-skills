@@ -4,7 +4,8 @@
 // The body always comes after the «◇ …» prefix, so it cannot pass for a row.
 
 import { sanitizeText, safeField } from './link-inbound-framing.js'
-import { fit, splitAddress, addressText } from './link-render-text.js'
+import { READ_SEPARATOR } from './link-read-tool.js'
+import { fit, splitAddress, addressText, parseInbound } from './link-render-text.js'
 
 /** @typedef {import('./link-render-text.js').Line} Line */
 
@@ -74,6 +75,23 @@ export function parseNotice(text) {
 }
 
 /**
+ * The compact line (link-inbox.js compactLine), alone or after the engine's
+ * own first line, with the engine's paragraph after it. Nothing else may come
+ * before it: the row hides the text, so any other line must be drawn whole.
+ */
+const COMPACT = /^(?:[ \t]*Another Claude session sent a message:[ \t]*\n)?[ \t]*(📨 mensaje de [a-z0-9?/-]{1,120})[ \t]*$/
+
+/**
+ * Reads the compact line back, or null for any other text.
+ * @param {string} text
+ * @returns {string|null}
+ */
+export function parseCompact(text) {
+  const m = COMPACT.exec(text.replace(/\r\n?/g, '\n').replace(ENGINE_NOTE, '').trimEnd())
+  return m ? m[1] : null
+}
+
+/**
  * A hub notice: «◇ aviso del hub · <la línea>». It is the hub, not a person, so
  * there is no person to show.
  * @param {string} line @param {number} cols
@@ -81,4 +99,21 @@ export function parseNotice(text) {
  */
 export function noticeRow(line, cols) {
   return [{ text: fit(`◇ aviso del hub · ${line}`, cols), dim: true }]
+}
+
+/** A link_read call: «◇ ← leer mensajes». @param {number} cols @returns {Line[]} */
+export function readCallRow(cols) {
+  return [{ text: fit('◇ ← leer mensajes', cols), dim: true }]
+}
+
+/**
+ * The answer to link_read: one row per card it brought, like an incoming
+ * message, or its plain line («No hay mensajes sin leer.»).
+ * @param {string} answer @param {string|undefined} selfPerson @param {number} cols
+ * @returns {Line[]}
+ */
+export function readAnswerRows(answer, selfPerson, cols) {
+  const cards = answer.split(READ_SEPARATOR).map(parseInbound)
+  if (cards.some(c => c === null)) return [{ text: fit(oneLine(answer), cols), dim: true }]
+  return cards.flatMap(c => inboundRow(/** @type {NonNullable<typeof c>} */ (c), selfPerson, cols))
 }

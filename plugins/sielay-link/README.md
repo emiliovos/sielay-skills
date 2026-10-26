@@ -80,12 +80,13 @@ Si otra carpeta ya usa ese nombre y está en línea, el hub te asigna `nombre-2`
 | `/link` | Estado: hub, dirección, modo y si está fresco, adaptador y mensajes en franja. Abre el panel |
 | `/link name <x>` | Fija el nombre de la sesión para esta carpeta |
 | `/link off` / `on` | Apaga o enciende la recepción en esta sesión. `SIELAY_LINK_OFF=1 claude` lo apaga del todo, sin herramientas |
-| `SIELAY_LINK_MINIMAL=1` | Modo mínimo: solo `link_send`, `link_reply` y `link_peers`, sin la línea de descubrimiento (ver «Novedades de la 1.9.0») |
+| `SIELAY_LINK_MINIMAL=1` | Modo mínimo: solo `link_send`, `link_reply`, `link_peers` y `link_read`, sin la línea de descubrimiento (ver «Novedades de la 1.9.0») |
+| `SIELAY_LINK_FULL=1` | Un mensaje entra como la tarjeta completa, como antes de la 1.10.0, en vez de la línea «📨 mensaje de …» (ver «Cómo entra un mensaje») |
 | `/link peers` | Tu dirección y las sesiones con las que puedes hablar (solo pares) |
 | `/link pair <slot>` | Empareja la máquina |
 | `/link show <id>` | Abre en el panel el mensaje completo de la franja con ese id |
 | `/link accept <id>` / `reject <id>` | Acepta o rechaza ese mensaje. Solo cuenta si lo tecleas tú en el prompt |
-| `link_send`, `link_reply`, `link_peers` | Las herramientas del modelo para hablar con otras sesiones. **No existe ninguna para aceptar, rechazar ni liberar** |
+| `link_send`, `link_reply`, `link_peers`, `link_read` | Las herramientas del modelo para hablar con otras sesiones; `link_read` trae el texto de los mensajes que entraron como «📨 mensaje de …». **No existe ninguna para aceptar, rechazar ni liberar** |
 | `link_build_stage` | Le dice al hub en qué va el build de `/si:build-auto` de esta sesión. Solo informa: no controla nada (ver «Reporte del build») |
 
 Si el hub tiene apagado sielay-link para esa conversación (409 `link_paused`), `link_send` y `link_reply` dicen qué está apagado: una de las personas, la línea entre las dos máquinas, una de las máquinas o una de las terminales, y que un admin lo prende desde `/admin/link` o `/conexiones` (desde la 1.4.0). No hay que reintentar.
@@ -95,8 +96,16 @@ Si el hub tiene apagado sielay-link para esa conversación (409 `link_paused`), 
 Para que el modelo las use sin preguntarte cada vez, agrégalas a `permissions.allow` en `~/.claude/settings.json`:
 
 ```json
-{ "permissions": { "allow": ["mcp__sielay-link__link_send", "mcp__sielay-link__link_reply", "mcp__sielay-link__link_peers", "mcp__sielay-link__link_build_stage", "mcp__sielay-link__link_watch"] } }
+{ "permissions": { "allow": ["mcp__sielay-link__link_send", "mcp__sielay-link__link_reply", "mcp__sielay-link__link_peers", "mcp__sielay-link__link_read", "mcp__sielay-link__link_build_stage", "mcp__sielay-link__link_watch"] } }
 ```
+
+## Novedades de la 1.10.0
+
+- **Modo compacto, el de por omisión:** un mensaje de otra sesión entra en la conversación como una sola línea, «📨 mensaje de sielay-2» (con la persona, «ana/sielay-2», solo cuando no es la de esta sesión). La línea no lleva nada del cuerpo. El modelo lee el texto con la herramienta nueva `link_read`, y la app muestra esa llamada plegada: el cuerpo se ve al abrirla con ctrl+o. Detalle en «Cómo entra un mensaje».
+- **`link_read`:** sin argumentos trae todos los mensajes sin leer; con `conversation`, los de esa conversación (o el último, si ya se leyeron). Devuelve la misma tarjeta que antes entraba en la conversación, con el cuerpo normalizado igual. También está en el modo mínimo. Si pediste permisos explícitos, agrega `mcp__sielay-link__link_read` a `permissions.allow`.
+- **Para volver a la tarjeta completa:** `SIELAY_LINK_FULL=1`, en el `env` del `.claude/settings.json` del proyecto, en `~/.claude/settings.json` o al arrancar (`SIELAY_LINK_FULL=1 claude`).
+- **Lo que no cambia:** la franja, la auto-ejecución, los acks y los avisos del hub. Claude Code sigue agregando su párrafo de «mensaje de otra sesión» después de la línea; ese no lo pone el plugin.
+- **Para tomarla:** `claude plugin update sielay-link@sielay` y `/reload-plugins` en cada sesión abierta (o reiniciarla).
 
 ## Novedades de la 1.9.2
 
@@ -212,6 +221,14 @@ El cuerpo se normaliza antes de entrar y antes de mostrarse:
 - se quitan las secuencias de terminal (ANSI y OSC), los caracteres de control y los invisibles o bidi;
 - se aplica NFKC;
 - se rompe cualquier etiqueta `<…`, cualquier `[sielay…`, cualquier `[conv=` y cualquier renglón que empiece con un guion y `Mensaje de`, para que un cuerpo no pueda falsificar el encabezado ni una etiqueta del sistema.
+
+**Modo compacto (por omisión desde la 1.10.0).** A la conversación solo entra una línea con el remitente:
+
+```
+📨 mensaje de sielay-2
+```
+
+El mensaje completo queda en un buzón de la máquina (`$.store`, `inbox.<instance_id>`: los últimos 50, por 24 h), y el modelo lo lee con `link_read`. La respuesta de `link_read` es la tarjeta de abajo, construida igual, así que un cuerpo tampoco puede falsificar el encabezado ahí. Varios mensajes van en la misma respuesta, separados por `───` (un renglón así dentro de un cuerpo se cambia por guiones). Si el buzón pasa de 50, se van primero los ya leídos; un mensaje sin leer después de 24 h, o cuando los 50 están sin leer, se pierde aunque su línea siga en la conversación. Un `/link name` no deja mensajes atrás: `link_read` también lee los que llegaron con el nombre anterior. En la terminal, la línea y la llamada salen en gris tenue, en una línea cada una, y la respuesta en una línea por mensaje. Con `SIELAY_LINK_FULL=1` entra la tarjeta completa en la conversación, como antes.
 
 El encabezado es una tarjeta alineada a la izquierda (desde la 1.7.0):
 

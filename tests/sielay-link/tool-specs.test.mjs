@@ -5,12 +5,12 @@ import { LINK_TOOL_SPECS, MINIMAL_LEFT_OUT, toolSpecsFor } from '../../plugins/s
 const names = specs => specs.map(s => s.name)
 
 test('without minimal mode every tool is registered', () => {
-  assert.deepEqual(names(toolSpecsFor({ minimal: false })), ['link_send', 'link_reply', 'link_peers', 'link_build_stage', 'link_watch'])
+  assert.deepEqual(names(toolSpecsFor({ minimal: false })), ['link_send', 'link_reply', 'link_peers', 'link_read', 'link_build_stage', 'link_watch'])
   assert.equal(toolSpecsFor({ minimal: false }), LINK_TOOL_SPECS)
 })
 
-test('minimal mode keeps only send, reply and peers', () => {
-  assert.deepEqual(names(toolSpecsFor({ minimal: true })), ['link_send', 'link_reply', 'link_peers'])
+test('minimal mode keeps only the message tools: send, reply, peers and read', () => {
+  assert.deepEqual(names(toolSpecsFor({ minimal: true })), ['link_send', 'link_reply', 'link_peers', 'link_read'])
   assert.deepEqual([...MINIMAL_LEFT_OUT], ['link_build_stage', 'link_watch'])
 })
 

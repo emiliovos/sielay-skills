@@ -5,6 +5,7 @@ import { createHubClient, normalizeHubUrl } from './link-hub-client.js'
 import { createDeliveryAdapter } from './link-delivery-adapter.js'
 import { recordLaunchMode } from './link-launch-mode.js'
 import { createInboundHandler } from './link-inbound-handler.js'
+import { createInbox } from './link-inbox.js'
 import { createPollLoop } from './link-poll-loop.js'
 import { createPairingFlow } from './link-pairing.js'
 import { buildSessionPayload, readMode } from './link-session-payload.js'
@@ -39,6 +40,8 @@ export function createRuntime(options) {
     client: /** @type {import('./link-hub-client.js').HubClient|null} */ (null),
     adapter: /** @type {import('./link-delivery-adapter.js').DeliveryAdapter|null} */ (null),
     handler: /** @type {import('./link-inbound-handler.js').InboundHandler|null} */ (null),
+    /** The messages waiting for link_read (compact mode). */
+    inbox: /** @type {import('./link-inbox.js').Inbox|null} */ (null),
     loop: /** @type {ReturnType<typeof createPollLoop>|null} */ (null),
     pairing: /** @type {ReturnType<typeof createPairingFlow>|null} */ (null),
     tmux: /** @type {{ name?: string, at: number }} */ ({ at: -Infinity }),
@@ -80,6 +83,11 @@ export async function isOff($) {
   if ((await $.env.get('SIELAY_LINK_OFF')) === '1') return true
   const { value = false } = await $.state.get(OFF)
   return value
+}
+
+/** SIELAY_LINK_FULL=1: a peer's message enters as the whole card, not as one line read with link_read. @param {Engine} $ */
+export async function isFull($) {
+  return (await $.env.get('SIELAY_LINK_FULL')) === '1'
 }
 
 /** SIELAY_LINK_MINIMAL=1: messages only, no build tools and no discovery line. @param {Engine} $ */
@@ -162,8 +170,12 @@ export async function startLink($, rt) {
   await recordLaunchMode($, adapter) // before the first poll, so the hub sees the mode at once
   if (mode === 'prompt') $.ui.toast('sielay-link: sin Node en el PATH, los mensajes llegan como prompt (modo respaldo).')
 
+  const store = { get: (/** @type {string} */ key) => $.store.get(key), set: (/** @type {string} */ key, /** @type {unknown} */ value) => $.store.set(key, value) }
+  rt.inbox = createInbox(store, () => $.clock.now())
   rt.handler = createInboundHandler({
-    store: { get: key => $.store.get(key), set: (key, value) => $.store.set(key, value) },
+    store,
+    inbox: rt.inbox,
+    compact: async () => !(await isFull($)),
     adapter,
     readMode: async () => (await restoreModeCarry($, rt), readMode($)),
     onStrip: async items => void (await $.state.set(STRIP, items)),
