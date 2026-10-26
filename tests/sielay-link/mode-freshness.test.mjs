@@ -11,9 +11,9 @@ import {
 const H = 3_600_000
 const bypass = (at, event = 'PostToolUse') => ({ mode: 'bypassPermissions', at, event })
 
-test('the default idle policy is "last seen mode" with a 12 h window', () => {
+test('the default idle policy is "last seen mode" with a 24 h window', () => {
   assert.equal(IDLE_POLICY, IDLE_POLICY_LAST_SEEN)
-  assert.equal(IDLE_FRESH_MAX_MS, 12 * H)
+  assert.equal(IDLE_FRESH_MAX_MS, 24 * H)
 })
 
 for (const policy of [IDLE_POLICY_STRICT, IDLE_POLICY_LAST_SEEN]) {
@@ -57,7 +57,7 @@ test('[strict] idle after Stop without a live source is not fresh', () => {
   assert.equal(s.ageMs, 1)
 })
 
-test('[last seen] idle bypass stays fresh up to 12 h, then goes stale', () => {
+test('[last seen] idle bypass stays fresh up to 24 h, then goes stale', () => {
   const at = 1_000
   const inWindow = modeState({ samples: [bypass(at, 'Stop')], lastStopAt: at, now: at + IDLE_FRESH_MAX_MS, policy: IDLE_POLICY_LAST_SEEN })
   assert.equal(inWindow.fresh, true)
@@ -67,10 +67,30 @@ test('[last seen] idle bypass stays fresh up to 12 h, then goes stale', () => {
   assert.equal(stale.ageMs, IDLE_FRESH_MAX_MS + 1)
 })
 
-test('[last seen] idle in a non-bypass mode is never fresh', () => {
-  const s = modeState({ samples: [{ mode: 'default', at: 5, event: 'Stop' }], lastStopAt: 5, now: 6, policy: IDLE_POLICY_LAST_SEEN })
+test('[last seen] idle in default, plan or acceptEdits is never fresh', () => {
+  for (const mode of ['default', 'plan', 'acceptEdits']) {
+    const s = modeState({ samples: [{ mode, at: 5, event: 'Stop' }], lastStopAt: 5, now: 6, policy: IDLE_POLICY_LAST_SEEN })
+    assert.equal(s.fresh, false, mode)
+    assert.equal(s.mode, mode)
+  }
+})
+
+test('[last seen] idle auto mode counts like bypass: fresh up to 24 h, then stale', () => {
+  const auto = { mode: 'auto', at: 1_000, event: 'Stop' }
+  const inWindow = modeState({ samples: [auto], lastStopAt: 1_000, now: 1_000 + IDLE_FRESH_MAX_MS, policy: IDLE_POLICY_LAST_SEEN })
+  assert.deepEqual([inWindow.mode, inWindow.fresh, inWindow.state], ['auto', true, 'idle'])
+  const stale = modeState({ samples: [auto], lastStopAt: 1_000, now: 1_001 + IDLE_FRESH_MAX_MS, policy: IDLE_POLICY_LAST_SEEN })
+  assert.equal(stale.fresh, false)
+})
+
+test('[last seen] a bypass session idle for a night (14 h) stays fresh', () => {
+  const s = modeState({ samples: [bypass(0, 'Stop')], lastStopAt: 0, now: 14 * H, policy: IDLE_POLICY_LAST_SEEN })
+  assert.equal(s.fresh, true)
+})
+
+test('[strict] idle auto mode is not fresh either', () => {
+  const s = modeState({ samples: [{ mode: 'auto', at: 5, event: 'Stop' }], lastStopAt: 5, now: 6, policy: IDLE_POLICY_STRICT })
   assert.equal(s.fresh, false)
-  assert.equal(s.mode, 'default')
 })
 
 test('a clock that went backwards never yields a negative age or freshness', () => {
@@ -93,12 +113,12 @@ test('an unknown policy falls back to strict (fail closed)', () => {
 import { MODE_FRESH_MAX_MS } from '../../plugins/sielay-link/mod/link-mode-freshness.js'
 
 for (const policy of [IDLE_POLICY_STRICT, IDLE_POLICY_LAST_SEEN]) {
-  test(`[${policy}] a "running" turn with no Stop is capped at 12 h`, () => {
+  test(`[${policy}] a "running" turn with no Stop is capped at 24 h`, () => {
     const within = modeState({ samples: [bypass(0, 'UserPromptSubmit')], lastStopAt: null, now: MODE_FRESH_MAX_MS, policy })
     assert.equal(within.fresh, true)
-    const later = modeState({ samples: [bypass(0, 'UserPromptSubmit')], lastStopAt: null, now: 13 * H, policy })
+    const later = modeState({ samples: [bypass(0, 'UserPromptSubmit')], lastStopAt: null, now: 25 * H, policy })
     assert.equal(later.fresh, false)
-    assert.equal(later.state, 'unknown', 'a turn silent for 12 h is not reported as working')
+    assert.equal(later.state, 'unknown', 'a turn silent for 24 h is not reported as working')
   })
 
   test(`[${policy}] the review probe: a sample after an older Stop, 48 h later, is not fresh`, () => {
@@ -107,6 +127,6 @@ for (const policy of [IDLE_POLICY_STRICT, IDLE_POLICY_LAST_SEEN]) {
   })
 }
 
-test('the 12 h cap is one constant shared by both branches', () => {
+test('the 24 h cap is one constant shared by both branches', () => {
   assert.equal(MODE_FRESH_MAX_MS, IDLE_FRESH_MAX_MS)
 })

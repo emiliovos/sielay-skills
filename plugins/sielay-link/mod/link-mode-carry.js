@@ -7,7 +7,7 @@
 //
 // What is carried is the last sample seen, never a fresh reading: a shift+tab
 // seen before the /clear still wins, and the sample keeps its age, so the
-// 12 h cap of link-mode-freshness.js counts from when it was really seen.
+// 24 h cap of link-mode-freshness.js counts from when it was really seen.
 // It is restored only into a session with no sample of its own.
 
 const MODE_SAMPLES = /** @type {const} */ ({ plugin: 'sielay-link', key: 'modeSamples' })

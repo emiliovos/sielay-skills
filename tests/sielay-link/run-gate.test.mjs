@@ -12,7 +12,12 @@ test('run=1 with stale bypass goes to the strip', () => {
   assert.equal(shouldInject({ delivery: { run: 1, gate: 'auto' }, mode: { mode: 'bypassPermissions', fresh: false } }), false)
 })
 
-for (const mode of ['default', 'auto', 'acceptEdits', 'plan', 'unknown']) {
+test('run=1 with fresh auto mode injects; stale auto goes to the strip', () => {
+  assert.equal(shouldInject({ delivery: { run: 1, gate: 'auto' }, mode: { mode: 'auto', fresh: true } }), true)
+  assert.equal(shouldInject({ delivery: { run: 1, gate: 'auto' }, mode: { mode: 'auto', fresh: false } }), false)
+})
+
+for (const mode of ['default', 'acceptEdits', 'plan', 'unknown']) {
   test(`run=1 in ${mode} goes to the strip`, () => {
     assert.equal(shouldInject({ delivery: { run: 1, gate: 'auto' }, mode: { mode, fresh: true } }), false)
   })

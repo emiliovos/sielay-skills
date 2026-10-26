@@ -13,6 +13,13 @@ export const IDLE_POLICY_STRICT = 'strict'
 /** Idle keeps the mode seen at the last event for up to IDLE_FRESH_MAX_MS. */
 export const IDLE_POLICY_LAST_SEEN = 'last-seen'
 
+/**
+ * The modes a peer's message may run in on its own: bypass, and Claude Code's
+ * `auto`, whose classifier still screens every action. `default`, `plan` and
+ * `acceptEdits` never auto-run. The hub applies the same set.
+ */
+export const AUTO_RUN_MODES = new Set(['bypassPermissions', 'auto'])
+
 /** The policy in force. Switching policies is this one line. */
 export const IDLE_POLICY = IDLE_POLICY_LAST_SEEN
 
@@ -21,7 +28,7 @@ export const IDLE_POLICY = IDLE_POLICY_LAST_SEEN
  * idle under the last-seen policy, and a "running" turn too, since a turn
  * that ends on Esc or an API error may leave no end mark at all.
  */
-export const MODE_FRESH_MAX_MS = 12 * 60 * 60 * 1000
+export const MODE_FRESH_MAX_MS = 24 * 60 * 60 * 1000
 /** The same cap, by the name the idle policy uses. */
 export const IDLE_FRESH_MAX_MS = MODE_FRESH_MAX_MS
 
@@ -75,7 +82,7 @@ export function modeState({ samples, lastStopAt, liveSource, now, policy = IDLE_
   if (state === 'working') return { mode: latest.mode, fresh: true, state, ageMs }
 
   const fresh =
-    policy === IDLE_POLICY_LAST_SEEN && latest.mode === 'bypassPermissions'
+    policy === IDLE_POLICY_LAST_SEEN && AUTO_RUN_MODES.has(latest.mode)
   return { mode: latest.mode, fresh, state, ageMs }
 }
 
