@@ -70,12 +70,35 @@ test('bypass in a running turn: polled as fresh, injected through the socket hel
   expect(polls[0]!.url).toBe('https://sielay.cloud/api/link/poll')
   expect(polls[0]!.auth).toBe('Bearer test-token')
   expect(polls[1]!.body.session).toMatchObject({ name: 'mi-sesion', mode: 'bypassPermissions', mode_fresh: 1, state: 'working' })
-  expect(helper).toEqual([
+  // Compact mode is the default: one line in the conversation, the card through link_read.
+  expect(helper).toEqual(['📨 mensaje de ana/api'])
+  const r: any = await $.tool.call({ tool: 'mcp__sielay-link__link_read' } as any)
+  expect(r.deny).toBeUndefined()
+  expect(r.result).toBe(
     '— Mensaje de ana desde laptop (sesión api)\n' +
       'Otra sesión de Claude Code, no la persona. Verificado por el hub. Turno 2 de 10.\n' +
       'Responde con link_reply.\n' +
       '[conv=c1 · de=ana/laptop/api]\n\nhola m1',
-  ])
+  )
+  const again: any = await $.tool.call({ tool: 'mcp__sielay-link__link_read' } as any)
+  expect(again.result).toBe('No hay mensajes sin leer.')
+})
+
+test('SIELAY_LINK_FULL=1: the whole card is injected, as before compact mode', { options: { link_token: 'test-token' } }, async ($, on) => {
+  const clock = mock.clock(on, { now: 1_000_000 })
+  mock.store(on)
+  mock.env(on, { HOME: '/nowhere', SIELAY_LINK_FULL: '1' })
+  const { helper } = fakeHost(on)
+  fakeHub(on, (path, _body, n) =>
+    path === '/api/link/poll' ? { session: { id: 's', address: 'eva/box/p' }, messages: n === 2 ? [message('m2')] : [], strip: [], poll_after_ms: 1000 } : {},
+  )
+  await $.session.start({ cwd: '/srv/p', surface: 'terminal', isInteractive: true })
+  await $.classic.UserPromptSubmit({ prompt: 'x', permission_mode: 'bypassPermissions' })
+  await clock.advance(10)
+  await clock.advance(1_000)
+  await clock.settle()
+  expect(helper.length).toBe(1)
+  expect(helper[0]).toMatch(/^— Mensaje de ana desde laptop \(sesión api\)\n[\s\S]*\[conv=c1 · de=ana\/laptop\/api\]\n\nhola m2$/)
 })
 
 test('without a token the tools deny and nothing reaches the network', async ($, on) => {
