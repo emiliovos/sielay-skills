@@ -98,6 +98,11 @@ Para que el modelo las use sin preguntarte cada vez, agrégalas a `permissions.a
 { "permissions": { "allow": ["mcp__sielay-link__link_send", "mcp__sielay-link__link_reply", "mcp__sielay-link__link_peers", "mcp__sielay-link__link_build_stage", "mcp__sielay-link__link_watch"] } }
 ```
 
+## Novedades de la 1.9.1
+
+- **El modo sobrevive a un /clear:** antes, una sesión en bypass recién limpiada con `/clear` y ociosa reportaba `unknown` hasta su primer prompt, y un mensaje de un par con auto-ejecución caía en la franja. Al hacer `/clear` el host empieza una sesión nueva con el estado vacío y no vuelve a correr `session.start`, así que la muestra de arranque no se repetía. Ahora el plugin guarda en memoria la última muestra de modo al cerrar con `/clear` y la pone en la conversación nueva si esta no tiene una propia, marcada como ociosa.
+- **Lo que no cambia:** se lleva la última muestra vista, no una lectura nueva: un shift+tab visto antes del `/clear` sigue ganando, la muestra conserva su edad (el tope de 12 h cuenta desde que se vio) y un modo distinto de bypass sigue sin auto-ejecutar. Salir, `/resume` o reiniciar no llevan nada.
+
 ## Novedades de la 1.9.0
 
 - **Modo mínimo:** con `SIELAY_LINK_MINIMAL=1` la sesión solo registra `link_send`, `link_reply` y `link_peers`, y nunca recibe la línea «[sielay-link] Esta sesión está conectada…». Quedan fuera `link_build_stage` y `link_watch`, que son unas tres cuartas partes de los esquemas que el modelo carga en cada request. Sirve para un equipo que no usa `/si:build-auto` y solo quiere mensajes entre máquinas. Recibir no cambia: el poll sigue en el proceso del plugin, sin tokens, y un mensaje que llega despierta al modelo como siempre. Los avisos del hub tampoco cambian.

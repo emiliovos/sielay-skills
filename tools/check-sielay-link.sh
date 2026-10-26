@@ -34,7 +34,7 @@ ALLOWED_ORIGINS='https://sielay.cloud https://sielay.vostec.mx'
 allowed=".gitignore .claude-plugin .claude-plugin/plugin.json .mcp.json hooks hooks/hooks.json bin
 bin/sielay-link-socket-write.mjs bin/sielay-mcp-headers.mjs bin/sielay-mcp-headers.sh types types/index.d.ts README.md tests tests/sielay-link-mod.test.ts
 mod mod/sielay-link-mod.js mod/link-band.jsx mod/link-pane.jsx mod/link-commands.js mod/link-delivery-adapter.js
-mod/link-hub-client.js mod/link-inbound-framing.js mod/link-inbound-handler.js mod/link-launch-mode.js mod/link-mode-freshness.js
+mod/link-hub-client.js mod/link-inbound-framing.js mod/link-inbound-handler.js mod/link-launch-mode.js mod/link-mode-carry.js mod/link-mode-freshness.js
 mod/link-pairing.js mod/link-poll-loop.js mod/link-run-gate.js mod/link-runtime.js mod/link-session-name-resolution.js
 mod/link-session-payload.js mod/link-state-refs.js mod/link-tools.js mod/link-inbound-store.js mod/link-strip-selection.js mod/link-instance-identity.js
 mod/link-build-tool.js mod/link-build-state.js mod/link-build-hooks.js mod/link-build-validate.js mod/link-build-fields.js mod/link-build-estimate.js mod/link-build-waiting-retro.js mod/link-build-detail.js mod/link-tool-messages.js mod/link-tool-address.js mod/link-session-repo.js mod/link-hub-notice-framing.js mod/link-watch-tool.js mod/link-tool-specs.js mod/link-secret-scrub.js
