@@ -24,8 +24,8 @@ function deps({ client = {}, conversations = {}, address } = {}) {
   }
 }
 
-test('five tools, none to decide or release, all loaded up front', () => {
-  assert.deepEqual(LINK_TOOL_SPECS.map(s => s.name), ['link_send', 'link_reply', 'link_peers', 'link_build_stage', 'link_watch'])
+test('six tools, none to decide or release, all loaded up front', () => {
+  assert.deepEqual(LINK_TOOL_SPECS.map(s => s.name), ['link_send', 'link_reply', 'link_peers', 'link_read', 'link_build_stage', 'link_watch'])
   for (const s of LINK_TOOL_SPECS) {
     assert.equal(s.isDeferred, false)
     assert.equal(s.inputSchema.type, 'object')
