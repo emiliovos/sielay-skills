@@ -13,6 +13,17 @@ export const IDLE_POLICY_STRICT = 'strict'
 /** Idle keeps the mode seen at the last event for up to IDLE_FRESH_MAX_MS. */
 export const IDLE_POLICY_LAST_SEEN = 'last-seen'
 
+/**
+ * The modes a peer's message may run in on its own: bypass, and Claude Code's
+ * `auto`, whose classifier still screens every action. `default`, `plan` and
+ * `acceptEdits` never auto-run. The hub applies the same rule.
+ * @param {unknown} mode
+ */
+export const isAutoRunMode = (mode) => mode === 'bypassPermissions' || mode === 'auto'
+
+/** The launch sample's event (link-launch-mode.js): read from the command line or settings, not from a hook. */
+const LAUNCH_EVENT = 'SessionStart'
+
 /** The policy in force. Switching policies is this one line. */
 export const IDLE_POLICY = IDLE_POLICY_LAST_SEEN
 
@@ -21,7 +32,7 @@ export const IDLE_POLICY = IDLE_POLICY_LAST_SEEN
  * idle under the last-seen policy, and a "running" turn too, since a turn
  * that ends on Esc or an API error may leave no end mark at all.
  */
-export const MODE_FRESH_MAX_MS = 12 * 60 * 60 * 1000
+export const MODE_FRESH_MAX_MS = 24 * 60 * 60 * 1000
 /** The same cap, by the name the idle policy uses. */
 export const IDLE_FRESH_MAX_MS = MODE_FRESH_MAX_MS
 
@@ -75,7 +86,10 @@ export function modeState({ samples, lastStopAt, liveSource, now, policy = IDLE_
   if (state === 'working') return { mode: latest.mode, fresh: true, state, ageMs }
 
   const fresh =
-    policy === IDLE_POLICY_LAST_SEEN && latest.mode === 'bypassPermissions'
+    policy === IDLE_POLICY_LAST_SEEN && isAutoRunMode(latest.mode) &&
+    // `auto` asked for at launch may not be granted (an organization or plan
+    // without it starts in default): it counts once a hook has shown it.
+    !(latest.mode === 'auto' && latest.event === LAUNCH_EVENT)
   return { mode: latest.mode, fresh, state, ageMs }
 }
 

@@ -98,10 +98,16 @@ Para que el modelo las use sin preguntarte cada vez, agrégalas a `permissions.a
 { "permissions": { "allow": ["mcp__sielay-link__link_send", "mcp__sielay-link__link_reply", "mcp__sielay-link__link_peers", "mcp__sielay-link__link_build_stage", "mcp__sielay-link__link_watch"] } }
 ```
 
+## Novedades de la 1.9.2
+
+- **El modo auto también corre solo:** una sesión en modo `auto` de Claude Code cuenta igual que una en `bypassPermissions` para la auto-ejecución, al enviar y al recibir, siempre que el par tenga auto-ejecución. Claude Code sigue filtrando cada acción en ese modo. `default`, `plan` y `acceptEdits` siguen yendo a la franja. Un modo `auto` pedido al arrancar (`--permission-mode auto` o `defaultMode`) cuenta solo cuando un hook lo confirma, porque una organización o un plan sin auto arranca en `default`. Hace falta el hub del 26-oct o posterior, que aplica la misma regla; con un hub anterior, un mensaje de una sesión en auto queda retenido como antes.
+- **La lectura del modo en idle vale 24 h:** antes eran 12 h, y una sesión en bypass que pasaba la noche sin tocarse mandaba a la franja lo que le llegaba. El tope vale igual para bypass y auto, y para un turno que quedó abierto sin fin.
+- **Para tomarla:** `claude plugin update sielay-link@sielay` y `/reload-plugins` en cada sesión abierta (o reiniciarla). Una sesión sigue con la versión que cargó al arrancar.
+
 ## Novedades de la 1.9.1
 
 - **El modo sobrevive a un /clear:** antes, una sesión en bypass recién limpiada con `/clear` y ociosa reportaba `unknown` hasta su primer prompt, y un mensaje de un par con auto-ejecución caía en la franja. Al hacer `/clear` el host empieza una sesión nueva con el estado vacío y no vuelve a correr `session.start`, así que la muestra de arranque no se repetía. Ahora el plugin guarda en memoria la última muestra de modo al cerrar con `/clear` y la pone en la conversación nueva si esta no tiene una propia, marcada como ociosa.
-- **Lo que no cambia:** se lleva la última muestra vista, no una lectura nueva: un shift+tab visto antes del `/clear` sigue ganando, la muestra conserva su edad (el tope de 12 h cuenta desde que se vio) y un modo distinto de bypass sigue sin auto-ejecutar. Salir, `/resume` o reiniciar no llevan nada.
+- **Lo que no cambia:** se lleva la última muestra vista, no una lectura nueva: un shift+tab visto antes del `/clear` sigue ganando, la muestra conserva su edad (el tope, hoy de 24 h, cuenta desde que se vio) y un modo distinto de bypass (o de auto, desde la 1.9.2) sigue sin auto-ejecutar. Salir, `/resume` o reiniciar no llevan nada.
 
 ## Novedades de la 1.9.0
 
@@ -174,8 +180,8 @@ Desde la 1.2.0, una conversación nueva sabe sola su dirección y cómo escribir
 Un mensaje entra a tu sesión sin preguntar solo si se cumple todo esto:
 
 - el par tiene auto-ejecución, y un admin la encendió con 2FA;
-- el remitente estaba en `bypassPermissions` al enviar;
-- tu sesión está en `bypassPermissions` y esa lectura está **fresca** al momento de entregar.
+- el remitente estaba en `bypassPermissions` o en modo `auto` al enviar (desde la 1.9.2);
+- tu sesión está en `bypassPermissions` o en modo `auto` y esa lectura está **fresca** al momento de entregar.
 
 Cualquier otro mensaje va a la **franja** de arriba del prompt. La franja muestra «link: N en franja», el id corto del mensaje más antiguo (8 caracteres), quién lo manda y su primera línea. Abajo están **[Ver completo]**, **[Aceptar `id`]** y **[Rechazar]**.
 
@@ -190,14 +196,14 @@ Cualquier otro mensaje va a la **franja** de arriba del prompt. La franja muestr
 
 **Frescura del modo.** Claude Code solo informa el modo de permisos en los hooks de un turno: al enviar un prompt, al usar una herramienta y al terminar. Con la sesión en idle no hay lectura en vivo: un shift+tab no avisa a nadie. La regla vigente (`IDLE_POLICY` en `mod/link-mode-freshness.js`) es «último modo visto»:
 
-- si al terminar el último turno la sesión estaba en bypass, sigue contando como bypass fresco hasta **12 h** en idle;
+- si al terminar el último turno la sesión estaba en bypass o en auto, ese modo sigue contando como fresco hasta **24 h** en idle (12 h hasta la 1.9.1);
 - pasado ese tiempo, o con otro modo, el mensaje va a la franja.
 
-El fin de turno se toma de `turn.complete`, que también llega cuando interrumpes con Esc o cuando un error de API corta el turno; `classic.Stop` no llega en esos casos. El tope de 12 h vale en todos los casos: una lectura más vieja nunca cuenta como fresca, aunque el turno parezca seguir abierto.
+El fin de turno se toma de `turn.complete`, que también llega cuando interrumpes con Esc o cuando un error de API corta el turno; `classic.Stop` no llega en esos casos. El tope de 24 h vale en todos los casos: una lectura más vieja nunca cuenta como fresca, aunque el turno parezca seguir abierto.
 
 El hub recibe en cada poll el modo, si está fresco y su antigüedad (`mode_age_s`), para mostrarlo en el dashboard. Al arrancar (sesión nueva o `--resume`), y sin otra lectura todavía, el plugin toma el modo con que se lanzó Claude Code: `--dangerously-skip-permissions` o `--permission-mode <modo>`, leídos del proceso con `ps`; si no hay ninguno, `permissions.defaultMode` de los settings. La sesión cuenta como idle. Así, una terminal lanzada en bypass recibe en automático desde el primer poll, sin esperar a su primer prompt (desde la 1.5.1). Un `/reload-plugins` no pisa un modo ya visto.
 
-**Organizaciones.** Donde una organización gestiona Claude Code, los hooks `classic.*` de un plugin instalado por la persona no corren. Ahí solo cuenta el modo de arranque: hasta 12 h en idle, como cualquier lectura, y sin ver un shift+tab posterior.
+**Organizaciones.** Donde una organización gestiona Claude Code, los hooks `classic.*` de un plugin instalado por la persona no corren. Ahí solo cuenta el modo de arranque: hasta 24 h en idle, como cualquier lectura, y sin ver un shift+tab posterior.
 
 ## Cómo entra un mensaje
 

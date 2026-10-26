@@ -1,7 +1,8 @@
 // The client's run gate. Pure (no `$`).
 //
 // A peer's message runs on its own only when the hub said run=1 with gate=auto AND this
-// session is in bypassPermissions with a fresh reading, checked at the moment
+// session is in an auto-run mode (bypassPermissions or auto, link-mode-freshness.js)
+// with a fresh reading, checked at the moment
 // of injecting (never from a value cached at poll time). Everything else goes
 // to the strip, where only a person's Accept keystroke runs it. A person's
 // "release" on the dashboard counts as that Accept: the hub then sends the
@@ -13,6 +14,8 @@
 // keeps redelivering it until the ack arrives. It is injected as-is, in any
 // mode; the dedupe by id keeps it from running twice.
 
+import { isAutoRunMode } from './link-mode-freshness.js'
+
 /**
  * @param {{ delivery: { run?: unknown, gate?: unknown }, mode: { mode?: unknown, fresh?: unknown } }} input
  * @returns {boolean}
@@ -20,7 +23,7 @@
 export function shouldInject({ delivery, mode }) {
   if (delivery.run !== 1) return false
   if (delivery.gate === 'accepted') return true
-  return delivery.gate === 'auto' && mode.mode === 'bypassPermissions' && mode.fresh === true
+  return delivery.gate === 'auto' && isAutoRunMode(mode.mode) && mode.fresh === true
 }
 
 /**

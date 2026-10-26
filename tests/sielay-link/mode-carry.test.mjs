@@ -1,7 +1,7 @@
 // The mode across a /clear: the host empties `$.state` and session.start does
 // not run again, so the last sample seen is carried in memory and restored
 // into the new conversation. A shift+tab seen before the /clear wins, the
-// sample keeps its age (the 12 h cap still applies) and nothing is invented.
+// sample keeps its age (the 24 h cap still applies) and nothing is invented.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { carryModeOnClear, restoreModeCarry, latestSample } from '../../plugins/sielay-link/mod/link-mode-carry.js'
@@ -49,7 +49,7 @@ test('a shift+tab seen before /clear wins: the newest sample is the one carried'
   const h = engine({
     samples: [
       { mode: 'bypassPermissions', at: NOW - 90_000, event: 'SessionStart' },
-      { mode: 'auto', at: NOW - 20_000, event: 'UserPromptSubmit' },
+      { mode: 'default', at: NOW - 20_000, event: 'UserPromptSubmit' },
     ],
     lastStopAt: NOW - 10_000,
   })
@@ -57,11 +57,21 @@ test('a shift+tab seen before /clear wins: the newest sample is the one carried'
   await carryModeOnClear(h.$, rt, { reason: 'clear' })
   h.clear()
   await restoreModeCarry(h.$, rt)
-  assert.deepEqual(h.state.modeSamples, [{ mode: 'auto', at: NOW - 20_000, event: 'UserPromptSubmit' }])
+  assert.deepEqual(h.state.modeSamples, [{ mode: 'default', at: NOW - 20_000, event: 'UserPromptSubmit' }])
   assert.equal((await readMode(h.$)).fresh, false)
 })
 
-test('the carried sample keeps its age: past the 12 h cap it is not fresh', async () => {
+test('an auto sample seen by a hook survives /clear and stays fresh', async () => {
+  const h = engine({ samples: [{ mode: 'auto', at: NOW - 20_000, event: 'Stop' }], lastStopAt: NOW - 20_000 })
+  const rt = runtime()
+  await carryModeOnClear(h.$, rt, { reason: 'clear' })
+  h.clear()
+  await restoreModeCarry(h.$, rt)
+  const m = await readMode(h.$)
+  assert.deepEqual([m.mode, m.fresh], ['auto', true])
+})
+
+test('the carried sample keeps its age: past the 24 h cap it is not fresh', async () => {
   const at = NOW - MODE_FRESH_MAX_MS - 1
   const h = engine({ samples: [{ mode: 'bypassPermissions', at, event: 'Stop' }], lastStopAt: at })
   const rt = runtime()
