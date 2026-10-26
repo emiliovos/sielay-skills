@@ -11,7 +11,7 @@ metadata:
   deps: "git en el repo destino. Recomendado: AgentKit (skills /ak:*); sin él, cada etapa se hace con subagentes nativos. Opcional: /si:checkpoint para el cierre (--checkpoint) y red a context7.com (o su MCP) para consultar la doc de dependencias en las etapas 2 y 3."
   installs: []
   risk: none
-  version: "2.6.0"
+  version: "2.6.1"
 ---
 
 # Build-auto: backbone de proyecto autónomo
@@ -118,7 +118,7 @@ El costo de un build crece con el tamaño del contexto por el número de turnos.
     1. `/si:checkpoint autonomo`: commit local y handoff en `~/handoffs/<sesion>.md` con el `build_id`, la etapa, lo hecho, lo que sigue, las decisiones vigentes y las esperas en segundo plano que hay que relanzar;
     2. solo el coordinador, si reporta a sielay: `link_build_stage` con `status: "blocked"` y `waiting: {on: "terminal", what: "corte de contexto a 150 K", next: "retomar desde <handoff>"}`. Una terminal de trabajo no toca `status` ni `waiting`;
     3. `node ${CLAUDE_SKILL_DIR}/scripts/corte-contexto.mjs --listo <handoff>`, que comprueba que el handoff existe y no está vacío;
-    4. termina el turno. En tmux, el gancho limpia la sesión sola (`scripts/limpiar-terminal.mjs`: comprueba que el pane sigue corriendo Claude y lo saca del modo copia, manda `/clear` y «Retoma desde <handoff>» en el mismo pane y deja «limpio» o «limpiar-fallo» en la bitácora; con un fallo antes del `/clear`, el siguiente fin de turno lo reintenta) y nadie más la toca. Sin tmux, avisa al coordinador por `link_send` (o, si tú coordinas, a quien te lanzó; sin link, a la persona en pantalla) «listo para clear, handoff en <ruta>», con su modelo y su `contexto_max`, y el coordinador la limpia como dice `references/terminales.md`.
+    4. termina el turno. En tmux, el gancho limpia la sesión sola (`scripts/limpiar-terminal.mjs`: solo toca el pane si sigue corriendo Claude y está libre, sin turno, diálogo ni texto en la caja; manda `/reload-plugins` y `/clear`, pega «Retoma desde <handoff>» con el Enter aparte, confirma cada paso en pantalla y deja «limpio» o «limpiar-fallo» en la bitácora; con un fallo antes del `/clear`, el siguiente fin de turno lo reintenta) y nadie más la toca. Sin tmux, avisa al coordinador por `link_send` (o, si tú coordinas, a quien te lanzó; sin link, a la persona en pantalla) «listo para clear, handoff en <ruta>», con su modelo y su `contexto_max`, y el coordinador la limpia como dice `references/terminales.md`.
   Nunca un `/clear` sin checkpoint. La sesión retomada sigue desde el handoff y, si coordina, vuelve a `status: "running"`.
   Nunca autocompactar a ciegas en el coordinador. Una lectura grande se delega a un subagente; no se usa la ventana de 1 M en builds autónomos.
 - **Tope de tokens por carril**, declarado en el plan. Si un carril lo pasa, para en un punto seguro y reporta; el coordinador decide si sigue. Si la persona fija un tope global de la corrida, también se respeta.
