@@ -11,7 +11,7 @@ metadata:
   deps: "git en el repo destino. Recomendado: AgentKit (skills /ak:*); sin él, cada etapa se hace con subagentes nativos. Opcional: /si:checkpoint para el cierre (--checkpoint) y red a context7.com (o su MCP) para consultar la doc de dependencias en las etapas 2 y 3."
   installs: []
   risk: none
-  version: "2.5.0"
+  version: "2.6.0"
 ---
 
 # Build-auto: backbone de proyecto autónomo
@@ -64,6 +64,7 @@ Arma esta ficha:
 | Ficha de navegador | cómo se obtienen capturas de UI en este entorno (navegador, comando, sesión de prueba) | "sin navegador": la evidencia de UI se pide a la persona o se marca no verificada |
 | Dónde corren las pruebas | **CI remoto** (un workflow en runners que no son esta máquina, y un comando de merge que reusa su corrida verde) o **local** (el pre-push y el merge corren las suites aquí). Compruébalo: la config de CI, sus runners en línea (`gh api repos/{dueño}/{repo}/actions/runners` o la última corrida) y el script de merge | "local". Si los runners están fuera de línea, cuenta como local |
 | AgentKit | ¿hay skills `/ak:*` en el catálogo de esta sesión? | modo nativo (abajo) |
+| Corte de contexto | `automático` si `node ${CLAUDE_SKILL_DIR}/scripts/corte-contexto.mjs --estado` da `"gancho": true` (un gancho Stop en la config del usuario o del proyecto que llama a ese script, o una terminal abierta por build-auto); si no, `manual` | `manual`: el coordinador se mide como dice «Presupuesto de contexto», y se anota el gancho de abajo como sugerencia para la persona |
 | Context7 | `docs-seeker` (ruta AgentKit con `/ak:docs-seeker`), `MCP` (`resolve-library-id` y `query-docs` en la sesión), `REST con key` o `REST sin key` (`curl` a context7.com; la key se comprueba solo como dice `references/puntos-ciegos-y-context7.md`) | `ninguno`: se avisa con el comando de alta para el usuario y se sigue con la doc oficial |
 
 **Plugins al día.** Antes del Frame, `claude plugin marketplace update` y `claude plugin list`: si hay una versión más nueva de esta skill o de `sielay-link`, dilo en la ficha. La sesión la toma al reiniciarse; nunca reinicies a media corrida.
@@ -110,11 +111,15 @@ Si la sesión tiene la herramienta `link_build_stage` (plugin `sielay-link`), le
 
 ## Presupuesto de contexto
 El costo de un build crece con el tamaño del contexto por el número de turnos. Reglas por defecto:
-- **Contexto medido, corte a 150 K.** El coordinador y las terminales de trabajo no pasan de **150 K** de contexto. No se estima a ojo: se mide con `node ${CLAUDE_SKILL_DIR}/scripts/medir-contexto.mjs` (si la variable no se expande, la carpeta es la «Base directory» que muestra la skill al cargarse). Lee el transcript de la sesión y devuelve `contexto_actual`, `contexto_max`, el modelo y lo mismo por subagente; `cortar: true` al llegar al umbral. Se corre al cerrar cada etapa, al volver cada subagente o carril y antes de una espera larga. Con `cortar: true`, en el siguiente punto seguro (nada a medio commitear, ningún subagente corriendo) y sin «terminar esto primero»:
-  1. `/si:checkpoint autonomo`: commit local y handoff en `~/handoffs/<sesion>.md` con el `build_id`, la etapa, lo hecho, lo que sigue y las decisiones vigentes;
-  2. solo el coordinador, si reporta a sielay: `link_build_stage` con `status: "blocked"` y `waiting: {on: "terminal", what: "corte de contexto a 150 K", next: "retomar desde <handoff>"}`. Una terminal de trabajo no toca `status` ni `waiting`: solo avisa (paso 3);
-  3. aviso al coordinador por `link_send` (o, si tú coordinas, a quien te lanzó; sin link, a la persona en pantalla): «listo para clear, handoff en <ruta>», con su modelo y su `contexto_max`. El coordinador le hace el `/clear` y la retoma como dice `references/terminales.md`;
-  4. termina el turno. Retoma una sesión limpia desde el handoff.
+- **Corte a 150 K automático, siempre con checkpoint.** El coordinador y las terminales de trabajo no pasan de **150 K** de contexto, y no depende de que el agente se acuerde de medirse: lo hace el gancho `scripts/corte-contexto.mjs` (Stop y PostToolUse). Lee la cola del transcript; si la sesión está en un build y pasó el umbral, a mitad de un turno largo le avisa a Claude después de una herramienta, y al terminar el turno lo bloquea una vez, con los pasos de abajo. Fuera de un build no hace nada, y los eventos de un subagente no cuentan: ni lo miden ni marcan la sesión como lista.
+  - **Activar:** las terminales que abre build-auto ya nacen activadas (`references/terminales.md`). El coordinador corre `node ${CLAUDE_SKILL_DIR}/scripts/corte-contexto.mjs --activar <build_id>` al reportar el arranque (si la variable no se expande, la carpeta es la «Base directory» que muestra la skill al cargarse) y `--desactivar` en el Cierre. En tmux la activación y el estado del corte van por pane (con la sesión de tmux y el pid del pane, porque tmux reusa los ids) y sobreviven al `/clear`; sin tmux van por sesión, y la sesión retomada la vuelve a activar. Vence a las 24 h sin un fin de turno; cada uno la renueva. El auto-`/clear` solo limpia sesiones activadas: un coordinador interactivo lo enciende a propósito con `--activar`.
+  - **Gancho instalado:** el campo «Corte de contexto» de la ficha. Con `manual`, el coordinador mide con `node ${CLAUDE_SKILL_DIR}/scripts/medir-contexto.mjs` (devuelve `contexto_actual`, `contexto_max`, el modelo, lo mismo por subagente y `cortar: true` al llegar al umbral) al cerrar cada etapa, al volver cada subagente o carril y antes de una espera larga, y sigue los mismos pasos. Instalar el gancho es decisión de la persona; la skill no toca su config. Para un repo, un Stop y un PostToolUse en `.claude/settings.json` que llamen a `node <carpeta de la skill>/scripts/corte-contexto.mjs` (o a un script del repo que lo ubique en el plugin instalado), con `[ -n "$SI_BUILD_CORTE_SCRIPT" ] ||` delante para no correr dos veces en una terminal que ya lo trae.
+  - **Pasos del corte**, en el siguiente punto seguro (nada a medio commitear, ningún subagente ni espera corriendo; si hay, se termina sin empezar nada nuevo y el gancho lo vuelve a pedir cuando el contexto crezca 20 K más):
+    1. `/si:checkpoint autonomo`: commit local y handoff en `~/handoffs/<sesion>.md` con el `build_id`, la etapa, lo hecho, lo que sigue, las decisiones vigentes y las esperas en segundo plano que hay que relanzar;
+    2. solo el coordinador, si reporta a sielay: `link_build_stage` con `status: "blocked"` y `waiting: {on: "terminal", what: "corte de contexto a 150 K", next: "retomar desde <handoff>"}`. Una terminal de trabajo no toca `status` ni `waiting`;
+    3. `node ${CLAUDE_SKILL_DIR}/scripts/corte-contexto.mjs --listo <handoff>`, que comprueba que el handoff existe y no está vacío;
+    4. termina el turno. En tmux, el gancho limpia la sesión sola (`scripts/limpiar-terminal.mjs`: comprueba que el pane sigue corriendo Claude y lo saca del modo copia, manda `/clear` y «Retoma desde <handoff>» en el mismo pane y deja «limpio» o «limpiar-fallo» en la bitácora; con un fallo antes del `/clear`, el siguiente fin de turno lo reintenta) y nadie más la toca. Sin tmux, avisa al coordinador por `link_send` (o, si tú coordinas, a quien te lanzó; sin link, a la persona en pantalla) «listo para clear, handoff en <ruta>», con su modelo y su `contexto_max`, y el coordinador la limpia como dice `references/terminales.md`.
+  Nunca un `/clear` sin checkpoint. La sesión retomada sigue desde el handoff y, si coordina, vuelve a `status: "running"`.
   Nunca autocompactar a ciegas en el coordinador. Una lectura grande se delega a un subagente; no se usa la ventana de 1 M en builds autónomos.
 - **Tope de tokens por carril**, declarado en el plan. Si un carril lo pasa, para en un punto seguro y reporta; el coordinador decide si sigue. Si la persona fija un tope global de la corrida, también se respeta.
 - **Autocompactación solo en terminales autónomas.** Se lanzan con `claude --autocompact 200k` (el CLI acepta de 100k a 1M). Nunca va en la config global ni en sesiones interactivas.
@@ -222,6 +227,7 @@ Reglas que nunca se rompen:
 
 ## Etapa 8: Cierre
 Lee `references/cierre-y-retro.md`: `retro.yaml`, marcador y reporte. Después:
+- Apaga el corte de contexto de tu sesión: `node ${CLAUDE_SKILL_DIR}/scripts/corte-contexto.mjs --desactivar`.
 - Entrega el **reporte final** (formato en `references/disciplina-de-pruebas.md`), estilo brief: primero lo que necesita a la persona, luego lo que pasó.
 - Con `--checkpoint`: invoca `/si:checkpoint`, que sigue el cierre que declare el repo. Si no está instalada, usa `/ak:journal` y `/ak:handoff --include-status`; sin AgentKit, escribe la bitácora y el handoff a mano en el lugar que use el repo. Sin el flag, sugiere en una línea correr `/si:checkpoint`.
 - Borra los worktrees y ramas locales de lo ya entregado, solo si la entrega está confirmada (PR mergeado o la rama aparece en `git branch --merged`) y el worktree no tiene cambios sin commitear. Nunca `--force`. Reporta los que quedan.

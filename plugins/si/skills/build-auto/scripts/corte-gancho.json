@@ -1,0 +1,6 @@
+{
+  "hooks": {
+    "Stop": [{ "hooks": [{ "type": "command", "command": "node \"$SI_BUILD_CORTE_SCRIPT\"" }] }],
+    "PostToolUse": [{ "hooks": [{ "type": "command", "command": "node \"$SI_BUILD_CORTE_SCRIPT\"" }] }]
+  }
+}
