@@ -56,7 +56,8 @@ function buildLine(kind, p) {
       'mandan en ese build; revisa su estado con builds_status antes de seguir.'
   }
   if (kind === 'build_closed') {
-    const absorbed = p.absorbed_by ? `, absorbido por ${clean(p.absorbed_by, 80)}` : ''
+    const by = clean(p.absorbed_by, 80)
+    const absorbed = by ? `, absorbido por ${by}` : ''
     return `Un admin cerró tu build ${id} (${clean(p.outcome, 20)})${absorbed}. El hub ignora los reportes nuevos de ese build: ` +
       'deja de trabajar en él y, si sigue habiendo trabajo, repórtalo con otro build_id.'
   }

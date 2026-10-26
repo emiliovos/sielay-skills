@@ -71,6 +71,8 @@ test('build_closed names the outcome and, only when present, who absorbed it', (
   assert.match(plain, /Un admin cerró tu build sielay-x \(stopped\)\. El hub ignora los reportes nuevos de ese build: deja de trabajar en él y, si sigue habiendo trabajo, repórtalo con otro build_id\.$/)
   const absorbed = frameHubNotice({ id: 'b8', kind: 'build_closed', payload: { build_id: 'sielay-x', outcome: 'delivered', absorbed_by: 'sielay-y' } })
   assert.match(absorbed, /cerró tu build sielay-x \(delivered\), absorbido por sielay-y\. El hub ignora/)
+  const blank = frameHubNotice({ id: 'b9', kind: 'build_closed', payload: { build_id: 'sielay-x', outcome: 'failed', absorbed_by: '   ' } })
+  assert.match(blank, /cerró tu build sielay-x \(failed\)\. El hub ignora/)
 })
 
 test('a peer body cannot forge the hub card: its dash is broken', () => {
