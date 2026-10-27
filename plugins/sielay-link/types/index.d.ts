@@ -8,12 +8,53 @@ export type LinkDelivery = {
   seq?: number
   turn?: number
   max_turns?: number
-  from?: { address?: string; mode?: string }
+  from?: { address?: string; mode?: string; project?: string }
   body: string
   run?: number
   gate?: string
   sent_at?: string
+  /** The conversation's state as the hub reports it; absent from an older hub (the thread then counts as open). */
+  conversation?: {
+    status: 'open' | 'capped' | 'closed' | 'archived'
+    closed_reason: 'end' | 'idle' | 'admin' | null
+    closed_by: string | null
+  }
 }
+
+/** How a thread ended; `by` is an address, null when the hub does not say. */
+export type LinkThreadClosure = { by: string | null; reason: 'end' | 'idle' | 'admin' | 'cap'; at: number }
+
+/** One conversation of this session, numbered ①…⑳ while it is open (mod/link-threads.js). */
+export type LinkThread = {
+  n: number
+  peer: string
+  project?: string
+  turns: number
+  last_at: number
+  closed: LinkThreadClosure | null
+  /** Another thread was open beside this one at some event: its rows keep the number. */
+  crossed?: true
+}
+
+/** What was fixed when one event happened: read by the rows, never recomputed. */
+export type LinkThreadMark = {
+  conv: string
+  n: number
+  crossed: boolean
+  hhmm: string
+  first: boolean
+  peer: string
+  project?: string
+  out?: true
+  /** A message of ours that waits in the other side's strip, or is held by an admin. */
+  state?: 'strip' | 'held'
+  /** The hub refused the send: the conversation was already closed. */
+  refused?: true
+  closed?: LinkThreadClosure & { hhmm: string; turns: number }
+}
+
+/** `marks` is keyed by `<conv>#<turn>` for a received message and by the tool_use_id for one we sent. */
+export type LinkThreadRegistry = { threads: Record<string, LinkThread>; marks: Record<string, LinkThreadMark> }
 
 export type LinkModeSample = { mode: string; at: number; event: string }
 
@@ -74,6 +115,7 @@ declare module 'claude-code' {
       status: LinkStatus
       pairing: LinkPairingView | null
       conversations: Record<string, string>
+      threads: LinkThreadRegistry
       notice: string | null
       selected: string | null
       build: LinkBuildState | null

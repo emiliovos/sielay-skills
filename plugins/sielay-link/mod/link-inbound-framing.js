@@ -41,6 +41,18 @@ const SEPARATOR_LINE = /^[ \t]*─+[ \t]*$/gm
 const HEADER_DASH = /^([ \t]*)[-‐‑‒–—―−﹘﹣]+(?=[ \t]*(?:mensaje|aviso)[ \t]+del?\b)/gim
 
 /**
+ * A line that opens like a thread header, a turn or a closure of link_read: a
+ * numbered circle (①…⑳, ❶…, ⓫…), an arrow (⇄ → -> ⟶ ➔ and their kin), a check or
+ * cross (✓ ✔ ☑ ✕ ⊘), «cerrado», or a clock time. It gets a `›` in front. The
+ * `│ ` prefix on every body line is the real guard; this is the second layer.
+ */
+const THREAD_OPENER = new RegExp(
+  '^([ \\t]*)(?=(?:[\\u2460-\\u24FF\\u2776-\\u2793\\u3251-\\u325F\\u32B1-\\u32BF\\u2190-\\u21FF\\u27F0-\\u27FF\\u2794-\\u27BF\\u2900-\\u297F' +
+    '\\u2610-\\u2612\\u2713-\\u2718\\u2705\\u274C\\u274E\\u2297\\u2298]|->|cerrado\\b|\\d{1,2}:\\d{2}\\b))',
+  'gim',
+)
+
+/**
  * Sanitizes, then breaks every opener that could pass for a header or a
  * harness tag: any `<` followed by a tag name (open or close), and any
  * `[sielay…`. Matching runs after normalization, so invisible characters and
@@ -54,6 +66,7 @@ export function neutralizeBody(body) {
     .replace(/\[(\s*)sielay/gi, '($1sielay_')
     .replace(/\[(\s*)conv\s*=/gi, '($1conv:')
     .replace(HEADER_DASH, '$1›')
+    .replace(THREAD_OPENER, '$1›')
     .replace(SEPARATOR_LINE, line => line.replace(/─/g, '-'))
     .replace(/<(?=\s*\/?\s*[A-Za-z])/g, '‹')
 }
@@ -74,13 +87,14 @@ export function safeField(value, disallowed, lower = false) {
  * @param {unknown} n
  * @returns {string}
  */
-function count(n) {
+export function count(n) {
   return Number.isInteger(n) && /** @type {number} */ (n) >= 0 ? String(n) : '?'
 }
 
 /**
  * @typedef {{ id: string, conversation_id: string, seq?: number, turn?: number, max_turns?: number,
  *   from?: { address?: string, mode?: string, project?: string }, body: string, run?: number, gate?: string, sent_at?: string,
+ *   conversation?: { status?: string, closed_reason?: string|null, closed_by?: string|null },
  *   attachment?: { name?: string, text?: string } }} Delivery
  */
 

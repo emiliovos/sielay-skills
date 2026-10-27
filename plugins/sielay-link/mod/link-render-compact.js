@@ -3,20 +3,15 @@
 // this very session, so a namesake from another person never looks like ours.
 // The body always comes after the «◇ …» prefix, so it cannot pass for a row.
 
-import { sanitizeText, safeField } from './link-inbound-framing.js'
+import { safeField } from './link-inbound-framing.js'
 import { READ_SEPARATOR } from './link-read-tool.js'
 import { fit, splitAddress, addressText, parseInbound } from './link-render-text.js'
+import { oneLine, who, parseThread } from './link-thread-text.js'
+import { inboundThreadRows, threadCardLines } from './link-thread-rows.js'
+
+export { who }
 
 /** @typedef {import('./link-render-text.js').Line} Line */
-
-/** Text on one line: no breaks, runs of blanks collapsed. @param {string} text */
-const oneLine = text => sanitizeText(text).replace(/\s+/g, ' ').trim()
-
-/**
- * «persona/sesión», or just «sesión» when the person is `selfPerson`.
- * @param {string} person @param {string} session @param {string|undefined} selfPerson
- */
-export const who = (person, session, selfPerson) => (selfPerson !== undefined && person === selfPerson ? session : `${person}/${session}`)
 
 /** @param {string|undefined} selfAddress the address of this session, when known */
 export const personOf = selfAddress => splitAddress(selfAddress)?.person
@@ -107,13 +102,29 @@ export function readCallRow(cols) {
 }
 
 /**
- * The answer to link_read: one row per card it brought, like an incoming
- * message, or its plain line («No hay mensajes sin leer.»).
- * @param {string} answer @param {string|undefined} selfPerson @param {number} cols
+ * The answer to link_read: the rows of each conversation it brought (a block
+ * of the thread format, or a card of 1.10.x), or its plain line («No hay
+ * mensajes sin leer.»).
+ * @param {string} answer @param {import('./link-thread-rows.js').RowCtx} ctx @param {number} cols
  * @returns {Line[]}
  */
-export function readAnswerRows(answer, selfPerson, cols) {
-  const cards = answer.split(READ_SEPARATOR).map(parseInbound)
+export function readAnswerRows(answer, ctx, cols) {
+  const cards = answer.split(READ_SEPARATOR).map(b => parseThread(b) ?? parseInbound(b))
   if (cards.some(c => c === null)) return [{ text: fit(oneLine(answer), cols), dim: true }]
-  return cards.flatMap(c => inboundRow(/** @type {NonNullable<typeof c>} */ (c), selfPerson, cols))
+  return cards.flatMap(c => {
+    const card = /** @type {NonNullable<typeof c>} */ (c)
+    return 'turns' in card ? inboundThreadRows(card, ctx, cols) : inboundRow(card, personOf(ctx.self), cols)
+  })
+}
+
+/**
+ * ctrl+o on the answer to link_read: every conversation as a card, or null
+ * when the answer is not made of thread blocks (the engine draws it).
+ * @param {string} answer @param {number} cols
+ * @returns {Line[]|null}
+ */
+export function readAnswerCards(answer, cols) {
+  const blocks = answer.split(READ_SEPARATOR).map(parseThread)
+  if (blocks.some(b => b === null)) return null
+  return blocks.flatMap((b, i) => [...(i > 0 ? [{ text: '  ───', dim: /** @type {const} */ (true) }] : []), ...threadCardLines(/** @type {NonNullable<typeof b>} */ (b), cols)])
 }

@@ -67,6 +67,7 @@ function isConvId(id) {
  *   notePrefix?: (prefix: string) => void,
  *   build?: import('./link-build-tool.js').BuildToolDeps,
  *   read?: import('./link-read-tool.js').ReadToolDeps,
+ *   onSent?: (sent: { conv: string, to: string, end?: boolean, gate?: unknown, turn?: unknown, closed?: { by?: unknown, reason?: unknown } }) => Promise<unknown>,
  * }} ToolDeps
  * @typedef {{ deny: string, result?: undefined } | { result: string, deny?: undefined }} ToolAnswer
  */
@@ -98,6 +99,10 @@ export async function runLinkTool(name, input, deps) {
   }
   if (!['link_send', 'link_reply', 'link_peers', 'link_watch'].includes(name)) return { deny: `herramienta desconocida: ${name}` }
   if (!deps.client) return { deny: 'sielay-link no está emparejado en esta máquina: corre /link pair <slot> (el slot lo crea un admin).' }
+  /** The conversation and peer of a single send once known: a 409 needs them to mark the refusal. @type {{ conv?: string, to?: string }} */
+  const sending = {}
+  /** The rows fall back to a plain line if the registry fails; the send itself already happened. @param {Parameters<NonNullable<ToolDeps['onSent']>>[0]} sent */
+  const noteSent = async sent => { try { await deps.onSent?.(sent) } catch { /* no mark: the row is drawn without a number */ } }
   try {
     if (name === 'link_watch') {
       const client = deps.client
@@ -156,17 +161,25 @@ export async function runLinkTool(name, input, deps) {
       body.to = to
       body.conversation_id = input.conversation
     }
+    sending.conv = typeof body.conversation_id === 'string' ? body.conversation_id : undefined
+    sending.to = String(body.to)
     body.client_msg_id = deps.newId()
     body.body = input.text
     if (attachment) body.attachment = attachment
     if (name === 'link_reply' && input.end === true) body.end = true
 
     const sent = await deps.client.send(body)
-    if (typeof sent?.conversation_id === 'string') await deps.rememberConversation(sent.conversation_id, String(body.to))
+    if (typeof sent?.conversation_id === 'string') {
+      await deps.rememberConversation(sent.conversation_id, String(body.to))
+      await noteSent({ conv: sent.conversation_id, to: String(body.to), end: body.end === true, gate: sent.gate, turn: sent.turn })
+    }
     return { result: sendAnswer(sent, String(body.to)) }
   } catch (err) {
     const e = /** @type {{ code?: string, closedBy?: string, closedReason?: string }} */ (err ?? {})
-    if (e.code === 'conversation_closed') return { result: closedConversationNote(e) }
+    if (e.code === 'conversation_closed') {
+      if (sending.conv && sending.to) await noteSent({ conv: sending.conv, to: sending.to, closed: { by: e.closedBy, reason: e.closedReason } })
+      return { result: closedConversationNote(e) }
+    }
     return { deny: describeHubError(err) }
   }
 }
