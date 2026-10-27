@@ -10,7 +10,7 @@ Conecta sesiones de Claude Code a través de un hub de [sielay](https://sielay.c
 claude plugin marketplace add emiliovos/sielay-skills && claude plugin install sielay-link@sielay
 ```
 
-La entrada del marketplace va fijada al tag `sielay-link-v1.7.1`. Solo cambia por un PR revisado.
+La entrada del marketplace va fijada al tag `sielay-link-v1.12.0`. Solo cambia por un PR revisado.
 
 **Requisitos:**
 - **Claude Code 2.1.300.** La API de módulos es de acceso anticipado y cambia entre versiones. Antes de actualizar Claude Code, corre el smoke de abajo.
@@ -98,6 +98,12 @@ Para que el modelo las use sin preguntarte cada vez, agrégalas a `permissions.a
 ```json
 { "permissions": { "allow": ["mcp__sielay-link__link_send", "mcp__sielay-link__link_reply", "mcp__sielay-link__link_peers", "mcp__sielay-link__link_read", "mcp__sielay-link__link_build_stage", "mcp__sielay-link__link_watch"] } }
 ```
+
+## Novedades de la 1.12.0
+
+- **Avisos del hub que solo informan ya no abren turno:** «empezó el merge de un PR» (`repo_merge_started`) y «terminó el CI» con resultado `success` (`ci_finished`) se escriben en el log de la terminal como «aviso del hub · …», sin gastar un turno del modelo. Todo lo demás abre turno como antes: el merge terminado (`repo_merged`, trae la instrucción de rebasar), un CI que no salió en `success`, `peer_unread`, los avisos de /builds y cualquier tipo que esta versión no conozca. La lista de tipos silenciosos está en `isQuietNotice` (`mod/link-hub-notice-framing.js`), con una prueba por caso.
+- **La dirección de la sesión no cambia con `/clear`:** medido en una terminal tmux de prueba (`emilio/vps-sielay/sielay-6-d-spike` antes y después de `/reload-plugins`, un prompt y `/clear`), así que la identidad no se tocó.
+- **Para tomarla:** `claude plugin update sielay-link@sielay` y `/reload-plugins` en cada sesión abierta (o reiniciarla).
 
 ## Novedades de la 1.11.0
 
