@@ -14,7 +14,7 @@
 // - The strip keeps arrival order: a newer message never takes the place of
 //   the one on screen.
 
-import { frameHubNotice, isHubNotice } from './link-hub-notice-framing.js'
+import { frameHubNotice, hubNoticeLine, isHubNotice, isQuietNotice } from './link-hub-notice-framing.js'
 import { frameInbound, isDelivery } from './link-inbound-framing.js'
 import { shouldInject, onStripAccept, onStripReject } from './link-run-gate.js'
 import { createInboundStore } from './link-inbound-store.js'
@@ -38,9 +38,10 @@ import { seqOf } from './link-threads.js'
  *   inbox?: import('./link-inbox.js').Inbox,
  *   compact?: () => Promise<boolean>,
  *   log?: (msg: string) => void,
+ *   show?: (line: string) => unknown,
  * }} deps
  */
-export function createInboundHandler({ store, adapter, readMode, onStrip, onConversation, onInbound, inbox, compact = async () => false, log = () => {} }) {
+export function createInboundHandler({ store, adapter, readMode, onStrip, onConversation, onInbound, inbox, compact = async () => false, log = () => {}, show }) {
   /** Strip items this client showed and the hub may not list yet, by id. */
   /** @type {Map<string, Delivery>} */
   const shownLocally = new Map()
@@ -149,12 +150,19 @@ export function createInboundHandler({ store, adapter, readMode, onStrip, onConv
         acks.push({ id: d.id, outcome })
       }
       for (const n of (Array.isArray(data.notices) ? data.notices : []).filter(isHubNotice)) {
-        const text = frameHubNotice(n)
-        if (!text) continue
+        const quiet = show !== undefined && isQuietNotice(n)
         try {
-          await adapter.inject(text)
+          // The hub marks a notice delivered when it serves it: if the log fails, the notice falls back to a turn.
+          if (quiet) {
+            const line = hubNoticeLine(n)
+            if (line) {
+              try { await show(`aviso del hub · ${line}`); continue } catch { /* falls back to a turn */ }
+            }
+          }
+          const framed = frameHubNotice(n)
+          if (framed) await adapter.inject(framed)
         } catch (err) {
-          log(`hub notice ${n.id} not injected: ${err instanceof Error ? err.message : String(err)}`)
+          try { log(`hub notice ${n.id} not delivered: ${err instanceof Error ? err.message : String(err)}`) } catch { /* nothing left to report to */ }
         }
       }
       if (Array.isArray(data.strip)) {

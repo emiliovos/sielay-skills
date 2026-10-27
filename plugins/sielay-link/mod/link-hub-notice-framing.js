@@ -65,12 +65,24 @@ function buildLine(kind, p) {
 }
 
 /**
+ * True for a notice that only informs and is shown without opening a turn: a
+ * merge that started and a CI run that passed. Everything else (a merge that
+ * finished, a red CI, build notices, an unknown kind) asks the model to act or
+ * to know, so it opens a turn as before.
  * @param {HubNotice} n
- * @returns {string|null} the text for the model, or null for a malformed build notice.
- *   A kind this version does not know still reaches the model as one generic line,
+ */
+export function isQuietNotice(n) {
+  if (n.kind === 'repo_merge_started') return true
+  return n.kind === 'ci_finished' && n.payload.conclusion === 'success'
+}
+
+/**
+ * @param {HubNotice} n
+ * @returns {string|null} the one line of the notice, or null for a malformed build notice.
+ *   A kind this version does not know still gets one generic line,
  *   so it is not lost in silence once the hub marks it delivered.
  */
-export function frameHubNotice(n) {
+export function hubNoticeLine(n) {
   const p = n.payload
   let line
   if (n.kind === 'repo_merge_started') line = repoLine(p, 'Empezó el merge del')
@@ -87,5 +99,15 @@ export function frameHubNotice(n) {
     line = build ?? `Llegó un aviso del hub de tipo «${clean(n.kind, 40)}» que esta versión de sielay-link no sabe mostrar. ` +
       'Actualiza el plugin (claude plugin update sielay-link@sielay) para verlo completo.'
   }
+  return line
+}
+
+/**
+ * @param {HubNotice} n
+ * @returns {string|null} the text for the model, or null for a malformed build notice.
+ */
+export function frameHubNotice(n) {
+  const line = hubNoticeLine(n)
+  if (line === null) return null
   return '— Aviso del hub de sielay (no es una persona ni otra sesión)\nSolo informa; no hace falta responder.\n\n' + line
 }
