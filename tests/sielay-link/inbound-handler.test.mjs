@@ -87,3 +87,28 @@ test('an accepted redelivery is never acked shown: a failed write sends no ack a
   assert.deepEqual(await h.handlePoll('inst', { messages: [accepted], strip: [] }), [{ id: 'acc-1', outcome: 'injected' }], 'redelivered again: re-acked, not re-injected')
   assert.equal(injected.length, 1)
 })
+
+test('onInbound hears of each message once, where it is injected: not for a redelivered id, not for the strip until accepted; `last` is the highest turn of the poll', async () => {
+  const store = memStore()
+  const heard = []
+  const logs = []
+  const h = createInboundHandler({
+    store, adapter: { inject: async () => {} }, readMode: async () => ({ mode: 'bypassPermissions', fresh: true }), onStrip: async () => {},
+    onInbound: async (d, opts) => { heard.push([d.id, opts.last]); if (d.id === 'boom') throw new Error('state gone') },
+    log: m => void logs.push(m),
+  })
+  const msg = (id, turn, extra = {}) => ({ id, conversation_id: 'c', turn, seq: turn, max_turns: 10, from: { address: 'a/b/c' }, body: 'x', run: 1, gate: 'auto', ...extra })
+  const acks = await h.handlePoll('inst', { messages: [msg('m1', 1), msg('m3', 3), msg('other', 1, { conversation_id: 'd' })], strip: [] })
+  assert.equal(acks.length, 3)
+  assert.deepEqual(heard, [['m1', false], ['m3', true], ['other', true]])
+  heard.length = 0
+  await h.handlePoll('inst', { messages: [msg('m1', 1)], strip: [] })
+  assert.deepEqual(heard, [], 'a redelivery is acked from the store and never reaches the registry')
+  await h.handlePoll('inst', { messages: [msg('boom', 4)], strip: [] })
+  assert.match(logs.join('\n'), /thread registry skipped boom: state gone/)
+  heard.length = 0
+  await h.handlePoll('inst', { messages: [], strip: [{ ...stripped, id: 'm8' }] })
+  assert.deepEqual(heard, [], 'a message waiting in the strip is not in the session yet')
+  await h.accept('m8', { instanceId: 'inst', decide: async () => {}, ack: async () => {} })
+  assert.deepEqual(heard, [['m8', true]])
+})

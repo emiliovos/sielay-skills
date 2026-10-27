@@ -99,6 +99,15 @@ Para que el modelo las use sin preguntarte cada vez, agrégalas a `permissions.a
 { "permissions": { "allow": ["mcp__sielay-link__link_send", "mcp__sielay-link__link_reply", "mcp__sielay-link__link_peers", "mcp__sielay-link__link_read", "mcp__sielay-link__link_build_stage", "mcp__sielay-link__link_watch"] } }
 ```
 
+## Novedades de la 1.11.0
+
+- **Hilos con sangría («formato A»):** los mensajes se ven como conversaciones numeradas. El primer turno de un hilo lleva su encabezado, «① operacion ⇄ sielay-6 · esta máquina · proyecto sielay», y cada turno es una fila con sangría: la hora local, quién → quién y el texto en una línea («   19:42  operacion → sielay-6 · Arranca el build…»). Mientras hay un solo hilo abierto las filas van sin número; cuando se abre otro antes de que cierre el primero, cada fila lleva su número en el margen («①  19:45 …», «②  19:46 …») y lo conserva hasta que el hilo termina. Los números son ①…⑳ por sesión, el más bajo libre entre los hilos abiertos; un hilo está abierto si no cerró y tuvo un turno en los últimos 30 minutos.
+- **Cierre y estado:** el hilo termina con su estado: «✓ cerrado por X · 19:53 · 3 turnos», «✕ cerrado por inactividad», «✕ cerrado por un admin», «⊘ tope de turnos». Un mensaje tuyo que espera a una persona sale con «⏸ en la franja de B», y uno retenido, con «⧗ retenido por un admin». El hub manda el estado de la conversación en cada entrega (campo `conversation`); con un hub que no lo manda, el hilo se ve siempre abierto y deja de contar como abierto a los 30 minutos. «✕ por inactividad» y «✕ por un admin» se ven cuando esta sesión lo sabe: la respuesta 409 de su `link_reply` o una entrega que ya lo trae.
+- **Lo que lee el modelo:** `link_read` agrupa por conversación (un bloque cada una, con el encabezado una sola vez) y cada línea del cuerpo y del adjunto va con el prefijo fijo «│ ». Un cuerpo que imite un encabezado, un turno o un cierre (con ①, ❶, ⇄, →, ->, ⟶, ✓, ✔, «cerrado»…) sigue siendo cuerpo: queda dentro de la barra y, además, esos signos al inicio de línea se rompen con «›». Con ctrl+o ves cada conversación como tarjeta.
+- **Cómo se fija:** la hora, el número y si el hilo está cruzado se guardan cuando ocurre el evento (`$.state`, clave `threads`: los hilos y las últimas 200 marcas); al redibujar, las filas solo leen la marca y no cambian. Si el estado se pierde (sesión reiniciada, marca podada), la fila sale con sangría y sin número, y los hilos vuelven a empezar en ①. La hora es la del hub para lo que llega y la del reloj de esta sesión para lo que envías, en la zona de esta máquina.
+- **Lo que no cambia:** la línea «📨 mensaje de X», la banda y el panel, los avisos del hub y una llamada a varias sesiones a la vez (sigue como una fila «◇ → a, b · texto»). Con `SIELAY_LINK_FULL=1` el mensaje que entra sigue siendo la tarjeta de la 1.10.x.
+- **Para tomarla:** `claude plugin update sielay-link@sielay` y `/reload-plugins` en cada sesión abierta (o reiniciarla).
+
 ## Novedades de la 1.10.1
 
 - **Avisos de /builds:** el hub avisa a la sesión que coordina un build cuando le contestaron en el buzón que esperaba (`build_answered`), cuando su trabajo ya está en la rama principal (`build_in_main`), cuando un admin le pasó el papel de coordinador (`build_adopted`) y cuando un admin lo cerró (`build_closed`, con el resultado y, si aplica, el build que lo absorbió). Llegan como cualquier «Aviso del hub de sielay», con un paso concreto (leer con `comms_read`, cerrar con `link_build_stage`, revisar con `builds_status` o dejar el build).
@@ -108,7 +117,7 @@ Para que el modelo las use sin preguntarte cada vez, agrégalas a `permissions.a
 ## Novedades de la 1.10.0
 
 - **Modo compacto, el de por omisión:** un mensaje de otra sesión entra en la conversación como una sola línea, «📨 mensaje de sielay-2» (con la persona, «ana/sielay-2», solo cuando no es la de esta sesión). La línea no lleva nada del cuerpo. El modelo lee el texto con la herramienta nueva `link_read`, y la app muestra esa llamada plegada: el cuerpo se ve al abrirla con ctrl+o. Detalle en «Cómo entra un mensaje».
-- **`link_read`:** sin argumentos trae todos los mensajes sin leer; con `conversation`, los de esa conversación (o el último, si ya se leyeron). Devuelve la misma tarjeta que antes entraba en la conversación, con el cuerpo normalizado igual. También está en el modo mínimo. Si pediste permisos explícitos, agrega `mcp__sielay-link__link_read` a `permissions.allow`.
+- **`link_read`:** sin argumentos trae todos los mensajes sin leer; con `conversation`, los de esa conversación (o el último, si ya se leyeron). Devolvía la misma tarjeta que antes entraba en la conversación (desde la 1.11.0, un bloque por conversación; ver arriba). También está en el modo mínimo. Si pediste permisos explícitos, agrega `mcp__sielay-link__link_read` a `permissions.allow`.
 - **Para volver a la tarjeta completa:** `SIELAY_LINK_FULL=1`, en el `env` del `.claude/settings.json` del proyecto, en `~/.claude/settings.json` o al arrancar (`SIELAY_LINK_FULL=1 claude`).
 - **Lo que no cambia:** la franja, la auto-ejecución, los acks y los avisos del hub. Claude Code sigue agregando su párrafo de «mensaje de otra sesión» después de la línea; ese no lo pone el plugin.
 - **Para tomarla:** `claude plugin update sielay-link@sielay` y `/reload-plugins` en cada sesión abierta (o reiniciarla).
@@ -151,7 +160,7 @@ Para que el modelo las use sin preguntarte cada vez, agrégalas a `permissions.a
 
 ### Detalle técnico: cómo se dibujan las filas
 
-Se usan los `ui.render` de `ToolUse`, `ToolResult` y `UserMessage`. Un árbol devuelto por el hook de `ToolUse` es todo lo que se dibuja de esa fila: así lo describen los tipos del motor («una fila compacta propia se deja pasar con `isExpanded`») y lo confirma la prueba de motor con `mount`, donde el árbol del plugin es lo único que aparece. Lo que esa prueba no puede mostrar es la terminal real: falta ver una vez que la línea `sielay-link - link_send (MCP)(…)` no queda encima. Con `isExpanded` (ctrl+o) el plugin dibuja el texto completo. Si una fila no se puede leer (otra herramienta, un mensaje que no trae el encabezado de sielay-link), el hook la devuelve al motor con `next(e)`. Las funciones de texto (`mod/link-render-text.js` y `mod/link-render-compact.js`) son puras y reciben el ancho; el árbol se arma en `mod/link-render-rows.jsx`.
+Se usan los `ui.render` de `ToolUse`, `ToolResult` y `UserMessage`. Un árbol devuelto por el hook de `ToolUse` es todo lo que se dibuja de esa fila: así lo describen los tipos del motor («una fila compacta propia se deja pasar con `isExpanded`») y lo confirma la prueba de motor con `mount`, donde el árbol del plugin es lo único que aparece. Lo que esa prueba no puede mostrar es la terminal real: falta ver una vez que la línea `sielay-link - link_send (MCP)(…)` no queda encima. Con `isExpanded` (ctrl+o) el plugin dibuja el texto completo. Si una fila no se puede leer (otra herramienta, un mensaje que no trae el encabezado de sielay-link), el hook la devuelve al motor con `next(e)`. Desde la 1.11.0 las filas de los hilos salen de `mod/link-thread-rows.js` (texto de `link_read` en `mod/link-thread-text.js`, registro de hilos en `mod/link-threads.js`). Las funciones de texto (`mod/link-render-text.js` y `mod/link-render-compact.js`) son puras y reciben el ancho; el árbol se arma en `mod/link-render-rows.jsx`.
 
 ## Novedades de la 1.7.2
 
@@ -226,7 +235,8 @@ El cuerpo se normaliza antes de entrar y antes de mostrarse:
 
 - se quitan las secuencias de terminal (ANSI y OSC), los caracteres de control y los invisibles o bidi;
 - se aplica NFKC;
-- se rompe cualquier etiqueta `<…`, cualquier `[sielay…`, cualquier `[conv=` y cualquier renglón que empiece con un guion y `Mensaje de`, para que un cuerpo no pueda falsificar el encabezado ni una etiqueta del sistema.
+- se rompe cualquier etiqueta `<…`, cualquier `[sielay…`, cualquier `[conv=` y cualquier renglón que empiece con un guion y `Mensaje de`, para que un cuerpo no pueda falsificar el encabezado ni una etiqueta del sistema;
+- al inicio de un renglón se rompen con «›» los signos que usan los hilos: ①…⑳ y sus variantes, flechas (⇄ → -> ⟶ ➔), marcas (✓ ✔ ☑ ✕ ⊘), «cerrado» y una hora (`19:42`).
 
 **Modo compacto (por omisión desde la 1.10.0).** A la conversación solo entra una línea con el remitente:
 
@@ -234,9 +244,9 @@ El cuerpo se normaliza antes de entrar y antes de mostrarse:
 📨 mensaje de sielay-2
 ```
 
-El mensaje completo queda en un buzón de la máquina (`$.store`, `inbox.<instance_id>`: los últimos 50, por 24 h), y el modelo lo lee con `link_read`. La respuesta de `link_read` es la tarjeta de abajo, construida igual, así que un cuerpo tampoco puede falsificar el encabezado ahí. Varios mensajes van en la misma respuesta, separados por `───` (un renglón así dentro de un cuerpo se cambia por guiones). Si el buzón pasa de 50, se van primero los ya leídos; un mensaje sin leer después de 24 h, o cuando los 50 están sin leer, se pierde aunque su línea siga en la conversación. Un `/link name` no deja mensajes atrás: `link_read` también lee los que llegaron con el nombre anterior. En la terminal, la línea y la llamada salen en gris tenue, en una línea cada una, y la respuesta en una línea por mensaje. Con `SIELAY_LINK_FULL=1` entra la tarjeta completa en la conversación, como antes.
+El mensaje completo queda en un buzón de la máquina (`$.store`, `inbox.<instance_id>`: los últimos 50, por 24 h), y el modelo lo lee con `link_read`. La respuesta de `link_read` agrupa por conversación (desde la 1.11.0, ver «Novedades de la 1.11.0») y lleva cada línea del cuerpo detrás de «│ », así que un cuerpo tampoco puede falsificar el encabezado, un turno ni un cierre ahí. Varios mensajes van en la misma respuesta, separados por `───` (un renglón así dentro de un cuerpo se cambia por guiones). Si el buzón pasa de 50, se van primero los ya leídos; un mensaje sin leer después de 24 h, o cuando los 50 están sin leer, se pierde aunque su línea siga en la conversación. Un `/link name` no deja mensajes atrás: `link_read` también lee los que llegaron con el nombre anterior. En la terminal, la línea y la llamada salen en gris tenue, en una línea cada una, y la respuesta en una fila por turno, con su encabezado de hilo. Con `SIELAY_LINK_FULL=1` entra la tarjeta completa en la conversación, como antes.
 
-El encabezado es una tarjeta alineada a la izquierda (desde la 1.7.0):
+La tarjeta de abajo es la que entra con `SIELAY_LINK_FULL=1` y la que traían las versiones anteriores a la 1.11.0 (alineada a la izquierda, desde la 1.7.0):
 
 ```
 — Mensaje de ana desde laptop (sesión api, proyecto tablero360)

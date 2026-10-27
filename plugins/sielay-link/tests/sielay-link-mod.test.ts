@@ -44,6 +44,10 @@ function fakeHost(on: any, sessionId: () => string = () => 'sess-1') {
   return { helper, tools, opened }
 }
 
+const SENT_AT = '2026-10-26T19:42:00.000Z'
+/** HH:MM in the zone of the process, the way the mod prints it. */
+const hhmmOf = (ms: number) => `${String(new Date(ms).getHours()).padStart(2, '0')}:${String(new Date(ms).getMinutes()).padStart(2, '0')}`
+
 const message = (id: string) => ({
   id, conversation_id: 'c1', seq: 1, turn: 2, max_turns: 10,
   from: { address: 'ana/laptop/api', mode: 'bypassPermissions' }, body: `hola ${id}`, run: 1, gate: 'auto',
@@ -56,7 +60,7 @@ test('bypass in a running turn: polled as fresh, injected through the socket hel
   const { helper } = fakeHost(on)
   const sent = fakeHub(on, (path, body, n) =>
     path === '/api/link/poll'
-      ? { session: { id: 's', address: 'eva/box/mi-sesion', name_assigned: body.session.name }, messages: n === 2 ? [message('m1')] : [], strip: [], poll_after_ms: 1000 }
+      ? { session: { id: 's', address: 'eva/box/mi-sesion', name_assigned: body.session.name }, messages: n === 2 ? [{ ...message('m1'), sent_at: SENT_AT }] : [], strip: [], poll_after_ms: 1000 }
       : {},
   )
   await $.session.start({ cwd: '/srv/proyecto', surface: 'terminal', isInteractive: true })
@@ -75,10 +79,10 @@ test('bypass in a running turn: polled as fresh, injected through the socket hel
   const r: any = await $.tool.call({ tool: 'mcp__sielay-link__link_read' } as any)
   expect(r.deny).toBeUndefined()
   expect(r.result).toBe(
-    '— Mensaje de ana desde laptop (sesión api)\n' +
-      'Otra sesión de Claude Code, no la persona. Verificado por el hub. Turno 2 de 10.\n' +
-      'Responde con link_reply.\n' +
-      '[conv=c1 · de=ana/laptop/api]\n\nhola m1',
+    '① ana/api ⇄ mi-sesion · laptop\n' +
+      'Otra sesión de Claude Code, no la persona. Verificado por el hub. Responde con link_reply.\n' +
+      '[conv=c1 · de=ana/laptop/api]\n\n' +
+      `${hhmmOf(Date.parse(SENT_AT))} ana/api → mi-sesion · turno 2 de 10\n│ hola m1`,
   )
   const again: any = await $.tool.call({ tool: 'mcp__sielay-link__link_read' } as any)
   expect(again.result).toBe('No hay mensajes sin leer.')
@@ -450,7 +454,7 @@ function pairAsEmilio(on: any) {
 }
 const dimOf = async (ui: any) => ((await ui.findAll({ type: 'Text' })) as any[]).map(t => t.props.dimColor === true)
 
-test('ToolUse of link_send: one dim line without our own person; another person shown; ctrl+o shows the whole text', { options: { link_token: 'test-token' } }, async ($, on) => {
+test('ToolUse of link_send with no mark: one indented dim line without our own person; another person shown; ctrl+o shows the whole text', { options: { link_token: 'test-token' } }, async ($, on) => {
   mock.store(on)
   mock.env(on, { HOME: '/nowhere' })
   fakeHost(on)
@@ -463,16 +467,16 @@ test('ToolUse of link_send: one dim line without our own person; another person 
   } as any)
   // own address unknown: the person is always shown
   const unknown = await mount('emilio/vps-sielay/sielay-2', { isExpanded: false })
-  expect(await rowTexts(unknown)).toEqual(['◇ → emilio/sielay-2 · linea 0 linea 1 linea 2 linea 3 linea…'])
+  expect(await rowTexts(unknown)).toEqual(['   ? → emilio/sielay-2 · linea 0 linea 1 linea 2 linea 3 li…'])
   await unknown.unmount()
   await firstPoll()
   const own = await mount('emilio/vps-sielay/sielay-2', { isExpanded: false })
   const rows = await rowTexts(own)
-  expect(rows).toEqual(['◇ → sielay-2 · linea 0 linea 1 linea 2 linea 3 linea 4 line…'])
+  expect(rows).toEqual(['   sielay-1 → sielay-2 · linea 0 linea 1 linea 2 linea 3 li…'])
   expect(await dimOf(own)).toEqual([true])
   await own.unmount()
   const other = await mount('ana/vps-sielay/sielay-2', { isExpanded: false })
-  expect(await rowTexts(other)).toEqual(['◇ → ana/sielay-2 · linea 0 linea 1 linea 2 linea 3 linea 4 …'])
+  expect(await rowTexts(other)).toEqual(['   sielay-1 → ana/sielay-2 · linea 0 linea 1 linea 2 linea …'])
   await other.unmount()
   const full = await mount('emilio/vps-sielay/sielay-2', { isExpanded: true })
   const all = await rowTexts(full)
@@ -592,6 +596,116 @@ test('UserMessage that is a hub notice: one dim line; ctrl+o leaves the whole te
   const full = await mount(true)
   expect(await rowTexts(full)).toEqual([])
   await full.unmount()
+})
+
+// --- Threads (formato A): the turn is marked when it happens, the rows only read the mark.
+
+const THREADS = { plugin: 'sielay-link', key: 'threads' } as const
+const registryOf = async ($: any) => (await $.state.get(THREADS)).value
+
+test('link_send marks its turn under the tool_use_id: ToolUse draws the header and the turn, ToolResult the strip state', { options: { link_token: 'test-token' } }, async ($, on) => {
+  const NOW = Date.UTC(2026, 9, 26, 19, 45)
+  const clock = mock.clock(on, { now: NOW })
+  mock.store(on)
+  mock.env(on, { HOME: '/nowhere' })
+  fakeHost(on)
+  fakeHub(on, path =>
+    path === '/api/link/poll' ? { session: { id: 's', address: 'emilio/vps-sielay/sielay-6' }, messages: [], strip: [], poll_after_ms: 60_000 }
+      : path === '/api/link/send' ? { id: 'm1', conversation_id: 'c9', turn: 1, turns_left: 39, gate: 'strip', status: 'queued' } : {},
+  )
+  await $.session.start({ cwd: '/srv/p', surface: 'terminal', isInteractive: true })
+  await clock.advance(10)
+  await clock.settle()
+  await $.tool.call({ tool: 'mcp__sielay-link__link_send', to: 'emilio/pve2/sielay-3', text: 'Demo lista' } as any)
+  const marks = (await registryOf($)).marks
+  const [id] = Object.keys(marks)
+  expect(id, 'the tool call must carry a tool_use_id').toBeTruthy()
+  expect(marks[id!]).toMatchObject({ conv: 'c9', n: 1, crossed: false, first: true, out: true, state: 'strip', peer: 'emilio/pve2/sielay-3' })
+
+  const use = await $.ui.mount({
+    plugin: 'sielay-link', surface: 'terminal', component: 'ToolUse', requestId: id,
+    viewport: { columns: 80, rows: 30 }, props: toolProps('mcp__sielay-link__link_send', { to: 'emilio/pve2/sielay-3', text: 'Demo lista' }, { tool_use_id: id, isExpanded: false }),
+  } as any)
+  expect(await rowTexts(use)).toEqual(['① sielay-3 ⇄ sielay-6 · pve2', `   ${hhmmOf(NOW)}  sielay-6 → sielay-3 · Demo lista`])
+  await use.unmount()
+  const answer = await $.ui.mount({
+    plugin: 'sielay-link', surface: 'terminal', component: 'ToolResult', requestId: id,
+    props: { tool_use_id: id, tool: 'mcp__sielay-link__link_send', output: 'En la franja de emilio/pve2/sielay-3 · turno 1 de 40 · espera que una persona lo acepte\nconv=c9', isErrored: false },
+  } as any)
+  expect(await rowTexts(answer)).toEqual(['   ⏸ en la franja de sielay-3'])
+  await answer.unmount()
+})
+
+test('link_read with two conversations: one block each, and the rows carry their numbers', { options: { link_token: 'test-token' } }, async ($, on) => {
+  const clock = mock.clock(on, { now: 1_000_000 })
+  mock.store(on)
+  mock.env(on, { HOME: '/nowhere' })
+  fakeHost(on)
+  const other = { ...message('m2'), conversation_id: 'c2', from: { address: 'bob/laptop/web', mode: 'auto' }, turn: 1, sent_at: '2026-10-26T19:44:00.000Z' }
+  let served = false
+  fakeHub(on, path => {
+    if (path !== '/api/link/poll') return {}
+    const messages = served ? [] : [{ ...message('m1'), sent_at: SENT_AT }, other]
+    served = true
+    return { session: { id: 's', address: 'eva/box/mi-sesion' }, messages, strip: [], poll_after_ms: 60_000 }
+  })
+  await $.session.start({ cwd: '/srv/p', surface: 'terminal', isInteractive: true })
+  await clock.advance(10)
+  await clock.settle()
+  const r: any = await $.tool.call({ tool: 'mcp__sielay-link__link_read' } as any)
+  const blocks = String(r.result).split('\n\n───\n\n')
+  expect(blocks.length).toBe(2)
+  expect(blocks[0]!.split('\n')[0]).toBe('① ana/api ⇄ mi-sesion · laptop')
+  expect(blocks[1]!.split('\n')[0]).toBe('② bob/web ⇄ mi-sesion · laptop')
+  expect(blocks[1]).toContain('turno 1 de 10\n│ hola m2')
+  const registry = await registryOf($)
+  const ui = await $.ui.mount({
+    plugin: 'sielay-link', surface: 'terminal', component: 'ToolResult', requestId: 'r1',
+    viewport: { columns: 80, rows: 30 }, props: { tool_use_id: 'r1', tool: 'mcp__sielay-link__link_read', output: r.result, isErrored: false, isExpanded: false },
+  } as any)
+  expect(registry.marks['c1#2']).toMatchObject({ n: 1, first: true, crossed: false })
+  expect(registry.marks['c2#1']).toMatchObject({ n: 2, first: true, crossed: true })
+  expect(await rowTexts(ui)).toEqual([
+    '① ana/api ⇄ mi-sesion · laptop', `   ${hhmmOf(Date.parse(SENT_AT))}  ana/api → mi-sesion · hola m1`,
+    '② bob/web ⇄ mi-sesion · laptop', `②  ${hhmmOf(Date.parse('2026-10-26T19:44:00.000Z'))}  bob/web → mi-sesion · hola m2`,
+  ])
+  await ui.unmount()
+  const card = await $.ui.mount({
+    plugin: 'sielay-link', surface: 'terminal', component: 'ToolResult', requestId: 'r1',
+    viewport: { columns: 80, rows: 30 }, props: { tool_use_id: 'r1', tool: 'mcp__sielay-link__link_read', output: r.result, isErrored: false, isExpanded: true },
+  } as any)
+  const lines = await rowTexts(card)
+  expect(lines[0]).toBe('① ana/api ⇄ mi-sesion · laptop')
+  expect(lines).toContain('  ───')
+  expect(lines).toContain('   ↩ responde con link_reply · conv c1…')
+  await card.unmount()
+})
+
+test('a delivery that says its conversation closed draws the closure once, and link_read ends the block with it', { options: { link_token: 'test-token' } }, async ($, on) => {
+  const clock = mock.clock(on, { now: 1_000_000 })
+  mock.store(on)
+  mock.env(on, { HOME: '/nowhere' })
+  fakeHost(on)
+  const closing = { ...message('m1'), turn: 3, sent_at: SENT_AT, conversation: { status: 'closed', closed_reason: 'end', closed_by: 'ana/laptop/api' } }
+  let polls = 0
+  fakeHub(on, path => {
+    if (path !== '/api/link/poll') return {}
+    polls += 1
+    const messages = polls === 1 ? [closing] : polls === 2 ? [{ ...closing, id: 'm1-again', run: 1 }] : []
+    return { session: { id: 's', address: 'eva/box/mi-sesion' }, messages, strip: [], poll_after_ms: 1000 }
+  })
+  await $.session.start({ cwd: '/srv/p', surface: 'terminal', isInteractive: true })
+  await clock.advance(10)
+  await clock.settle()
+  const hh = hhmmOf(Date.parse(SENT_AT))
+  const r: any = await $.tool.call({ tool: 'mcp__sielay-link__link_read' } as any)
+  expect(String(r.result).split('\n').at(-1)).toBe(`✓ cerrado por ana/api · ${hh} · 3 turnos`)
+  // the same turn redelivered (run=1) is the same mark: nothing is counted twice
+  await clock.advance(1_000)
+  await clock.settle()
+  const registry = await registryOf($)
+  expect(Object.keys(registry.marks)).toEqual(['c1#3'])
+  expect(registry.threads.c1).toMatchObject({ turns: 3, closed: { by: 'ana/laptop/api', reason: 'end' } })
 })
 
 // --- Discovery: the once-per-conversation line telling the model its address.
