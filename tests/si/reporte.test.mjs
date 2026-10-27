@@ -112,7 +112,7 @@ test('reportar agrega en el host declarado y, fuera de él, devuelve la direcci�
   assert.equal(l.accion, 'link');
   assert.equal(l.direccion, 'ana/srv1/coord');
   assert.match(l.mensaje, /^link: ana\/srv1\/coord\n\n## 22:28 · demo-x\n/);
-  assert.equal(escritos.length, 1);
+  assert.equal(escritos.length, 2);
   assert.equal(reportar({ ...base, host: 'srv1', descriptor: '## Cierre de sesión\n- Reporte: no\n' }).accion, 'no');
 });
 
