@@ -36,6 +36,11 @@ jobs:
         with:
           node-version: '22'
 
+      # No Claude, no network, no real processes: /proc, ps, fs and kill are
+      # injected, so the checkpoint inventory is tested against fixed data.
+      - name: checkpoint tests
+        run: bash tests/si/run-unit.sh
+
       # No Claude, no network beyond 127.0.0.1: pure modules, a fake hub over
       # node:http and a temp unix socket; then the gate's own negative cases.
       - name: sielay-link tests
