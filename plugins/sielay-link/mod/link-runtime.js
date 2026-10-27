@@ -6,6 +6,7 @@ import { createDeliveryAdapter } from './link-delivery-adapter.js'
 import { recordLaunchMode } from './link-launch-mode.js'
 import { createInboundHandler } from './link-inbound-handler.js'
 import { createInbox } from './link-inbox.js'
+import { createThreads, recordInbound } from './link-threads.js'
 import { createPollLoop } from './link-poll-loop.js'
 import { createPairingFlow } from './link-pairing.js'
 import { buildSessionPayload, readMode } from './link-session-payload.js'
@@ -20,6 +21,7 @@ const STATUS = /** @type {const} */ ({ plugin: 'sielay-link', key: 'status' })
 const PAIRING = /** @type {const} */ ({ plugin: 'sielay-link', key: 'pairing' })
 const CONVERSATIONS = /** @type {const} */ ({ plugin: 'sielay-link', key: 'conversations' })
 const NOTICE = /** @type {const} */ ({ plugin: 'sielay-link', key: 'notice' })
+const THREADS = /** @type {const} */ ({ plugin: 'sielay-link', key: 'threads' })
 
 export const CLIENT_VERSION = '1.6.0'
 
@@ -42,6 +44,8 @@ export function createRuntime(options) {
     handler: /** @type {import('./link-inbound-handler.js').InboundHandler|null} */ (null),
     /** The messages waiting for link_read (compact mode). */
     inbox: /** @type {import('./link-inbox.js').Inbox|null} */ (null),
+    /** The thread registry (link-threads.js); one per session, shared by what arrives and what is sent. */
+    threads: /** @type {import('./link-threads.js').Threads|null} */ (null),
     loop: /** @type {ReturnType<typeof createPollLoop>|null} */ (null),
     pairing: /** @type {ReturnType<typeof createPairingFlow>|null} */ (null),
     tmux: /** @type {{ name?: string, at: number }} */ ({ at: -Infinity }),
@@ -57,6 +61,8 @@ export function createRuntime(options) {
     buildCarry: /** @type {import('../types/index.js').LinkBuildState|null} */ (null),
     /** The last invalid build field logged, so it is logged once. */
     buildError: /** @type {string|null} */ (null),
+    /** touched_at of the current build the last poll carried, so a call landing mid-poll stays unsent. Memory only. */
+    sentTouchedAt: /** @type {number|undefined} */ (undefined),
     /** The discovery line went into this conversation (link-discovery-context.js); memory only, reset on session.end. */
     discoveryAnnounced: false,
     /** `self.address_prefix` from the last peers answer that carried it; memory only. */
@@ -93,6 +99,20 @@ export async function isFull($) {
 /** SIELAY_LINK_MINIMAL=1: messages only, no build tools and no discovery line. @param {Engine} $ */
 export async function isMinimal($) {
   return (await $.env.get('SIELAY_LINK_MINIMAL')) === '1'
+}
+
+/** @param {Engine} $ */
+function newThreads($) {
+  return createThreads({ get: async () => (await $.state.get(THREADS)).value, set: v => $.state.set(THREADS, v), now: () => $.clock.now() })
+}
+
+/**
+ * The session's thread registry. startLink makes it with the `$` of session.start, so a
+ * tool call (maybe a subagent's) never becomes the registry's `$`; this only covers a call before that.
+ * @param {Engine} $ @param {Runtime} rt
+ */
+export function threadsOf($, rt) {
+  return (rt.threads ??= newThreads($))
 }
 
 /** @param {Engine} $ @param {Runtime} rt */
@@ -172,9 +192,11 @@ export async function startLink($, rt) {
 
   const store = { get: (/** @type {string} */ key) => $.store.get(key), set: (/** @type {string} */ key, /** @type {unknown} */ value) => $.store.set(key, value) }
   rt.inbox = createInbox(store, () => $.clock.now())
+  rt.threads = newThreads($)
   rt.handler = createInboundHandler({
     store,
     inbox: rt.inbox,
+    onInbound: (d, opts) => recordInbound(threadsOf($, rt), d, opts),
     compact: async () => !(await isFull($)),
     adapter,
     readMode: async () => (await restoreModeCarry($, rt), readMode($)),

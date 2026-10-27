@@ -1,9 +1,10 @@
 // link_read: the full text of the messages that entered as «📨 mensaje de …»
-// (compact mode, link-inbox.js). The answer is the same card the session got
-// before compact mode, built the same way (frameInbound), so a body can never
-// forge a header here either. Pure.
+// (compact mode, link-inbox.js). One block per conversation (frameThread), every
+// body line behind «│ », so a body can never forge a header, a turn or a
+// closure here. Pure.
 
-import { frameInbound, isDelivery } from './link-inbound-framing.js'
+import { isDelivery } from './link-inbound-framing.js'
+import { frameThread } from './link-thread-text.js'
 
 /** Between two cards in one link_read answer. */
 export const READ_SEPARATOR = '\n\n───\n\n'
@@ -25,7 +26,8 @@ export const READ_TOOL_SPEC = Object.freeze({
 })
 
 /**
- * @typedef {{ inbox: import('./link-inbox.js').Inbox | null, instanceId: () => Promise<string>, selfAddress: () => Promise<string|undefined> }} ReadToolDeps
+ * @typedef {{ inbox: import('./link-inbox.js').Inbox | null, instanceId: () => Promise<string>, selfAddress: () => Promise<string|undefined>,
+ *   registry?: () => Promise<import('../types/index.js').LinkThreadRegistry|undefined> }} ReadToolDeps
  */
 
 /**
@@ -39,5 +41,9 @@ export async function runReadTool(input, deps) {
   const messages = (await deps.inbox.take(await deps.instanceId(), conv)).filter(isDelivery)
   if (messages.length === 0) return { result: 'No hay mensajes sin leer.' }
   const self = await deps.selfAddress()
-  return { result: messages.map(d => frameInbound(d, { self })).join(READ_SEPARATOR) }
+  const registry = await deps.registry?.()
+  /** @type {Map<string, typeof messages>} */
+  const byConversation = new Map()
+  for (const d of messages) byConversation.set(d.conversation_id, [...(byConversation.get(d.conversation_id) ?? []), d])
+  return { result: [...byConversation.values()].map(ds => frameThread(ds, { self, registry })).join(READ_SEPARATOR) }
 }

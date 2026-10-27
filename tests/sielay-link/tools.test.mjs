@@ -284,3 +284,30 @@ test('link_peers asks for online sessions by default and for all with online_onl
   assert.deepEqual(asked, [{ onlineOnly: true }, { onlineOnly: false }])
   assert.match((await runLinkTool('link_peers', { online_only: 'no' }, h.d)).deny, /online_only/)
 })
+
+test('onSent hears of a single send: the conversation, the peer, end and the gate; a failing hook never breaks the send', async () => {
+  const heard = []
+  const send = async () => ({ id: 'm', conversation_id: 'c1', turn: 3, turns_left: 7, gate: 'strip', status: 'queued' })
+  const { d } = deps({ client: { send }, conversations: { c1: 'eva/box/web' } })
+  const r = await runLinkTool('link_reply', { conversation: 'c1', text: 'listo', end: true }, { ...d, onSent: async s => void heard.push(s) })
+  assert.match(r.result, /^En la franja de eva\/box\/web/)
+  assert.deepEqual(heard, [{ conv: 'c1', to: 'eva/box/web', end: true, gate: 'strip', turn: 3 }])
+  const broken = await runLinkTool('link_reply', { conversation: 'c1', text: 'otra vez' }, { ...d, onSent: async () => { throw new Error('state gone') } })
+  assert.match(broken.result, /^En la franja/)
+  const multi = []
+  const many = deps({ client: { send: async b => ({ results: b.to.map(to => ({ ok: true, to, conversation_id: `c-${to}`, turn: 1, turns_left: 9, gate: 'auto' })) }) } })
+  await runLinkTool('link_send', { to: ['a/b/c', 'd/e/f'], text: 'hola' }, { ...many.d, onSent: async s => void multi.push(s) })
+  assert.deepEqual(multi, [], 'a send to several sessions opens several threads: none is marked')
+})
+
+test('onSent hears of a 409 conversation_closed with who closed it and why, and only when the conversation is known', async () => {
+  const heard = []
+  const refuse = extra => ({ send: async () => { throw new HubError('http', 'x', { status: 409, code: 'conversation_closed', ...extra }) } })
+  const { d } = deps({ client: refuse({ closedBy: 'eva/box/web', closedReason: 'end' }), conversations: { c1: 'eva/box/web' } })
+  const r = await runLinkTool('link_reply', { conversation: 'c1', text: 'gracias' }, { ...d, onSent: async s => void heard.push(s) })
+  assert.match(r.result, /^Ya cerrada por eva\/web/)
+  assert.deepEqual(heard, [{ conv: 'c1', to: 'eva/box/web', closed: { by: 'eva/box/web', reason: 'end' } }])
+  heard.length = 0
+  await runLinkTool('link_send', { to: 'eva/box/web', text: 'hola' }, { ...deps({ client: refuse({}) }).d, onSent: async s => void heard.push(s) })
+  assert.deepEqual(heard, [], 'a new conversation has no id to mark')
+})

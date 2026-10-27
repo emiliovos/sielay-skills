@@ -19,6 +19,7 @@ import { frameInbound, isDelivery } from './link-inbound-framing.js'
 import { shouldInject, onStripAccept, onStripReject } from './link-run-gate.js'
 import { createInboundStore } from './link-inbound-store.js'
 import { compactLine } from './link-inbox.js'
+import { seqOf } from './link-threads.js'
 
 /**
  * @typedef {import('./link-inbound-framing.js').Delivery} Delivery
@@ -33,12 +34,13 @@ import { compactLine } from './link-inbox.js'
  *   readMode: () => Promise<{ mode: string, fresh: boolean }>,
  *   onStrip: (items: Delivery[]) => Promise<void>,
  *   onConversation?: (d: Delivery) => Promise<void>,
+ *   onInbound?: (d: Delivery, opts: { last: boolean }) => Promise<unknown>,
  *   inbox?: import('./link-inbox.js').Inbox,
  *   compact?: () => Promise<boolean>,
  *   log?: (msg: string) => void,
  * }} deps
  */
-export function createInboundHandler({ store, adapter, readMode, onStrip, onConversation, inbox, compact = async () => false, log = () => {} }) {
+export function createInboundHandler({ store, adapter, readMode, onStrip, onConversation, onInbound, inbox, compact = async () => false, log = () => {} }) {
   /** Strip items this client showed and the hub may not list yet, by id. */
   /** @type {Map<string, Delivery>} */
   const shownLocally = new Map()
@@ -74,9 +76,17 @@ export function createInboundHandler({ store, adapter, readMode, onStrip, onConv
 
   /**
    * The whole card, or in compact mode the sender's line with the card kept for link_read.
-   * @param {Delivery} d @param {string} instanceId
+   * The thread registry hears of the message first (`onInbound`), here and not in
+   * onConversation: this runs once per message, after the dedupe. `last` is false for
+   * a card that is not the highest turn of its conversation in the same poll.
+   * @param {Delivery} d @param {string} instanceId @param {{ last?: boolean }} [opts]
    */
-  async function inject(d, instanceId) {
+  async function inject(d, instanceId, opts = {}) {
+    try {
+      await onInbound?.(d, { last: opts.last !== false })
+    } catch (err) {
+      log(`thread registry skipped ${d.id}: ${err instanceof Error ? err.message : String(err)}`)
+    }
     if (inbox && (await compact())) {
       await inbox.add(instanceId, d)
       await adapter.inject(compactLine(d, selfAddress))
@@ -110,7 +120,11 @@ export function createInboundHandler({ store, adapter, readMode, onStrip, onConv
         acks.push({ id, outcome: 'injected' })
       }
       const seen = new Map(await readSeen(instanceId))
-      for (const d of (Array.isArray(data.messages) ? data.messages : []).filter(isDelivery)) {
+      const batch = (Array.isArray(data.messages) ? data.messages : []).filter(isDelivery)
+      /** @type {Map<string, number>} */
+      const top = new Map()
+      for (const d of batch) top.set(d.conversation_id, Math.max(top.get(d.conversation_id) ?? 0, seqOf(d) ?? 0))
+      for (const d of batch) {
         if (onConversation) await onConversation(d)
         const prior = seen.get(d.id)
         if (prior) {
@@ -121,7 +135,7 @@ export function createInboundHandler({ store, adapter, readMode, onStrip, onConv
         let outcome = 'shown'
         if (shouldInject({ delivery: d, mode: await readMode() })) {
           try {
-            await inject(d, instanceId)
+            await inject(d, instanceId, { last: (seqOf(d) ?? 0) >= (top.get(d.conversation_id) ?? 0) })
             outcome = 'injected'
           } catch (err) {
             log(`delivery ${d.id} not injected: ${err instanceof Error ? err.message : String(err)}`)

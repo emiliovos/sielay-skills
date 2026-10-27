@@ -25,17 +25,34 @@ export function columnsOf(e) {
   return Math.max(MIN_COLS, Math.min(MAX_COLS, Number.isInteger(cols) ? /** @type {number} */ (cols) : MAX_COLS))
 }
 
-/**
- * One line cut to `cols` code points, with an ellipsis when it was longer.
- * @param {string} text @param {number} cols
- */
-export function fit(text, cols) {
-  const chars = Array.from(text)
-  return chars.length > cols ? `${chars.slice(0, cols - 1).join('')}…` : text
+/** Emoji and East Asian wide characters take two terminal columns; erring wide only cuts sooner. */
+const WIDE = /[\p{Extended_Pictographic}\u1100-\u115F\u2E80-\uA4CF\uAC00-\uD7A3\uF900-\uFAFF\uFE30-\uFE4F\uFF00-\uFF60\uFFE0-\uFFE6\u{1F300}-\u{1F64F}\u{1F900}-\u{1F9FF}\u{20000}-\u{3FFFD}]/u
+/** Columns a character takes. @param {string} ch */
+const colsOfChar = ch => (WIDE.test(ch) ? 2 : 1)
+/** Columns a text takes in the terminal. @param {string} text */
+export const width = text => Array.from(text).reduce((n, ch) => n + colsOfChar(ch), 0)
+
+/** The longest head of `chars` that fits in `cols` columns. @param {string[]} chars @param {number} cols */
+function head(chars, cols) {
+  let used = 0
+  let i = 0
+  while (i < chars.length && used + colsOfChar(chars[i]) <= cols) used += colsOfChar(chars[i++])
+  return i
 }
 
 /**
- * Wraps text at word boundaries into lines of at most `cols` code points; a
+ * One line cut to `cols` columns, with an ellipsis when it was wider: a line
+ * the terminal would wrap could paint a row of ours from a peer's text.
+ * @param {string} text @param {number} cols
+ */
+export function fit(text, cols) {
+  if (width(text) <= cols) return text
+  const chars = Array.from(text)
+  return `${chars.slice(0, head(chars, cols - 1)).join('')}…`
+}
+
+/**
+ * Wraps text at word boundaries into lines of at most `cols` columns; a
  * word longer than a line is split. Newlines in the text are kept.
  * @param {string} text @param {number} cols
  * @returns {string[]}
@@ -47,15 +64,16 @@ export function wrap(text, cols) {
     let line = ''
     for (const word of raw.split(/[ \t]+/).filter(Boolean)) {
       let rest = Array.from(word)
-      while (rest.length > cols) {
+      while (width(rest.join('')) > cols) {
         if (line) out.push(line)
-        out.push(rest.slice(0, cols).join(''))
-        rest = rest.slice(cols)
+        const n = Math.max(1, head(rest, cols))
+        out.push(rest.slice(0, n).join(''))
+        rest = rest.slice(n)
         line = ''
       }
       const w = rest.join('')
       if (!line) line = w
-      else if (Array.from(line).length + 1 + rest.length <= cols) line += ` ${w}`
+      else if (width(line) + 1 + width(w) <= cols) line += ` ${w}`
       else { out.push(line); line = w }
     }
     out.push(line)
@@ -92,10 +110,11 @@ export function headLine(lead, parts, cols, cutOrder = []) {
   const shown = [...parts]
   const render = () => lead + shown.filter(Boolean).map(p => ` · ${p}`).join('')
   for (const i of cutOrder) {
-    const over = Array.from(render()).length - cols
+    const over = width(render()) - cols
     if (over <= 0) break
     const chars = Array.from(shown[i])
-    shown[i] = chars.length - over >= 4 ? `${chars.slice(0, chars.length - over - 1).join('')}…` : ''
+    const keep = width(shown[i]) - over - 1
+    shown[i] = keep >= 3 ? `${chars.slice(0, head(chars, keep)).join('')}…` : ''
   }
   return fit(render(), cols)
 }
