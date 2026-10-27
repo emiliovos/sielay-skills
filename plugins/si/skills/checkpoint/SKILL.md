@@ -1,9 +1,9 @@
 ---
 name: checkpoint
-description: "Ritual de cierre de sesión + handoff genérico para cualquier proyecto. Úsalo al terminar de trabajar: resuelve el contexto y el contrato de cierre del proyecto (CLAUDE.md o descriptor) → bitácora/estado → docs → commit → push según el flujo del repo → handoff copy-paste para seguir en otra terminal con contexto limpio. Si el CLAUDE.md del repo declara su cierre en la sección '## Cierre de sesión', lo sigue sin crear archivos nuevos; si no, usa los valores por defecto. Actívalo cuando el usuario diga '/checkpoint', 'checkpoint', 'cierra la sesión', 'termina y dame handoff', 'cerremos', 'wrap up', 'dame el handoff', o al final de una tanda de trabajo. Modo 'continuar' (/checkpoint continuar, 'checkpoint para seguir', 'voy a limpiar contexto'): sin bitácora ni docs ni push, solo commit local + handoff en pantalla para seguir la misma tarea tras /clear."
+description: "Ritual de cierre de sesión + handoff genérico para cualquier proyecto. Úsalo al terminar de trabajar: resuelve el contexto y el contrato de cierre del proyecto (CLAUDE.md o descriptor) → bitácora/estado → docs → commit → push según el flujo del repo → handoff copy-paste para seguir en otra terminal con contexto limpio. Si el CLAUDE.md del repo declara su cierre en la sección '## Cierre de sesión', lo sigue sin crear archivos nuevos; si no, usa los valores por defecto. Actívalo cuando el usuario diga '/checkpoint', 'checkpoint', 'cierra la sesión', 'termina y dame handoff', 'cerremos', 'wrap up', 'dame el handoff', o al final de una tanda de trabajo. Modo 'continuar' (/checkpoint continuar, 'checkpoint para seguir', 'voy a limpiar contexto'): sin bitácora ni docs ni push, solo commit local + handoff corto (≤25 líneas) en pantalla para seguir la misma tarea tras /clear. Todos los modos incluyen el ENTORNO VIVO de la sesión (crons, procesos en segundo plano con PID, estado git) y un ARRANQUE que lo verifica al retomar."
 user-invocable: true
 when_to_use: "Invoke al cerrar una sesión de trabajo: deja el trabajo commiteado (en el repo/entorno correcto), la bitácora o el archivo de estado y los docs al día, y un prompt de handoff para retomar en frío. Resuelve acceso, rutas, flujo de push y destino del handoff por proyecto en vez de asumir constantes fijas — una sola skill sirve para proyectos con y sin convenciones propias. Para proyectos SIN buzón de coordinación (trabajo en solitario)."
-argument-hint: "[continuar|autonomo] [<slug-del-proyecto>] [nota opcional de cierre]"
+argument-hint: "[continuar|autonomo|coordinador] [<slug-del-proyecto>] [nota opcional de cierre]"
 keywords: [cierre, handoff, journal, estado, docs, commit, push, wrap-up, sesion, continuar, compact]
 metadata:
   category: workflow
@@ -11,31 +11,35 @@ metadata:
   deps: "git configurado en el repo destino. Opcional: una sección '## Cierre de sesión' en el CLAUDE.md del repo o un descriptor de proyecto (p.ej. docs/projects/<slug>/project.json) para fijar archivo de estado, flujo de push y destino del handoff; si no existen, se usan los valores por defecto."
   installs: []
   risk: none
-  version: "2.5.0"
+  version: "2.6.0"
 ---
 
 # Checkpoint — cierre de sesión + handoff
 
-Ritual que se corre **al terminar de trabajar**. Deja todo sincronizado (git + bitácora o estado + docs) y produce un handoff para retomar en una terminal limpia. Ejecuta los pasos **en orden**.
+Ritual que se corre **al terminar de trabajar**. Deja todo sincronizado (git + bitácora o estado + docs) y produce un handoff para retomar en una terminal limpia, con el **entorno vivo** de la sesión (crons, procesos en segundo plano, estado git) para que la sesión nueva no herede en silencio lo que dejó corriendo la anterior.
 
 > **Precedencia (todos los pasos):** si el `CLAUDE.md` del repo o el descriptor del proyecto define su propio cierre (archivo de estado, flujo de push, handoff, rutas de solo lectura), este ritual **lo sigue y no crea archivos ni carpetas que el repo no use**. Lo que dice esta skill son los valores por defecto para repos sin convención. Si un paso no aplica según el contrato del Paso 0, dilo y sáltalo; no lo inventes.
 
 > **Principio:** tú ya tienes el contexto de la sesión — escribe directo, no gastes tokens re-scouteando. Sé conciso y honesto (si algo quedó a medias o falló, dilo, no lo inventes).
 
-## Modos: `cierre`, `continuar` o `autonomo`
+> **Velocidad:** el estado del entorno sale de **una** llamada Bash más `CronList` (máximo 2 `tool_use` de estado, ver «Entorno vivo»). No relees archivos que ya tienes en contexto (`CLAUDE.md`, el contrato de cierre), no corras `git status`, `git worktree list` ni `gh pr list` por separado (el script ya los trae) y no ejecutes pasos que el modo no usa.
 
-- **`cierre` (por defecto):** terminas la tanda. Corre los Pasos 0 a 5 completos.
-- **`continuar`:** la tarea sigue en una terminal nueva o tras `/clear`, solo quieres soltar contexto. Se activa con el argumento `continuar` o frases como "checkpoint para seguir", "voy a limpiar contexto", "handoff para continuar". Corre:
-  - **Paso 0** sin cambios (hace falta saber dónde está el repo y su flujo).
-  - **Pasos 1 y 2: no se corren.** Sin bitácora, sin archivo de estado, sin docs.
-  - **Paso 3:** commit local del trabajo de esta tarea, si hay algo. Nunca en `main`/`master` de un repo con `Push: rama+PR`: si estás ahí, no commitees y dilo en el handoff.
-  - **Paso 4: no se pushea**, diga lo que diga el contrato. Reporta los commits como locales.
-  - **Paso 5:** handoff siempre en pantalla (no escribe archivos), con la estructura completa.
+## Modos y formato del handoff
 
-- **`autonomo`:** para terminales de un build autónomo que reinician su contexto (`/clear`) y retoman desde un archivo. Se activa con el argumento `autonomo` o cuando un coordinador lo pide. Es `continuar` más estas reglas:
+| Modo | Se activa con | Pasos | Handoff | Largo |
+|---|---|---|---|---|
+| `cierre` (por defecto) | `/checkpoint`, «cierra la sesión», «cerremos» | 0 a 5; docs solo si cambió algo visible; push en segundo plano | según el contrato de cierre + ENTORNO VIVO + ARRANQUE | completo |
+| `continuar` | `continuar`, «voy a limpiar contexto», «checkpoint para seguir» | 0 breve, 3 (commit local), entorno vivo, 5 | pantalla: objetivo, estado, siguiente, ENTORNO VIVO, ARRANQUE | **≤ 25 líneas** |
+| `autonomo` | `autonomo`, o lo pide un coordinador | igual que `continuar`, sin preguntas | archivo `~/handoffs/<sesion>.md` | **≤ 40 líneas** |
+| `coordinador` | `coordinador`, o la sesión coordina a otras | `cierre` + renglones `(coordinador)` del descriptor + las demás sesiones | según el contrato de cierre | completo |
+
+- **`continuar`:** la tarea sigue en una terminal nueva o tras `/clear`. **Paso 0** breve (dónde está el repo; sin reporte de contexto). **Pasos 1, 2 y 4: no se corren** (sin bitácora, docs ni push, diga lo que diga el contrato). **Paso 3:** commit local del trabajo de esta tarea si hay algo; nunca en `main`/`master` de un repo con `Push: rama+PR` (si estás ahí, no commitees y dilo en el handoff). **Paso 5:** handoff en pantalla, sin escribir archivos, de máximo 25 líneas: objetivo, estado (hecho / en curso, con rama y PR), siguiente paso concreto, ENTORNO VIVO y ARRANQUE; suma una línea por decisión o intento fallido que la sesión nueva no deba reabrir.
+- **`autonomo`:** para terminales de un build autónomo que reinician su contexto y retoman desde un archivo. Es `continuar` más estas reglas:
   - **Cero preguntas al usuario.** Si algo es ambiguo, decide el valor por defecto y anótalo en el handoff.
-  - **El handoff va a un archivo, no a la pantalla:** `~/handoffs/<sesion>.md` (crea la carpeta si falta; `<sesion>` es el nombre de la sesión o del slug). Máximo 40 líneas, sin narrativa: objetivo, estado (hecho / en curso, con rama y PR), siguiente paso concreto, archivos tocados y comandos de verificación. Sin secretos (ver redacción de secretos).
+  - El handoff va a `~/handoffs/<sesion>.md` (crea la carpeta si falta; `<sesion>` es el nombre de la sesión o del slug), máximo 40 líneas, sin narrativa: objetivo, estado, siguiente paso, archivos tocados, comandos de verificación, ENTORNO VIVO y ARRANQUE. Sin secretos.
   - **Responde con una sola línea:** la ruta del archivo. No imprimas el handoff.
+- **`cierre`:** Pasos 0 a 5 completos. El **push va en segundo plano** (Paso 4) mientras redactas; el entorno vivo y el reporte se hacen **después** del aviso de fin del push.
+- **`coordinador`:** es `cierre`, y además el ENTORNO VIVO suma los renglones `(coordinador)` del descriptor (`--coordinador` en el script) y las demás sesiones de la máquina que lista el script (`otras sesiones`), más lo que sepas de la sesión: quién espera a quién y qué se dio por turno.
 
 ### ¿`/compact`, `checkpoint continuar` o `checkpoint`?
 - **`/compact`:** la misma tarea sigue y casi todo el contexto sigue sirviendo. No hace falta esta skill.
@@ -61,7 +65,7 @@ Busca en el `CLAUDE.md` del repo (o en los campos `cierre.estado`, `cierre.push`
 
 El formato exacto, las excepciones por repo en `Push`, los valores por defecto y las reglas (reemplaza nunca suma, rutas de solo lectura, publicar no es pushear) están en `references/contrato-de-cierre.md`. **Léelo** si el repo no tiene la sección, si tiene excepciones o si dudas qué valor aplica. Lo mínimo: sin la sección exacta, valen los valores por defecto (`Estado: journals`, `Push: rama+PR`, `Handoff` según el estado) y **nunca se deducen valores de la prosa**; si el `CLAUDE.md` parece describir otro cierre, pregunta en una línea antes de escribir nada.
 
-**Reporta en 3-4 líneas** el contexto resuelto (repo, cómo se accede, identidad git, estado del remoto) y el contrato de cierre (estado, push con sus excepciones por repo, handoff) antes de seguir. Si no hay sección, dilo así: "sin contrato, usando valores por defecto; si tu repo cierra distinto, agrega la sección `## Cierre de sesión` (ver el README de emiliovos/sielay-skills)".
+**En `cierre` y `coordinador`, reporta en 3-4 líneas** el contexto resuelto (repo, cómo se accede, identidad git, estado del remoto) y el contrato de cierre (estado, push con sus excepciones por repo, handoff) antes de seguir (en `continuar` y `autonomo` no reportes el contexto). Si no hay sección, dilo así: "sin contrato, usando valores por defecto; si tu repo cierra distinto, agrega la sección `## Cierre de sesión` (ver el README de emiliovos/sielay-skills)".
 
 ## Constantes del proyecto (fallback — EDITAR solo si no hay descriptor ni CLAUDE.md)
 
@@ -90,9 +94,7 @@ Si ya escribiste la bitácora o el estado de esta tanda, dilo y sáltalo.
 
 ## Paso 2 — Docs
 - **`Estado: <ruta>`:** este paso **no aplica** (el estado ya quedó en el Paso 1). Dilo y sáltalo. Solo toca otro doc si el `CLAUDE.md` lo pide explícitamente para el cierre.
-- **`Estado: journals` (por defecto):** refresca SOLO lo que cambió en la carpeta de docs del proyecto:
-  - `codebase-summary.md` — estado actual (stack, estructura, endpoints que consume, PRs, cómo correr).
-  - Otros docs (`system-architecture.md`, `project-roadmap.md`, etc.) solo si el cambio los afecta. No inventes docs nuevos porque sí.
+- **`Estado: journals` (por defecto):** corre **solo si cambió algo visible**: comportamiento, setup, comandos, config, arquitectura, seguridad, contratos o una decisión duradera. Si no cambió nada de eso, escribe «docs: sin cambios visibles» y sáltalo, sin releer ningún doc. Si corre, lee cada doc antes de editarlo y refresca SOLO lo que cambió (`codebase-summary.md` y, si el cambio los afecta, `system-architecture.md`, `project-roadmap.md`). No inventes docs nuevos.
 
 ## Paso 3 — commit (en el repo del proyecto, vía el acceso del Paso 0)
 1. `git status` primero (dentro del repo/entorno correcto según el Paso 0).
@@ -108,18 +110,79 @@ Si ya escribiste la bitácora o el estado de esta tanda, dilo y sáltalo.
 - **`no pushear`:** no pushees; reporta los commits como locales.
 - **Si `origin` es upstream / no hay remoto propio:** NO pushees. Reporta explícito: "commits solo locales, sin remoto propio — crear fork/remote para backup".
 - Si el trabajo vive en carpetas sin repo (planes o bitácoras en un host no versionado), es esperado que no se pushee — dilo.
+- **Segundo plano:** en `cierre` y `coordinador`, lanza el push con la herramienta Bash en segundo plano (`run_in_background`) y mientras corre redacta el handoff (Paso 5, todo menos el ENTORNO VIVO). **No reportes ni tomes el inventario antes del aviso de fin del push**; si falla, ponlo en el reporte y en el handoff.
 - Nunca corras scripts de publicación ni deploys (ver el contrato).
 
+## Entorno vivo (una llamada Bash + CronList)
+
+Lo que la sesión deja corriendo es parte del estado: un monitor armado antes de un `/clear` sigue vivo y avisa a nadie. El inventario sale de `scripts/entorno-vivo.mjs` (Node ≥ 18, solo lee) y de `CronList`, que solo tú puedes ver.
+
+**Cuándo:** en `continuar`/`autonomo`, justo después del Paso 0 y **antes** del commit del Paso 3 (ajusta a mano los conteos «sin commit/sin push» según lo que commiteaste, sin repetir la llamada). En `cierre`/`coordinador`, **después** de que termine el push en segundo plano (Paso 4), para que el push no aparezca como proceso vivo.
+
+**Cómo, en el mismo turno, 2 `tool_use`:**
+1. Una llamada Bash:
+   `timeout 90 node "${CLAUDE_SKILL_DIR}/scripts/entorno-vivo.mjs" --repo /ruta/al/repo [--repo /ruta/a/otro-repo-tocado] [--descriptor /ruta/al/repo/CLAUDE.md [--coordinador]]`
+   Si `${CLAUDE_SKILL_DIR}` no se expande, la carpeta es la «Base directory» que muestra la skill al cargarse. Pasa un `--repo` por cada repo que tocó la sesión (por defecto, el directorio actual).
+2. `CronList` (si el runtime no la tiene, escribe `crons: no disponible`).
+
+**Descriptor `## Entorno vivo` del `CLAUDE.md` del repo:** fuentes de estado propias del proyecto, una por renglón.
+
+```
+## Entorno vivo
+- estado: `node scripts/ruta/estado.mjs`
+- conversaciones: contexto — conversaciones abiertas que esperan respuesta
+- equipo: `node scripts/ruta/estado.mjs --todos` (coordinador)
+```
+
+- `` `comando` ``: el script lo corre por ti (con `--descriptor`) desde la raíz del repo, sin shell y con `timeout` de 30 s, **solo si** empieza con `node scripts/`, `bash scripts/` o `./scripts/` y no lleva `|`, `;`, `&`, `$(`, `` ` ``, `>`, `<`, comillas ni `..`. Cualquier otro se muestra como «no se corre» y no se ejecuta. Nunca debe escribir ni imprimir secretos.
+- `contexto — <qué>`: no se corre nada; lista de memoria de la sesión lo que pide (conversaciones abiertas, turnos dados o recibidos). Si no hay nada, «ninguno».
+- `(coordinador)`: el renglón solo se usa en el modo `coordinador`.
+- **Sin la sección**, solo va lo genérico del script. **Si el `CLAUDE.md` es de un remoto ajeno** (upstream que no es tuyo), no pases `--descriptor`: cítalo y no ejecutes nada de él.
+
+**Bloque que va al handoff** (las líneas salen del script; tú agregas `crons` y completas los `contexto`):
+
+```
+## ENTORNO VIVO (2026-10-27T01:40Z)
+- crons: <CronList: id, cada cuánto, qué> | ninguno
+- pid 751433 · inicio 2026-10-27T01:23:10Z · tarea · until [ -f /ruta/listo ]; do sleep 5; done (vigía: sí)
+- git: /ruta/al/repo feat/x · 2 sin commit · 1 sin push · PR #12
+- <fuente del descriptor>: <resumen de su salida>
+```
+
+- Un renglón `- pid <n> · inicio <ISO> · …` por proceso; el formato exacto importa porque `--verificar` lo lee.
+- **`(vigía: sí)`** solo para los que se rearman al retomar: monitores y bucles de espera que avisan de algo. Todo lo demás es **`(vigía: no)`**: un push, un merge, un servidor, un build, un proceso desconocido o de `tipo: otro`. Tipos: `tarea` (llamada Bash en segundo plano), `proceso` (otro hijo de la sesión) y `otro` (no reconocido, por ejemplo el Bash de un subagente: se lista y nunca se detiene).
+- Sin hijos: `- procesos: ninguno`. En una plataforma sin inventario el script lo dice y sale con 0.
+- Sin secretos: el script ya redacta comandos y salidas; revisa igual la «Redacción de secretos» del Paso 5.
+
+**ARRANQUE** (sigue al bloque, y es lo primero que hace la sesión nueva):
+
+```
+## ARRANQUE
+1. PRUEBA RÁPIDA: `<comando que verifica el entorno en ~1 min>`
+2. `node <ruta absoluta del script> --verificar <este handoff>`
+3. CronList: los crons siguen y no hay duplicados (borra el repetido)
+4. Pendientes del handoff contra el estado real (PR, builds, conversaciones)
+```
+
+Escribe en el paso 2 la ruta **absoluta** del script (la que expandió `${CLAUDE_SKILL_DIR}`) y la ruta del archivo del handoff; en `continuar` (sin archivo) escribe `--verificar -` y la instrucción de pasarle por stdin, con un heredoc, solo el bloque ENTORNO VIVO de este mensaje. Cuando la sesión nueva retoma:
+- Si el script ya no existe (por un `claude plugin update`), usa el más nuevo de `~/.claude/plugins/cache/*/si/*/skills/checkpoint/scripts/entorno-vivo.mjs`.
+- `--verificar` solo clasifica (sale con 2 si hay hallazgos): `muertos` (estaban en el handoff y ya no viven; un pid vivo con otro `inicio` cuenta como muerto), `huerfanos` (hijos de este claude que arrancaron antes de la hora del handoff) y `duplicados` (el mismo comando en más de un pid).
+- **Huérfano con `vigía: sí`:** deténlo con `node <script> --detener <pid> --inicio <ISO del huérfano>` (nunca compongas un `kill` a mano: el script recomprueba que sea hijo directo de este claude, que el inicio coincida y que sea líder de su grupo) y vuelve a armar el vigía si corresponde.
+- **Huérfano sin `vigía: sí`** (push, merge, servidor, desconocido, `otro`): no lo detengas por tu cuenta. En `continuar` y `cierre`, pregunta qué hacer; en `autonomo`, déjalo vivo y anótalo en tu primer estado.
+- `muertos` con `vigía: sí`: vuelve a armarlos. `duplicados`: avisa y, en CronList, borra el cron repetido.
+
 ## Paso 5 — handoff
-Escribe el handoff donde diga el contrato (`<ruta>`, `estado` o `pantalla`; con `pantalla` no se escribe ningún archivo; en modo `continuar`, siempre `pantalla`; en modo `autonomo`, siempre el archivo `~/handoffs/<sesion>.md` de ≤40 líneas) Y preséntalo siempre como **prompt copy-paste** para pegar en una terminal nueva. Estructura obligatoria:
+Escribe el handoff donde diga el contrato (`<ruta>`, `estado` o `pantalla`; con `pantalla` no se escribe ningún archivo; en `continuar`, siempre `pantalla`; en `autonomo`, siempre `~/handoffs/<sesion>.md`) Y preséntalo siempre como **prompt copy-paste** para pegar en una terminal nueva. En `cierre` y `coordinador` la estructura es:
 1. **LEE PRIMERO** — plan, archivo de estado o fase actual + contexto (docs de setup, specs).
-2. **ESTADO (no rehacer)** — qué está hecho + PRs/branches. Sácalo de comandos, no de memoria: `git status --short`, `git worktree list` y `gh pr list --state open` (o el equivalente de la forja) en cada repo tocado. Cita PRs y ramas tal como salen ahí.
+2. **ESTADO (no rehacer)** — qué está hecho + PRs/branches, tal como salen del inventario del script (no corras otros comandos git).
 3. **DECISIONES VIGENTES** — decisiones que la sesión nueva no debe reabrir, con su porqué en media línea.
 4. **INTENTOS FALLIDOS** — lo que se probó y no funcionó, y por qué, para no repetirlo.
 5. **ENTORNO (crítico)** — cómo acceder al código (local/SSH/contenedor), paths de worktree, DB dev, venv/entorno, puerto dev, credenciales demo (y cómo regenerarlas), identidad git, estado del remoto, flujo de push, pasos de publicación pendientes del usuario, prohibiciones (nunca prod / datos reales), gotchas del host.
-6. **PRUEBA RÁPIDA** — comando que verifica el entorno en ~1 min (curl login→endpoint, tests, o health).
+6. **ENTORNO VIVO** y **ARRANQUE** — los bloques de «Entorno vivo». La PRUEBA RÁPIDA es el paso 1 del ARRANQUE.
 7. **SIGUE** — el siguiente paso concreto.
 8. Cierra pidiendo a la sesión nueva que confirme su plan de arranque antes de codear.
+
+En `continuar` y `autonomo` usa el formato corto de la tabla de modos (25 y 40 líneas) en lugar de esta estructura.
 
 **Arrastre:** si la sesión empezó con un handoff, copia sus DECISIONES VIGENTES e INTENTOS FALLIDOS, quita los que ya no apliquen (dilo en una línea) y suma los nuevos. No se pierden entre handoffs encadenados.
 
@@ -128,7 +191,7 @@ Escribe el handoff donde diga el contrato (`<ruta>`, `estado` o `pantalla`; con 
 ---
 
 ## Al terminar
-Reporta al usuario, en breve: modo (`cierre` o `continuar`), contexto y contrato resueltos, qué se commiteó (y en qué repo/entorno), estado del push (o por qué no aplicó), links a PRs, dónde quedó el handoff, y pega el prompt de handoff listo para copiar. Sé explícito si algo quedó sin respaldar.
+Reporta al usuario, en breve: modo, qué se commiteó (y en qué repo/entorno), estado del push (o por qué no aplicó; en `cierre`, después del aviso de fin), links a PRs, dónde quedó el handoff, y pega el prompt de handoff listo para copiar (en `autonomo`, solo la ruta). Sé explícito si algo quedó sin respaldar.
 
 ## Notas
 - **Fuente de verdad:** el descriptor del proyecto (si existe) + el `CLAUDE.md` del repo. Ante conflicto entre ellos, confirma con el usuario.

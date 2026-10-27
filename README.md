@@ -129,11 +129,37 @@ Cada [release](https://github.com/emiliovos/sielay-skills/releases) trae un `.zi
   Es defensa en profundidad. Lo que se instala cambia solo cuando la entrada del marketplace apunta a un tag nuevo.
 - Una skill son instrucciones que Claude sigue con tus permisos. Antes de actualizar, puedes revisar qué cambió en el historial de `plugins/si/skills/`.
 
+## Formato del handoff por modo
+
+Todos los modos agregan al handoff un bloque `ENTORNO VIVO` (crons de `CronList`, procesos que la sesión dejó en segundo plano con su PID, estado git de cada repo) y un bloque `ARRANQUE` con el que la sesión nueva lo verifica antes de seguir. El inventario sale de una sola llamada a `scripts/entorno-vivo.mjs` (Node 18 o más, sin dependencias, solo lee) más `CronList`.
+
+| Modo | Qué hace | Handoff | Largo |
+|---|---|---|---|
+| `/si:checkpoint` (cierre) | Bitácora, docs solo si cambió algo visible, commit y push en segundo plano; el inventario y el reporte llegan cuando el push termina | según tu `## Cierre de sesión` | completo |
+| `/si:checkpoint continuar` | Commit local y nada más, para seguir la misma tarea tras `/clear` | pantalla: objetivo, estado, siguiente, ENTORNO VIVO, ARRANQUE | hasta 25 líneas |
+| `/si:checkpoint autonomo` | Igual que `continuar`, sin preguntas, para terminales de un build | archivo `~/handoffs/<sesion>.md` | hasta 40 líneas |
+| `/si:checkpoint coordinador` | Cierre completo y, además, las demás sesiones de la máquina y los renglones marcados `(coordinador)` | según tu `## Cierre de sesión` | completo |
+
+Al retomar, `entorno-vivo.mjs --verificar <handoff>` clasifica lo que quedó: procesos muertos (un PID reciclado con otra hora de inicio cuenta como muerto), huérfanos anteriores al handoff y duplicados. No mata nada por sí solo. La sesión nueva detiene (con `--detener <pid>`, que solo acepta hijos directos de su propio `claude`) los huérfanos que el handoff marca `vigía: sí`, es decir, monitores y bucles de espera que se vuelven a armar; los demás se reportan y se pregunta qué hacer (en `autonomo` se dejan vivos). Hay inventario de procesos en Linux y macOS; en otras plataformas el script lo avisa y sigue con lo demás.
+
+### Fuentes de estado propias del repo
+
+Una sección opcional del `CLAUDE.md` suma fuentes al ENTORNO VIVO. Sin ella solo va lo genérico:
+
+```
+## Entorno vivo
+- estado: `node scripts/ruta/estado.mjs`
+- conversaciones: contexto — conversaciones abiertas que esperan respuesta
+- equipo: `node scripts/ruta/estado.mjs --todos` (coordinador)
+```
+
+Un renglón con comando entre backticks se ejecuta desde la raíz del repo con un `timeout` de 30 s, solo si empieza con `node scripts/`, `bash scripts/` o `./scripts/` y no lleva `|`, `;`, `&`, `$(`, backticks, `>`, `<`, comillas ni `..`; cualquier otro se cita y no se corre. Un renglón `contexto — …` se completa de memoria de la sesión. El `CLAUDE.md` de un remoto ajeno nunca se ejecuta.
+
 ## Skills
 
 | Skill | Qué hace |
 |---|---|
-| `/si:checkpoint` | Cierre de sesión: journal, docs, commit, push y handoff para retomar en otra terminal. Con `/si:checkpoint continuar` solo hace commit local y deja el handoff en pantalla, para seguir la misma tarea tras `/clear` |
+| `/si:checkpoint` | Cierre de sesión: journal, docs, commit, push y handoff para retomar en otra terminal, con el entorno vivo de la sesión (crons, procesos en segundo plano, estado git) y una verificación al retomar. Modos `continuar`, `autonomo` y `coordinador`: ver «Formato del handoff por modo» |
 | `/si:build-auto` | Proyecto autónomo en 7 etapas: tú apruebas Frame, Evidencia y Plan; los agentes implementan, prueban, revisan y entregan hasta merge o producción por la compuerta de pruebas del repo. Funciona con PRs o con push directo a main; AgentKit (`/ak:*`) es recomendado, no obligatorio |
 | `si-auto` (plugin aparte) | Nota de sesión automática fuera del repo, entregada a la sesión siguiente |
 | `sielay-link` (plugin aparte) | Mensajes entre sesiones de Claude Code emparejadas por el hub de sielay, con franja para aceptar o rechazar |
