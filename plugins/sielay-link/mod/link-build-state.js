@@ -178,7 +178,6 @@ export function addActiveTime(state, durationMs) {
  */
 export function forgetIfDone(state, sent) {
   if (!state || !isObj(sent) || sent.status !== 'done') return state
-  if (state.pending?.[0]?.declared.build_id === sent.build_id) return state
   if (state.closed || state.declared.build_id !== sent.build_id || state.declared.status !== 'done') return state
   return Object.keys(state.open ?? {}).length > 0 || state.pending?.length ? { ...state, closed: true } : null
 }

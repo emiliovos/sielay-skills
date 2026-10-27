@@ -8,7 +8,7 @@
 // came back empty, so a /clear never drops the build.
 
 import { declareBuild, subagentUp, subagentSeen, subagentDown, addUsage, addActiveTime, forgetIfDone, buildReport, pruneExpired, openBuildIds } from './link-build-state.js'
-import { markSent, pendingReport } from './link-build-pending.js'
+import { markSent, pendingReport, ridingAlong } from './link-build-pending.js'
 
 // $.state reference: literal plugin/key, declared in each file that uses it.
 const BUILD = /** @type {const} */ ({ plugin: 'sielay-link', key: 'build' })
@@ -114,16 +114,16 @@ export async function pollBuildFields($, rt) {
   if (!state) return {}
   const ids = openBuildIds(state, now)
   const queued = pendingReport(state, now)
-  rt.sentTouchedAt = queued ? undefined : state.touched_at
+  const head = state.pending?.[0]
+  rt.sentTouchedAt = head ? head.touched_at : state.touched_at
   if (queued?.build) {
-    // a displaced build goes out first; the current one rides as open so the hub keeps it
-    const current = state.closed ? [] : [String(state.declared.build_id)]
-    const others = [...current, ...ids].filter(id => id !== queued.build?.build_id)
+    // a displaced build goes out first; the current one and the rest of the queue ride as open so the hub keeps them
+    const others = ridingAlong(state, ids)
     return { build: queued.build, ...(others.length > 0 ? { open_builds: others } : {}) }
   }
   if (queued) {
     $.ui.log(`sielay-link: build en cola no enviado, campo inválido: ${queued.error}`)
-    await update($, rt, s => markSent(s, state.pending?.[0]?.declared, undefined))
+    await update($, rt, s => markSent(s, head?.declared, head?.touched_at))
     return pollBuildFields($, rt)
   }
   const open = ids.length > 0 ? { open_builds: ids } : {}

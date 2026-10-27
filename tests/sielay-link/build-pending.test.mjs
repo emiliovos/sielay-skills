@@ -57,6 +57,7 @@ test('a coordinator closing two builds and moving to a third between polls loses
   assert.equal(first.build.summary, 'Entregado a')
   assert.ok(first.open_builds.includes('tablero360-lotes'), 'the current build stays open while the queue drains')
   assert.ok(first.open_builds.includes('sielay-c-rumbo'))
+  assert.ok(first.open_builds.includes('tablero360-b-barra'), 'the rest of the queue rides too, so the hub does not take it as left')
 
   const second = await h.poll()
   assert.equal(second.build.build_id, 'tablero360-b-barra')
@@ -94,6 +95,32 @@ test('re-declaring a queued build merges into what it had, keeping its start', a
   const sent = await h.poll()
   assert.equal(sent.build.build_id, 'repo-b-two')
   assert.equal((await h.poll()).build.stage, 6)
+})
+
+test('a done and a new build declared while a poll carries the old report still go out', async () => {
+  const h = engine()
+  await declareFromTool(h.$, h.rt, decl('repo-a-one'))
+  const inFlight = await pollBuildFields(h.$, h.rt)
+  assert.equal(inFlight.build.status, 'running')
+  h.advance(1000)
+  await declareFromTool(h.$, h.rt, decl('repo-a-one', { status: 'done', outcome: 'delivered' }))
+  h.advance(1000)
+  await declareFromTool(h.$, h.rt, decl('repo-b-two'))
+  await afterPoll(h.$, h.rt, { build: inFlight.build })
+  const next = await h.poll()
+  assert.equal(next.build.build_id, 'repo-a-one')
+  assert.equal(next.build.status, 'done')
+  assert.equal((await h.poll()).build.build_id, 'repo-b-two')
+})
+
+test('past the cap the oldest queued build goes, a done last', async () => {
+  const h = engine()
+  await declareFromTool(h.$, h.rt, decl('repo-done-00', { status: 'done', outcome: 'delivered' }))
+  for (let i = 1; i <= 14; i++) await declareFromTool(h.$, h.rt, decl(`repo-build-${String(i).padStart(2, '0')}`))
+  const ids = h.raw().pending.map(p => p.declared.build_id)
+  assert.equal(ids.length, 12)
+  assert.equal(ids[0], 'repo-done-00')
+  assert.equal(ids.includes('repo-build-01'), false)
 })
 
 test('a call landing while a poll is out keeps the current build unsent', () => {
