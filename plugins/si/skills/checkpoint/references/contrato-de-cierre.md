@@ -9,6 +9,16 @@ Referencia del Paso 0.2 de `checkpoint`. Léela cuando el repo no tenga la secci
 - Estado: <ruta del archivo de estado> | journals
 - Push: rama+PR | main directo | no pushear
 - Handoff: <ruta de archivo> | estado | pantalla
+- Reporte: <ruta con {AAMMDD} y {terminal}>[; corte HH:MM <zona IANA>][; fuera de <host>: link <dirección>] | no
+```
+
+La línea `Reporte` es opcional; sus partes van separadas por `;`:
+- **Ruta:** absoluta o con `~/`. `{AAMMDD}` es el día del reporte y `{terminal}`, el nombre de la sesión. Sin `..`.
+- **`corte HH:MM <zona>`:** desde esa hora (en esa zona), el bloque va al reporte del día siguiente, para que la noche se lea en el reporte de la mañana. Sin corte, el día es la fecha local y la hora sale en la zona del proceso.
+- **`fuera de <host>: link <dirección>`:** si la sesión corre en otro host (se compara el `hostname` corto), no se escribe nada: el bloque se manda por mensajería entre sesiones a esa dirección, y quien la atiende lo pega en el archivo.
+
+```
+- Reporte: ~/handoffs/dia-{AAMMDD}/reportes/{terminal}.md; corte 08:00 America/Mexico_City; fuera de srv1: link ana/srv1/coord
 ```
 
 Si unos repos se pushean distinto que otros (p.ej. el repo del proyecto va por PR y los repos de docs y planes van directo a main), agrega excepciones a la línea `Push` después de `;`, nombrando cada repo por la carpeta raíz de su checkout:
@@ -35,6 +45,7 @@ Ejemplo (repo que cierra en un solo archivo y trabaja en main):
 | **Estado** | `<ruta>`: bitácora y estado van solo a ese archivo. `journals`: bitácora en `docs/journals/YYMMDD-<slug>.md` | `journals` |
 | **Push** | `rama+PR` · `main directo` · `no pushear`, con excepciones por repo después de `;` | `rama+PR` para todos los repos |
 | **Handoff** | `<ruta>`: ese archivo. `estado`: dentro del archivo de estado. `pantalla`: solo en el chat | Si `Estado` es una ruta: `estado` (dentro de ese archivo). Si no: `HANDOFF.md` en el plan activo; si no hay plan activo o está fuera del repo o es de solo lectura, `pantalla` |
+| **Reporte** | `<ruta>` (con corte y link opcionales): el bloque de reporte se agrega ahí, en todos los modos. `no`: no hay reporte | `~/handoffs/reportes/{AAMMDD}-{terminal}.md`, fecha local, sin corte |
 
 ## Reglas
 
@@ -43,4 +54,5 @@ Ejemplo (repo que cierra en un solo archivo y trabaja en main):
 - **Rutas de solo lectura** (las que el `CLAUDE.md` marque así, o cualquier carpeta fuera del repo que no sea tuya) **nunca se escriben**, aunque sean "el plan activo".
 - **Publicar no es pushear:** si el repo publica con un script propio (p.ej. `deploy/publicar.sh`) o con un deploy, checkpoint **nunca lo corre**. Solo lo menciona en el handoff como paso pendiente del usuario.
 - **Excepción que no existe:** si una excepción de `Push` nombra un repo que no está en este host, dilo; no adivines a cuál se refería.
-- **Modo `continuar`:** el contrato se resuelve igual, pero solo se usa para saber dónde está el repo y su flujo; `continuar` no escribe estado ni docs, no pushea y deja el handoff en pantalla (ver el SKILL.md).
+- **Modo `continuar`:** el contrato se resuelve igual, pero solo se usa para saber dónde está el repo y su flujo; `continuar` no escribe estado ni docs, no pushea y deja el handoff en pantalla (ver el SKILL.md). El reporte (Paso 6) sí corre: es lo único que escribe.
+- **El reporte solo agrega.** Nunca reescribe ni borra bloques anteriores, y se escribe solo con `scripts/reporte.mjs`.

@@ -54,6 +54,27 @@ El modo `continuar` no usa el estado ni el push del contrato: no escribe bitáco
 
 Si la sesión arranca fuera de un repo (por ejemplo, en el home de un servidor que maneja varios proyectos), la skill lee el `CLAUDE.md` del directorio donde arrancó.
 
+### Reporte por terminal
+
+Todos los modos, también `continuar` y `autonomo`, terminan agregando un bloque de reporte para el reporte del día. Así no se pierde con cada `/clear` lo que hizo la sesión. El bloque es fijo:
+
+```
+## <hora> · <build_id | sin build>
+- Hecho: PRs, commits y deploys, con hora
+- Quedó: lo que sigue o lo que espera, y de quién
+- Retro: qué salió bien · qué salió mal · qué mejorar
+```
+
+Lo escribe `scripts/reporte.mjs`, que redacta secretos y solo agrega, nunca borra. Por defecto va a `~/handoffs/reportes/{AAMMDD}-{terminal}.md`, con la fecha local. Una cuarta línea opcional en `## Cierre de sesión` lo cambia:
+
+```
+- Reporte: ~/handoffs/dia-{AAMMDD}/reportes/{terminal}.md; corte 08:00 America/Mexico_City; fuera de srv1: link ana/srv1/coord
+```
+
+- **`corte 08:00 <zona>`:** a partir de esa hora, el bloque va al reporte del día siguiente. Así la noche se lee en el reporte de la mañana.
+- **`fuera de <host>: link <dirección>`:** una sesión que corre en otro host no escribe nada. Manda el bloque a esa dirección por mensajería entre sesiones.
+- **`Reporte: no`:** apaga el reporte.
+
 Cada valor que pongas reemplaza al de por defecto, nunca se suma: con `Estado` en una ruta no se crean bitácoras ni `codebase-summary.md`, y el handoff va dentro de ese archivo salvo que pongas `Handoff: <ruta>`. Con `Handoff: estado` o `pantalla` no se crea `HANDOFF.md`. La skill nunca escribe rutas de solo lectura ni corre scripts de publicación o deploy.
 
 Solo hay dos caminos: la sección exacta o los valores por defecto. Sin la sección, la skill no deduce nada del texto libre del `CLAUDE.md`: usa los valores por defecto y lo dice al empezar. Si la prosa sugiere otro cierre, pregunta antes de escribir nada.
@@ -136,7 +157,7 @@ Todos los modos agregan al handoff un bloque `ENTORNO VIVO` (crons de `CronList`
 | Modo | Qué hace | Handoff | Largo |
 |---|---|---|---|
 | `/si:checkpoint` (cierre) | Bitácora, docs solo si cambió algo visible, commit y push en segundo plano; el inventario y el reporte llegan cuando el push termina | según tu `## Cierre de sesión` | completo |
-| `/si:checkpoint continuar` | Commit local y nada más, para seguir la misma tarea tras `/clear` | pantalla: objetivo, estado, siguiente, ENTORNO VIVO, ARRANQUE | hasta 25 líneas |
+| `/si:checkpoint continuar` | Commit local y el bloque de reporte, para seguir la misma tarea tras `/clear` | pantalla: objetivo, estado, siguiente, ENTORNO VIVO, ARRANQUE | hasta 25 líneas |
 | `/si:checkpoint autonomo` | Igual que `continuar`, sin preguntas, para terminales de un build | archivo `~/handoffs/<sesion>.md` | hasta 40 líneas |
 | `/si:checkpoint coordinador` | Cierre completo y, además, las demás sesiones de la máquina y los renglones marcados `(coordinador)` | según tu `## Cierre de sesión` | completo |
 
