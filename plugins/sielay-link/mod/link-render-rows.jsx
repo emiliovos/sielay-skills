@@ -6,11 +6,19 @@
 // engine's own drawing.
 
 import { columnsOf, sendLines, parseInbound, inboundLines, fit } from './link-render-text.js'
-import { inboundRow, callRow, answerRow, personOf, parseNotice, noticeRow, readCallRow, readAnswerRows, parseCompact } from './link-render-compact.js'
+import { inboundRow, callRow, answerRow, personOf, parseNotice, noticeRow, readCallRow, readAnswerRows, readAnswerCards, parseCompact } from './link-render-compact.js'
+import { outboundTurnRows, outboundAnswerRows } from './link-thread-rows.js'
+import { markFrom } from './link-threads.js'
 
 // $.state reference: literal plugin/key, declared in each file that uses it.
 const CONVERSATIONS = /** @type {const} */ ({ plugin: 'sielay-link', key: 'conversations' })
 const STATUS = /** @type {const} */ ({ plugin: 'sielay-link', key: 'status' })
+const THREADS = /** @type {const} */ ({ plugin: 'sielay-link', key: 'threads' })
+
+/** This session's address and its thread registry: what the thread rows read. @param {Engine} $ */
+async function threadCtx($) {
+  return { self: (await $.state.get(STATUS)).value?.address, registry: (await $.state.get(THREADS)).value }
+}
 
 /** The person of this session, or undefined while its address is not known. @param {Engine} $ */
 async function selfPersonOf($) {
@@ -73,7 +81,9 @@ export async function renderSendCall($, e) {
   const attachment = /** @type {{ name?: unknown }|undefined} */ (input.attachment)?.name
   const call = { tool, destinations: destinations.map(String), conv, text: input.text, attachment: typeof attachment === 'string' ? attachment : undefined }
   if (e.props.isExpanded === true) return tree($, e, sendLines(call, columnsOf(e), true))
-  return tree($, e, callRow(call, await selfPersonOf($), columnsOf(e)))
+  if (call.destinations.length > 1) return tree($, e, callRow(call, await selfPersonOf($), columnsOf(e)))
+  const ctx = await threadCtx($)
+  return tree($, e, outboundTurnRows(call, markFrom(ctx.registry, e.props.tool_use_id), ctx, columnsOf(e)))
 }
 
 /**
@@ -83,13 +93,22 @@ export async function renderSendCall($, e) {
  */
 export async function renderSendAnswer($, e) {
   if (LINK_READ.test(e.props.tool)) {
-    if (e.props.isErrored || e.props.isExpanded === true) return null
+    if (e.props.isErrored) return null
     const read = outputText(e.props.output)
-    return read ? tree($, e, readAnswerRows(read, await selfPersonOf($), columnsOf(e))) : null
+    if (!read) return null
+    if (e.props.isExpanded === true) {
+      const cards = readAnswerCards(read, columnsOf(e))
+      return cards ? tree($, e, cards) : null
+    }
+    return tree($, e, readAnswerRows(read, await threadCtx($), columnsOf(e)))
   }
   if (!LINK_SEND_OR_REPLY.test(e.props.tool) || e.props.isErrored || e.props.isExpanded === true) return null
   const text = outputText(e.props.output)
-  return text ? tree($, e, answerRow(text, columnsOf(e))) : null
+  if (!text) return null
+  const ctx = await threadCtx($)
+  const mark = markFrom(ctx.registry, e.props.tool_use_id)
+  const rows = mark ? outboundAnswerRows(mark, ctx, columnsOf(e)) : null
+  return tree($, e, rows ?? answerRow(text, columnsOf(e)))
 }
 
 /**

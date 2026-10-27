@@ -2,7 +2,8 @@
 // sielay hub. Entry module (hooks/hooks.json). Every hook is registered here;
 // the work lives in the modules it imports, most of them pure.
 
-import { createRuntime, startLink, sessionPayload, isOff, isMinimal } from './link-runtime.js'
+import { createRuntime, startLink, sessionPayload, isOff, isMinimal, threadsOf } from './link-runtime.js'
+import { recordOutbound } from './link-threads.js'
 import { recordModeSample, recordSessionTitle, recordTurnEnd } from './link-session-payload.js'
 import { LINK_TOOL_SPECS, runLinkTool } from './link-tools.js'
 import { toolSpecsFor } from './link-tool-specs.js'
@@ -22,6 +23,7 @@ import {
 // $.state reference: literal plugin/key, declared in each file that uses it.
 const CONVERSATIONS = /** @type {const} */ ({ plugin: 'sielay-link', key: 'conversations' })
 const STATUS = /** @type {const} */ ({ plugin: 'sielay-link', key: 'status' })
+const THREADS = /** @type {const} */ ({ plugin: 'sielay-link', key: 'threads' })
 
 /** @typedef {import('claude-code').EngineInterface} Engine */
 /** @typedef {import('./link-runtime.js').Runtime} Runtime */
@@ -68,7 +70,10 @@ async function callTool($, rt, name, input) {
       inbox: rt.inbox,
       instanceId: async () => (await sessionPayload($, rt)).instance_id,
       selfAddress: async () => (await $.state.get(STATUS)).value?.address,
+      registry: async () => (await $.state.get(THREADS)).value,
     },
+    // The call's tool_use_id is the key the rows find the turn's mark by.
+    onSent: async sent => recordOutbound(threadsOf($, rt), { ...sent, toolUseId: input.tool_use_id }, (await $.state.get(STATUS)).value?.address),
     build: {
       declare: fields => declareFromTool($, rt, fields),
       canReport: async () => reportState({ paired: rt.client !== null, off: await isOff($), code: rt.loopCode }),
