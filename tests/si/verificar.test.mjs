@@ -159,3 +159,14 @@ test('sesiones: un archivo viejo con pid reciclado no sale en otras sesiones', a
   const r = await correr(['--json'], { fuente: { ...fuente, listar: () => tabla }, io, run: () => ({ ok: false, salida: '' }), propioPid: 201, sesionesDir: '/s', ahora: T0 });
   assert.deepEqual(JSON.parse(r.out).sesiones, []);
 });
+
+test('el renglón git solo lista los PRs de la rama actual o de sus worktrees', async () => {
+  const { renderMarkdown, prsRelevantes } = await import('../../plugins/si/skills/checkpoint/scripts/render.mjs');
+  const g = { repo: '/ruta/al/repo', rama: 'feat/x', sucio: [], sucio_total: 0, adelante: 0, sin_upstream: false,
+    worktrees: ['/ruta/al/repo feat/x', '/ruta/wt otra/rama', '/ruta/det (detached)'],
+    prs: [{ n: 1, rama: 'feat/x', titulo: 'a' }, { n: 2, rama: 'otra/rama', titulo: 'b' }, { n: 3, rama: 'ajena', titulo: 'c' }] };
+  assert.deepEqual(prsRelevantes(g).map((p) => p.n), [1, 2]);
+  const md = renderMarkdown({ generado: '2026-10-27T01:40:00Z', claude: null, procesos: [], sesiones: [], git: [g] });
+  assert.match(md, /PR #1, PR #2 \(otra\/rama\)/);
+  assert.ok(!md.includes('#3'));
+});

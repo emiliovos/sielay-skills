@@ -133,7 +133,10 @@ const esPrincipal = () => {
 if (esPrincipal()) {
   let res;
   try { res = await correr(process.argv.slice(2)); } catch (e) { res = { codigo: 1, err: `error: ${e.message}` }; }
-  if (res.out) process.stdout.write(`${res.out}\n`);
+  // Termina con process.exit tras vaciar la salida: un nieto de un comando del
+  // descriptor no debe retener la llamada.
+  const salir = () => process.exit(res.codigo);
   if (res.err) process.stderr.write(`${res.err}\n`);
-  process.exitCode = res.codigo;
+  if (res.out) process.stdout.write(`${res.out}\n`, salir);
+  else salir();
 }

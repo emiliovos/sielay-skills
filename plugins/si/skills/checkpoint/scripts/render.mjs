@@ -2,13 +2,22 @@
 // Con segundos: un vigía armado en el mismo minuto del handoff debe quedar antes de `desde`.
 const hora = (iso) => iso;
 
+// Solo los PRs de la rama actual o de alguna rama con worktree propio; el resto es ruido.
+export function prsRelevantes(g) {
+  const ramas = new Set([g.rama, ...(g.worktrees ?? []).map((w) => w.slice(w.lastIndexOf(' ') + 1))]);
+  return (g.prs ?? []).filter((p) => ramas.has(p.rama));
+}
+
 function lineaGit(g) {
   if (g.error) return `- git: ${g.repo} · ${g.error}`;
   const partes = [`${g.repo} ${g.rama ?? '(sin rama)'}`, `${g.sucio_total} sin commit`];
   if (g.sin_upstream) partes.push(`sin upstream${g.adelante == null ? '' : ` (${g.adelante} sin push vs origin/HEAD)`}`);
   else partes.push(`${g.adelante ?? '?'} sin push`);
   if (g.prs === null) partes.push('PRs: sin datos');
-  else if (g.prs.length) partes.push(g.prs.map((p) => `PR #${p.n}${p.rama === g.rama ? '' : ` (${p.rama})`}`).join(', '));
+  else {
+    const prs = prsRelevantes(g);
+    if (prs.length) partes.push(prs.map((p) => `PR #${p.n}${p.rama === g.rama ? '' : ` (${p.rama})`}`).join(', '));
+  }
   return `- git: ${partes.join(' · ')}`;
 }
 

@@ -42,10 +42,10 @@ test('un sessions/<pid>.json viejo (pid reciclado, otro procStart) no cuenta', (
   assert.equal(encontrarClaude(arbolSesion(123), 5, { dir: '/s', io: ioSesion(sesion()) }), null);
 });
 
-test('en macOS la sesión vale si startedAt cae a ±2 s del lstart', () => {
+test('en macOS la sesión vale si startedAt es de 0 a 15 s posterior al lstart', () => {
   const rec = { pid: 7, inicioMs: T0 };
-  assert.equal(sesionVigente({ pid: 7, startedAt: T0 + 1500 }, rec), true);
-  assert.equal(sesionVigente({ pid: 7, startedAt: T0 + 5000 }, rec), false);
+  for (const d of [0, 1200, 2600, 15000]) assert.equal(sesionVigente({ pid: 7, startedAt: T0 + d }, rec), true, `+${d}`);
+  for (const d of [-1, -1000, 15001, 60000]) assert.equal(sesionVigente({ pid: 7, startedAt: T0 + d }, rec), false, `${d}`);
   assert.equal(sesionVigente({ pid: 7 }, rec), false);
 });
 

@@ -54,11 +54,16 @@ export function leerSesion(dir, pid, io = fs) {
 
 // Un sessions/<pid>.json sobrevive a su proceso: solo vale si el proceso que
 // hoy tiene ese pid es el mismo que lo escribió. Linux compara `procStart` con
-// el campo 22 de stat; macOS compara `startedAt` con el lstart (±2 s).
+// el campo 22 de stat; macOS compara `startedAt` con el lstart: el
+// archivo se escribe poco después de arrancar, así que solo vale una diferencia
+// de 0 a 15 s (lstart se trunca al segundo y la sesión tarda en escribirlo).
 export function sesionVigente(sesion, rec) {
   if (!sesion || !rec) return false;
   if (rec.ticks != null && sesion.procStart != null) return String(rec.ticks) === String(sesion.procStart);
-  if (sesion.startedAt != null) return Math.abs(rec.inicioMs - Number(sesion.startedAt)) <= 2000;
+  if (sesion.startedAt != null) {
+    const dif = Number(sesion.startedAt) - rec.inicioMs;
+    return dif >= 0 && dif <= 15000;
+  }
   return false;
 }
 

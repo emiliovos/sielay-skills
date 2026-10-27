@@ -47,16 +47,36 @@ function correr(argv, repo, { timeoutMs = POR_COMANDO_MS, signal } = {}) {
   return new Promise((resolve) => {
     let salida = '';
     let h;
+    let motivo = null;
+    // Grupo propio: al vencer el tiempo se mata el grupo entero (solo de un hijo que lanzó este script).
+    const matarGrupo = () => { try { process.kill(-h.pid, 'SIGKILL'); } catch { /* ya terminó */ } };
     try {
-      h = spawn(argv[0], argv.slice(1), { cwd: repo, signal, timeout: timeoutMs, stdio: ['ignore', 'pipe', 'pipe'] });
+      h = spawn(argv[0], argv.slice(1), { cwd: repo, detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
     } catch (e) { resolve({ ok: false, salida: String(e.code ?? e.message) }); return; }
     const juntar = (b) => { if (salida.length < MAX_SALIDA) salida += b; };
     h.stdout.setEncoding('utf8').on('data', juntar);
     h.stderr.setEncoding('utf8').on('data', juntar);
-    h.on('error', (e) => resolve({ ok: false, salida: e.name === 'AbortError' ? 'cancelado' : String(e.code ?? e.message) }));
-    h.on('close', (code, sig) => resolve(sig
-      ? { ok: false, salida: `${salida.trim()}\n(terminado por ${sig}: pasó los ${timeoutMs / 1000} s)`.trim() }
-      : { ok: code === 0, salida: salida.trim() }));
+    const reloj = setTimeout(() => { motivo = `pasó los ${timeoutMs / 1000} s`; matarGrupo(); }, timeoutMs);
+    const alAbortar = () => { motivo = 'cancelado'; matarGrupo(); };
+    signal?.addEventListener('abort', alAbortar, { once: true });
+    const cerrar = (r) => {
+      clearTimeout(reloj);
+      signal?.removeEventListener('abort', alAbortar);
+      resolve(r);
+    };
+    h.on('error', (e) => cerrar({ ok: false, salida: String(e.code ?? e.message) }));
+    // Se resuelve en `exit`, no en `close`: un nieto que hereda el pipe
+    // (`( sleep 6 ) & echo hola`) retendría `close` hasta que termine.
+    h.on('exit', (code, sig) => {
+      const fin = () => {
+        h.stdout.destroy(); h.stderr.destroy();
+        const t = salida.trim();
+        cerrar(motivo || sig ? { ok: false, salida: `${t}\n(terminado: ${motivo ?? sig})`.trim() } : { ok: code === 0, salida: t });
+      };
+      // Deja que se vacíe lo ya escrito en el pipe antes de destruirlo.
+      const espera = setTimeout(fin, 50);
+      h.stdout.once('close', () => { clearTimeout(espera); fin(); });
+    });
   });
 }
 

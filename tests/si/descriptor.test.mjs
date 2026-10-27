@@ -71,3 +71,31 @@ test('los comandos corren en paralelo y uno que no termina vence el presupuesto 
   assert.equal(r[1].ok, false);
   assert.equal(abortado, true);
 });
+
+async function repoConScript(nombre, cuerpo) {
+  const fs = await import('node:fs');
+  const os = await import('node:os');
+  const path = await import('node:path');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ck-desc-'));
+  fs.mkdirSync(path.join(dir, 'scripts'));
+  fs.writeFileSync(path.join(dir, 'scripts', nombre), cuerpo);
+  return dir;
+}
+
+test('un nieto que hereda el pipe no retiene la llamada y la salida llega', async () => {
+  const dir = await repoConScript('nieto.sh', '( sleep 6 ) & echo hola\n');
+  const t0 = Date.now();
+  const [r] = await resolverDescriptor(parseDescriptor('## Entorno vivo\n- n: `bash scripts/nieto.sh`\n'), { repo: dir });
+  assert.equal(r.salida, 'hola');
+  assert.equal(r.ok, true);
+  assert.ok(Date.now() - t0 < 3000, `tardó ${Date.now() - t0} ms`);
+});
+
+test('al vencer el tiempo por comando se mata el grupo del hijo', async () => {
+  const dir = await repoConScript('colgado.sh', 'echo antes\nsleep 30\n');
+  const t0 = Date.now();
+  const [r] = await resolverDescriptor(parseDescriptor('## Entorno vivo\n- c: `bash scripts/colgado.sh`\n'), { repo: dir, porComandoMs: 300 });
+  assert.equal(r.ok, false);
+  assert.match(r.salida, /^antes\n\(terminado: pasó los 0\.3 s\)$/);
+  assert.ok(Date.now() - t0 < 3000);
+});
