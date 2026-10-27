@@ -23,8 +23,8 @@ test('ningún archivo de la skill nombra herramientas propias de un repo', () =>
   assert.deepEqual(hallazgos, []);
 });
 
-test('SKILL.md declara la versión 2.6.0 y usa la ruta del script con CLAUDE_SKILL_DIR', () => {
+test('SKILL.md declara la versión 2.7.0 y usa la ruta del script con CLAUDE_SKILL_DIR', () => {
   const md = fs.readFileSync(path.join(RAIZ, 'SKILL.md'), 'utf8');
-  assert.match(md, /version: "2\.6\.0"/);
+  assert.match(md, /version: "2\.7\.0"/);
   assert.match(md, /\$\{CLAUDE_SKILL_DIR\}\/scripts\/entorno-vivo\.mjs/);
 });
