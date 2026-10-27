@@ -28,3 +28,22 @@ test('SKILL.md declara la versión 2.7.0 y usa la ruta del script con CLAUDE_SKI
   assert.match(md, /version: "2\.7\.0"/);
   assert.match(md, /\$\{CLAUDE_SKILL_DIR\}\/scripts\/entorno-vivo\.mjs/);
 });
+
+// mejora-continua también es pública: la ruta de la bitácora sale del
+// «## Cierre de sesión» del repo, nunca de una ruta fija de la skill.
+const RAIZ_MC = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../plugins/si/skills/mejora-continua');
+
+test('mejora-continua no nombra herramientas ni rutas propias de un repo', () => {
+  const hallazgos = [];
+  for (const f of archivos(RAIZ_MC)) {
+    const txt = fs.readFileSync(f, 'utf8');
+    for (const t of [...PROHIBIDOS, '/home/', '~/handoffs']) if (txt.includes(t)) hallazgos.push(`${path.relative(RAIZ_MC, f)}: ${t}`);
+  }
+  assert.deepEqual(hallazgos, []);
+});
+
+test('mejora-continua declara la versión 1.0.0 y usa la ruta del script con CLAUDE_SKILL_DIR', () => {
+  const md = fs.readFileSync(path.join(RAIZ_MC, 'SKILL.md'), 'utf8');
+  assert.match(md, /version: "1\.0\.0"/);
+  assert.match(md, /\$\{CLAUDE_SKILL_DIR\}\/scripts\/bitacora\.mjs/);
+});
