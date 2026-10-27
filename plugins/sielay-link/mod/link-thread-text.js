@@ -17,8 +17,10 @@ import { sanitizeText, safeField, neutralizeBody, count } from './link-inbound-f
 import { splitAddress, addressText } from './link-render-text.js'
 import { threadGlyph, markFrom, inboundKey, seqOf, hhmm as clock, sentAtMs, endingOf } from './link-threads.js'
 
+/** Blanks `\s` misses (braille, Hangul fillers): they could fake a row's indent. */
+const ODD_BLANKS = /[\u2800\u115F\u1160\u3164\uFFA0]/g
 /** Text on one line: no breaks, runs of blanks collapsed. @param {string} text */
-export const oneLine = text => sanitizeText(text).replace(/\s+/g, ' ').trim()
+export const oneLine = text => sanitizeText(text).replace(ODD_BLANKS, ' ').replace(/\s+/g, ' ').trim()
 
 /**
  * «persona/sesión», or just «sesión» when the person is `selfPerson`.

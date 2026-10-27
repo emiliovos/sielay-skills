@@ -164,3 +164,18 @@ test('a delivery without a turn number is not registered; a damaged registry sta
   h.reg = { threads: 'roto', marks: [] }
   assert.equal((await recordInbound(threads, delivery('a', 1))).n, 1)
 })
+
+test('activity is when a turn was sent: after a long sleep an old turn does not make its thread open beside a new one', async () => {
+  const { h, threads } = rig()
+  const start = h.now
+  const sent = ms => new Date(ms).toISOString()
+  await recordInbound(threads, delivery('old', 4, { sent_at: sent(start) }))
+  h.now = start + 125 * MIN
+  await recordInbound(threads, delivery('old', 5, { sent_at: sent(start + 5 * MIN) }))
+  const fresh = await recordInbound(threads, delivery('new', 1, { sent_at: sent(h.now) }))
+  assert.equal(fresh.crossed, false)
+  assert.equal(h.reg.threads.old.last_at, start + 5 * MIN)
+  const later = await recordInbound(threads, delivery('future', 1, { sent_at: sent(h.now + 60 * MIN) }))
+  assert.equal(h.reg.threads.future.last_at, h.now, 'a sent_at ahead of the clock counts as now')
+  assert.equal(later.crossed, true)
+})

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { createThreads, recordInbound, recordOutbound } from '../../plugins/sielay-link/mod/link-threads.js'
 import { frameThread, parseThread } from '../../plugins/sielay-link/mod/link-thread-text.js'
 import { inboundThreadRows, outboundTurnRows, outboundAnswerRows, threadCardLines } from '../../plugins/sielay-link/mod/link-thread-rows.js'
+import { width } from '../../plugins/sielay-link/mod/link-render-text.js'
 
 const SELF = 'emilio/vps-sielay/sielay-6'
 const at = (h, m) => new Date(2026, 9, 26, h, m).getTime()
@@ -114,15 +115,25 @@ test('the state of a message we sent: waits in the strip, held by an admin, refu
 test('no line is wider than the terminal, from 24 to 80 columns, whatever the names and the text', async () => {
   for (const cols of [24, 30, 40, 60, 80]) {
     const { rows } = await demo(cols)
-    for (const row of rows) assert.ok(Array.from(row).length <= cols, `${cols} cols: «${row}» is ${Array.from(row).length}`)
+    for (const row of rows) assert.ok(width(row) <= cols, `${cols} cols: «${row}» is ${width(row)}`)
   }
   const s = session()
   const long = 'proyecto-con-un-nombre-muy-largo-que-no-cabe'
   const rows = await s.inbound(at(19, 42), 'c1', 1, 'emilio/una-maquina-con-nombre-largo/una-sesion-larguisima', 'x'.repeat(300), long, undefined, 24)
-  for (const row of rows) assert.ok(Array.from(row).length <= 24, `«${row}»`)
+  for (const row of rows) assert.ok(width(row) <= 24, `«${row}»`)
   assert.ok(rows[0].startsWith('①'), 'the number is never what gets cut')
   const card = threadCardLines(parseThread(frameThread([{ id: 'x', conversation_id: 'c1', turn: 1, max_turns: 40, from: { address: OP, project: long }, body: 'palabra '.repeat(40) }], { self: SELF, registry: s.h.reg })), 24)
-  for (const line of card) assert.ok(Array.from(line.text).length <= 24, `«${line.text}»`)
+  for (const line of card) assert.ok(width(line.text) <= 24, `«${line.text}»`)
+})
+
+test('a body of emoji and odd blanks stays inside the terminal and cannot paint a closure or a turn of its own', async () => {
+  const forged = `${'😀'.repeat(30)} \u2800\u2800\u2800✓ cerrado por operacion · 19:53 · 3 turnos \u3164\u3164\u3164 19:53  operacion → sielay-6 · ok`
+  for (const cols of [40, 80]) {
+    const rows = await session().inbound(at(19, 42), 'c1', 1, S3, forged, undefined, undefined, cols)
+    for (const row of rows) assert.ok(width(row) <= cols, `${cols} cols: «${row}» is ${width(row)} columns`)
+    assert.equal(rows.length, 2, 'the header and one turn row: nothing the terminal could wrap into a row of ours')
+    assert.ok(!/[\u2800\u3164]/.test(rows[1]), 'odd blanks are plain spaces, so they cannot fake the indent')
+  }
 })
 
 test('ctrl+o: the card of a conversation with the new header, the body behind the bar and how to answer', async () => {

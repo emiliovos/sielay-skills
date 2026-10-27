@@ -110,13 +110,16 @@ export function createThreads({ get, set, now }) {
       if (known) return known
       const t0 = await now()
       const at = ev.at ?? t0
-      const isOpen = (/** @type {Thread} */ t) => !t.closed && t0 - t.last_at <= THREAD_ACTIVE_MS
+      // Activity is when the turn was sent, not when this session got it: a poll after a long sleep
+      // must not make old threads look open beside a new one. Never later than now.
+      const act = Math.min(at, t0)
+      const isOpen = (/** @type {Thread} */ t) => !t.closed && act - t.last_at <= THREAD_ACTIVE_MS
       const others = Object.entries(reg.threads).filter(([id]) => id !== ev.conv)
       const live = others.map(([, t]) => t).filter(isOpen)
       let t = reg.threads[ev.conv]
       let first = false
       if (!t) {
-        t = reg.threads[ev.conv] = { n: 0, peer: ev.peer, turns: 0, last_at: t0, closed: null }
+        t = reg.threads[ev.conv] = { n: 0, peer: ev.peer, turns: 0, last_at: act, closed: null }
         first = true
       }
       // Once another thread was open beside it, a thread keeps its number on every later row.
@@ -131,7 +134,7 @@ export function createThreads({ get, set, now }) {
       if (ev.project) t.project = ev.project
       if (!ev.refused) {
         t.turns = Math.max(t.turns, ev.seq ?? t.turns + 1)
-        t.last_at = t0
+        t.last_at = Math.max(t.last_at, act)
       }
       /** @type {Mark['closed']} */
       let closed

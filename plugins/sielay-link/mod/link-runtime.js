@@ -101,9 +101,16 @@ export async function isMinimal($) {
   return (await $.env.get('SIELAY_LINK_MINIMAL')) === '1'
 }
 
-/** @param {Engine} $ @param {Runtime} rt */
+/** @param {Engine} $ */
+const newThreads = $ => createThreads({ get: async () => (await $.state.get(THREADS)).value, set: v => $.state.set(THREADS, v), now: () => $.clock.now() })
+
+/**
+ * The session's thread registry. startLink makes it with the `$` of session.start, so a
+ * tool call (maybe a subagent's) never becomes the registry's `$`; this only covers a call before that.
+ * @param {Engine} $ @param {Runtime} rt
+ */
 export function threadsOf($, rt) {
-  return (rt.threads ??= createThreads({ get: async () => (await $.state.get(THREADS)).value, set: v => $.state.set(THREADS, v), now: () => $.clock.now() }))
+  return (rt.threads ??= newThreads($))
 }
 
 /** @param {Engine} $ @param {Runtime} rt */
@@ -183,6 +190,7 @@ export async function startLink($, rt) {
 
   const store = { get: (/** @type {string} */ key) => $.store.get(key), set: (/** @type {string} */ key, /** @type {unknown} */ value) => $.store.set(key, value) }
   rt.inbox = createInbox(store, () => $.clock.now())
+  rt.threads = newThreads($)
   rt.handler = createInboundHandler({
     store,
     inbox: rt.inbox,
