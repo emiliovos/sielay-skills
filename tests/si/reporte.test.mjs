@@ -43,6 +43,9 @@ test('sin la línea vale el valor por defecto; «no» apaga el reporte; una part
   assert.throws(() => parseReporte('## Cierre de sesión\n- Reporte: ~/r.md; corte 08:00 Marte/Olimpo\n'), /zona desconocida/);
   assert.throws(() => parseReporte('## Cierre de sesión\n- Reporte: ~/r.md; fuera de srv1.ejemplo.com: link a/b/c\n'), /no se entiende/);
   assert.deepEqual(parseReporte('## Cierre de sesión\n  - Reporte: no\n'), { ruta: RUTA_POR_DEFECTO, porDefecto: true });
+  assert.deepEqual(parseReporte('## Cierre de sesión\n- reporte: No\n'), { no: true });
+  assert.throws(() => parseReporte('## Cierre de sesión\n- Reporte: no\n- Reporte: ~/r.md\n'), /dos veces/);
+  assert.throws(() => parseReporte('## Cierre de sesión\n- Reporte: ~/r.md; corte 08:00; corte 09:00\n'), /repetida/);
 });
 
 test('con corte, lo de la noche y lo de antes del corte van al mismo día; desde el corte, al siguiente', () => {
@@ -70,6 +73,9 @@ test('el bloque lleva hora de la zona y build, y exige Hecho, Quedó y Retro', (
   assert.match(armarBloque(CUERPO, { ahoraMs: NOCHE, zona: 'UTC' }), /^## 04:28 · sin build\n/);
   assert.throws(() => armarBloque('- Hecho: x\n- Retro: y', { ahoraMs: NOCHE }), /«- Quedó:»/);
   assert.throws(() => armarBloque(CUERPO, { ahoraMs: NOCHE, build: 'a b' }), /build_id inválido/);
+  const tokenComoBuild = `ghp_${'Ab1'.repeat(12)}`;
+  assert.throws(() => armarBloque(CUERPO, { ahoraMs: NOCHE, build: tokenComoBuild }),
+    (e) => /build_id inválido/.test(e.message) && !e.message.includes(tokenComoBuild));
 });
 
 test('redacta tokens y SHAs largos, pero deja los slugs largos (build_id, ramas)', () => {
@@ -80,7 +86,10 @@ test('redacta tokens y SHAs largos, pero deja los slugs largos (build_id, ramas)
   assert.equal(t.includes('ab12'.repeat(10)), false);
   assert.match(t, /password=\[redactado\]/);
   assert.equal(redactarReporte(`xoxb-${'1234567890ab-'.repeat(3)}x`).includes('1234567890ab'), false);
-  assert.match(redactarReporte('rama feat/261027-checkpoint-reporte-largo'), /feat\/261027-checkpoint-reporte-largo/);
+  for (const slug of ['feat/261027-checkpoint-reporte-largo', 'sielay-261027-checkpoint-reporte-fijo-r2',
+    'tablero360-261026-publicar-y-direcciones', 'fix/i18n-key-parity-locale-strings-es', 'feat/asia-pacific-region-dashboard-nuevo']) {
+    assert.equal(redactarReporte(`rama ${slug} lista`), `rama ${slug} lista`, slug);
+  }
 });
 
 test('formas de token que parecen slug se redactan igual que con redactar', () => {
@@ -92,6 +101,8 @@ test('formas de token que parecen slug se redactan igual que con redactar', () =
     `secrets/xoxb-${'1234567890ab-'.repeat(2)}abcdefgh`,
     `cfg.sk-${'abcdefgh12345678-'.repeat(2)}x`,
     `notas/sk-${'abcdefghijklmnop-'.repeat(2)}qr`,
+    ['deadbeef', 'e89b', '12d3', 'a456', '426614174000'].join('-'),
+    `${'a1b2c3d4e5f6a7b8-'.repeat(2)}c9d0`,
   ];
   for (const c of casos) {
     const t = redactarReporte(`dato ${c} fin`);
@@ -134,6 +145,14 @@ test('la CLI agrega al archivo sin borrar lo anterior', () => {
   const enlace = correr('tres-x', 'enlace');
   assert.equal(enlace.status, 1);
   assert.match(enlace.stderr, /no es un archivo normal/);
+  const fuera = fs.mkdtempSync(path.join(os.tmpdir(), 'fuera-'));
+  fs.symlinkSync(fuera, path.join(dir, 'escape'));
+  fs.writeFileSync(desc, '## Cierre de sesión\n- Reporte: ~/escape/sub/{terminal}.md\n');
+  const escape = correr('cuatro-x');
+  assert.equal(escape.status, 1);
+  assert.match(escape.stderr, /sale del home/);
+  assert.deepEqual(fs.readdirSync(fuera), []);
+  fs.rmSync(fuera, { recursive: true, force: true });
   const malo = spawnSync(process.execPath, [SCRIPT, '--terminal', 't-2'], { input: 'sin secciones', encoding: 'utf8' });
   assert.equal(malo.status, 1);
   fs.rmSync(dir, { recursive: true, force: true });

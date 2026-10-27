@@ -215,7 +215,7 @@ El reporte del día junta lo que hizo cada terminal; sin este paso, lo que no se
 ---
 
 ## Al terminar
-Reporta al usuario, en breve: modo, qué se commiteó (y en qué repo/entorno), estado del push (o por qué no aplicó; en `cierre`, después del aviso de fin), links a PRs, dónde quedó el handoff, dónde quedó el reporte (o a quién se mandó), y pega el prompt de handoff listo para copiar (en `autonomo`, solo la ruta). Sé explícito si algo quedó sin respaldar.
+Reporta al usuario, en breve: modo, qué se commiteó (y en qué repo/entorno), estado del push (o por qué no aplicó; en `cierre`, después del aviso de fin), links a PRs, dónde quedó el handoff, dónde quedó el reporte (o a quién se mandó), y pega el prompt de handoff listo para copiar (en `autonomo`, solo la ruta del handoff y la línea del reporte). Sé explícito si algo quedó sin respaldar.
 
 ## Notas
 - **Fuente de verdad:** el descriptor del proyecto (si existe) + el `CLAUDE.md` del repo. Ante conflicto entre ellos, confirma con el usuario.

@@ -24,18 +24,20 @@ export function parseReporte(texto) {
   if (ini >= 0) {
     for (const l of lineas.slice(ini + 1)) {
       if (/^##\s/.test(l)) break;
-      const m = /^-\s+Reporte:\s*(.*?)\s*$/.exec(l);
-      if (m) { valor = m[1]; break; }
+      const m = /^-\s+Reporte:\s*(.*?)\s*$/i.exec(l);
+      if (m && valor !== null) throw new Error('la línea Reporte aparece dos veces');
+      if (m) valor = m[1];
     }
   }
   if (valor === null) return { ruta: RUTA_POR_DEFECTO, porDefecto: true };
   const [primera, ...resto] = valor.split(';').map((p) => p.trim()).filter(Boolean);
   if (!primera) throw new Error('la línea Reporte está vacía');
-  if (primera === 'no') return { no: true };
+  if (primera.toLowerCase() === 'no') return { no: true };
   const r = { ruta: primera };
   for (const p of resto) {
     const corte = /^corte\s+(\d{1,2}):(\d{2})(?:\s+(\S+))?$/.exec(p);
     const fuera = /^fuera de\s+([A-Za-z0-9-]+):\s*link\s+(\S+)$/.exec(p);
+    if ((corte && r.corte) || (fuera && r.fuera)) throw new Error(`parte de Reporte repetida: «${p}»`);
     if (corte && Number(corte[1]) < 24 && Number(corte[2]) < 60 && Number(corte[1]) + Number(corte[2]) > 0) {
       r.corte = { h: Number(corte[1]), m: Number(corte[2]) };
       if (corte[3]) r.zona = zonaValida(corte[3]);
@@ -79,16 +81,20 @@ export function rutaDelReporte(plantilla, { dia, terminal, home }) {
   return abs;
 }
 
-// Un slug legible (build_id, rama: tramos de solo minúsculas o solo dígitos,
-// de hasta 16, unidos por - _ . /) no es un token aunque mida 32 o más; la
-// regla genérica de redactar lo borraría. Un tramo mixto (UUID, base64) o un
-// prefijo de token conocido en cualquier tramo nunca se guarda como slug.
-const SLUG = /(?<![A-Za-z0-9_-])(?:[a-z]{1,16}|[0-9]{1,16})(?:[-_./](?:[a-z]{1,16}|[0-9]{1,16}))+(?![A-Za-z0-9_-])/g;
-const PREFIJO_TOKEN = /(?:^|[-_./])(?:gh[pousr]_|github_pat|sk-|xox[abpr]-|aiza|akia|asia|eyj)/i;
+// Un slug legible (build_id, rama: tramos en minúsculas que empiezan con letra,
+// o solo dígitos, de hasta 16, unidos por - _ . /) no es un token aunque mida
+// 32 o más; la regla genérica de redactar lo borraría. Nunca se guarda como
+// slug lo que lleva mayúsculas o tramos como 123e4567 (base64, UUID), lo que es
+// todo hexadecimal, ni lo que trae un prefijo de token conocido en algún tramo.
+// Hueco aceptado: una frase larga solo en minúsculas con guiones no se redacta.
+const TRAMO = '(?:[a-z][a-z0-9]{0,15}|[0-9]{1,16})';
+const SLUG = new RegExp(`(?<![A-Za-z0-9_-])${TRAMO}(?:[-_./]${TRAMO})+(?![A-Za-z0-9_-])`, 'g');
+const PREFIJO_TOKEN = /(?:^|[-_./])(?:gh[pousr]_|github_pat|sk-|xox[abpr]-)/;
+const TODO_HEX = /^[0-9a-f]+(?:[-_./][0-9a-f]+)*$/;
 export function redactarReporte(texto) {
   const guardados = [];
   const t = String(texto ?? '').replace(SLUG, (s) => {
-    if (s.length < 32 || PREFIJO_TOKEN.test(s)) return s;
+    if (s.length < 32 || PREFIJO_TOKEN.test(s) || TODO_HEX.test(s)) return s;
     guardados.push(s);
     return `\u0000${guardados.length - 1}\u0000`;
   });
@@ -101,7 +107,7 @@ export function armarBloque(cuerpo, { ahoraMs, zona, build }) {
   if (faltan.length) throw new Error(`al bloque le falta: ${faltan.map((s) => `«- ${s}:»`).join(', ')}`);
   const r = relojEn(ahoraMs, zona);
   const hora = `${String(r.h).padStart(2, '0')}:${String(r.mi).padStart(2, '0')}`;
-  if (build && !NOMBRE.test(build)) throw new Error(`build_id inválido: «${build}»`);
+  if (build && (!NOMBRE.test(build) || redactarReporte(build) !== build)) throw new Error(`build_id inválido: «${redactarReporte(build)}»`);
   return `## ${hora} · ${build || 'sin build'}\n${c}\n`;
 }
 
@@ -114,16 +120,31 @@ export function reportar({ cuerpo, terminal, build, descriptor, ahoraMs, host, h
     return { accion: 'link', direccion: c.fuera.link, bloque, mensaje: `link: ${c.fuera.link}\n\n${bloque}` };
   }
   const ruta = rutaDelReporte(c.ruta, { dia: diaDelReporte(ahoraMs, c), terminal, home });
-  escribir(ruta, bloque);
+  escribir(ruta, bloque, home);
   return { accion: 'agregado', ruta, mensaje: `agregado: ${ruta}${c.porDefecto ? ' (valor por defecto)' : ''}` };
 }
 
-function agregarAlArchivo(ruta, bloque) {
+// La carpeta, ya resuelta (symlinks incluidos), debe seguir dentro del home; el
+// archivo se abre sin seguir un symlink final.
+function agregarAlArchivo(ruta, bloque, home) {
+  const raiz = fs.realpathSync(home);
+  const dentro = (d) => d === raiz || d.startsWith(raiz + path.sep);
+  let existente = path.dirname(ruta);
+  while (!fs.existsSync(existente)) existente = path.dirname(existente);
+  if (!dentro(fs.realpathSync(existente))) throw new Error(`la carpeta del reporte sale del home: ${existente}`);
   fs.mkdirSync(path.dirname(ruta), { recursive: true });
-  const st = fs.lstatSync(ruta, { throwIfNoEntry: false });
-  if (st && !st.isFile()) throw new Error(`el reporte no es un archivo normal: ${ruta}`);
-  const previo = Boolean(st && st.size > 0);
-  fs.appendFileSync(ruta, previo ? `\n${bloque}` : bloque);
+  if (!dentro(fs.realpathSync(path.dirname(ruta)))) throw new Error(`la carpeta del reporte sale del home: ${path.dirname(ruta)}`);
+  const k = fs.constants;
+  let fd;
+  try { fd = fs.openSync(ruta, k.O_WRONLY | k.O_APPEND | k.O_CREAT | (k.O_NOFOLLOW ?? 0), 0o600); } catch (e) {
+    if (e.code === 'ELOOP') throw new Error(`el reporte no es un archivo normal: ${ruta}`);
+    throw e;
+  }
+  try {
+    const st = fs.fstatSync(fd);
+    if (!st.isFile()) throw new Error(`el reporte no es un archivo normal: ${ruta}`);
+    fs.writeSync(fd, st.size > 0 ? `\n${bloque}` : bloque);
+  } finally { fs.closeSync(fd); }
 }
 
 export function parseArgs(argv) {
