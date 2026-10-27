@@ -102,6 +102,10 @@ export type LinkBuildState = {
   touched_at?: number
   /** The current build went out as done; the state only holds `open` until they end. */
   closed?: true
+  /** The current build has declarations no poll has carried yet. */
+  unsent?: true
+  /** Builds displaced before a poll carried their last declaration, oldest first; one goes out per poll. */
+  pending?: Array<{ declared: Record<string, unknown>, started_at: string, at: number }>
 }
 
 declare module 'claude-code' {

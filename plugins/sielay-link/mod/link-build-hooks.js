@@ -8,6 +8,7 @@
 // came back empty, so a /clear never drops the build.
 
 import { declareBuild, subagentUp, subagentSeen, subagentDown, addUsage, addActiveTime, forgetIfDone, buildReport, pruneExpired, openBuildIds } from './link-build-state.js'
+import { markSent, pendingReport } from './link-build-pending.js'
 
 // $.state reference: literal plugin/key, declared in each file that uses it.
 const BUILD = /** @type {const} */ ({ plugin: 'sielay-link', key: 'build' })
@@ -15,7 +16,7 @@ const MAX_TRIES = 5
 
 /** @typedef {import('claude-code').EngineInterface} Engine */
 /** @typedef {import('../types/index.js').LinkBuildState} BuildState */
-/** @typedef {{ buildCarry: BuildState|null, buildError: string|null }} BuildRuntime */
+/** @typedef {{ buildCarry: BuildState|null, buildError: string|null, sentTouchedAt?: number }} BuildRuntime */
 
 /**
  * Applies `fn` to the build and writes it when it changed. The one place that
@@ -112,6 +113,19 @@ export async function pollBuildFields($, rt) {
   const { state, now } = await update($, rt, (s, at) => pruneExpired(s, at))
   if (!state) return {}
   const ids = openBuildIds(state, now)
+  const queued = pendingReport(state, now)
+  rt.sentTouchedAt = queued ? undefined : state.touched_at
+  if (queued?.build) {
+    // a displaced build goes out first; the current one rides as open so the hub keeps it
+    const current = state.closed ? [] : [String(state.declared.build_id)]
+    const others = [...current, ...ids].filter(id => id !== queued.build?.build_id)
+    return { build: queued.build, ...(others.length > 0 ? { open_builds: others } : {}) }
+  }
+  if (queued) {
+    $.ui.log(`sielay-link: build en cola no enviado, campo inválido: ${queued.error}`)
+    await update($, rt, s => markSent(s, state.pending?.[0]?.declared, undefined))
+    return pollBuildFields($, rt)
+  }
   const open = ids.length > 0 ? { open_builds: ids } : {}
   if (state.closed) return { build: null, ...open }
   const report = buildReport(state, now)
@@ -135,9 +149,10 @@ export async function pollBuild($, rt) {
 }
 
 /**
- * After a poll went through: a build it carried as `done` is forgotten.
+ * After a poll went through: a queued build it carried leaves the queue, the
+ * current one stops being unsent, and a build it carried as `done` is forgotten.
  * @param {Engine} $ @param {BuildRuntime} rt @param {Record<string, unknown>} session the session the poll sent
  */
 export async function afterPoll($, rt, session) {
-  if (session.build !== undefined) await update($, rt, s => forgetIfDone(s, session.build))
+  if (session.build !== undefined) await update($, rt, s => forgetIfDone(markSent(s, session.build, rt.sentTouchedAt), session.build))
 }
