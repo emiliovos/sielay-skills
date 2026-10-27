@@ -112,3 +112,72 @@ test('onInbound hears of each message once, where it is injected: not for a rede
   await h.accept('m8', { instanceId: 'inst', decide: async () => {}, ack: async () => {} })
   assert.deepEqual(heard, [['m8', true]])
 })
+
+const notice = (kind, payload) => ({ id: `n-${kind}`, kind, payload })
+const merge = { repo: 'o/r', pr: 7, sha: 'abc1234', files: ['a.js'] }
+
+async function pollNotices(notices) {
+  const injected = []
+  const shown = []
+  const h = createInboundHandler({
+    store: memStore(),
+    adapter: { inject: async t => void injected.push(t) },
+    readMode: async () => ({ mode: 'default', fresh: false }),
+    onStrip: async () => {},
+    show: line => void shown.push(line),
+  })
+  await h.handlePoll('inst', { messages: [], strip: [], notices })
+  return { injected, shown }
+}
+
+test('notice repo_merge_started: shown in the log, no turn', async () => {
+  const { injected, shown } = await pollNotices([notice('repo_merge_started', merge)])
+  assert.equal(injected.length, 0)
+  assert.equal(shown.length, 1)
+  assert.match(shown[0], /^aviso del hub · Empezó el merge del PR #7 en o\/r/)
+})
+
+test('notice ci_finished with conclusion success: shown in the log, no turn', async () => {
+  const { injected, shown } = await pollNotices([notice('ci_finished', { workflow: 'validate', repo: 'o/r', branch: 'x', conclusion: 'success' })])
+  assert.equal(injected.length, 0)
+  assert.match(shown[0], /Terminó el CI «validate».*success/)
+})
+
+test('notice ci_finished that is not success opens a turn', async () => {
+  for (const conclusion of ['failure', 'cancelled', 'timed_out', undefined]) {
+    const { injected, shown } = await pollNotices([notice('ci_finished', { workflow: 'validate', repo: 'o/r', branch: 'x', conclusion })])
+    assert.equal(shown.length, 0, String(conclusion))
+    assert.equal(injected.length, 1, String(conclusion))
+    assert.match(injected[0], /^— Aviso del hub de sielay/)
+  }
+})
+
+test('notice repo_merged opens a turn, with its rebase instruction', async () => {
+  const { injected, shown } = await pollNotices([notice('repo_merged', merge)])
+  assert.equal(shown.length, 0)
+  assert.equal(injected.length, 1)
+  assert.match(injected[0], /rebasa/)
+})
+
+test('an unknown notice kind opens a turn, as before', async () => {
+  const { injected, shown } = await pollNotices([notice('deploy_verified', { x: 1 })])
+  assert.equal(shown.length, 0)
+  assert.equal(injected.length, 1)
+  assert.match(injected[0], /deploy_verified/)
+})
+
+test('build and peer notices open a turn', async () => {
+  const { injected, shown } = await pollNotices([
+    notice('peer_unread', { to: 'a/b/c', minutes: 20, conversation_id: 'c1' }),
+    notice('build_in_main', { build_id: 'b-1', ref: 'main' }),
+  ])
+  assert.equal(shown.length, 0)
+  assert.equal(injected.length, 2)
+})
+
+test('without a show hook, a quiet kind still reaches the model', async () => {
+  const injected = []
+  const h = createInboundHandler({ store: memStore(), adapter: { inject: async t => void injected.push(t) }, readMode: async () => ({ mode: 'default', fresh: false }), onStrip: async () => {} })
+  await h.handlePoll('inst', { messages: [], strip: [], notices: [notice('repo_merge_started', merge)] })
+  assert.equal(injected.length, 1)
+})

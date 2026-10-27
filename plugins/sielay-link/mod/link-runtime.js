@@ -208,6 +208,7 @@ export async function startLink($, rt) {
       if (value[d.conversation_id] !== address) await $.state.set(CONVERSATIONS, { ...value, [d.conversation_id]: address })
     },
     log: msg => $.ui.log(`sielay-link: ${msg}`),
+    show: line => $.ui.log(line),
   })
   rt.loop = createPollLoop({
     schedule: (ms, fn) => void $.clock.after(ms, fn),
