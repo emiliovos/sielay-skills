@@ -24,7 +24,7 @@ export function parseReporte(texto) {
   if (ini >= 0) {
     for (const l of lineas.slice(ini + 1)) {
       if (/^##\s/.test(l)) break;
-      const m = /^\s*-\s+Reporte:\s*(.*?)\s*$/i.exec(l);
+      const m = /^-\s+Reporte:\s*(.*?)\s*$/.exec(l);
       if (m) { valor = m[1]; break; }
     }
   }
@@ -35,14 +35,19 @@ export function parseReporte(texto) {
   const r = { ruta: primera };
   for (const p of resto) {
     const corte = /^corte\s+(\d{1,2}):(\d{2})(?:\s+(\S+))?$/.exec(p);
-    const fuera = /^fuera de\s+([A-Za-z0-9._-]+):\s*link\s+(\S+)$/.exec(p);
-    if (corte && Number(corte[1]) < 24 && Number(corte[2]) < 60) {
+    const fuera = /^fuera de\s+([A-Za-z0-9-]+):\s*link\s+(\S+)$/.exec(p);
+    if (corte && Number(corte[1]) < 24 && Number(corte[2]) < 60 && Number(corte[1]) + Number(corte[2]) > 0) {
       r.corte = { h: Number(corte[1]), m: Number(corte[2]) };
-      if (corte[3]) r.zona = corte[3];
+      if (corte[3]) r.zona = zonaValida(corte[3]);
     } else if (fuera) r.fuera = { host: fuera[1], link: fuera[2] };
     else throw new Error(`parte de Reporte que no se entiende: «${p}»`);
   }
   return r;
+}
+
+function zonaValida(zona) {
+  try { new Intl.DateTimeFormat('en', { timeZone: zona }); } catch { throw new Error(`zona desconocida: «${zona}»`); }
+  return zona;
 }
 
 // Fecha y hora de pared en la zona (o la local del proceso, sin zona).
@@ -67,17 +72,19 @@ export function diaDelReporte(ahoraMs, { corte, zona } = {}) {
 export function rutaDelReporte(plantilla, { dia, terminal, home }) {
   if (!NOMBRE.test(terminal)) throw new Error(`nombre de terminal inválido: «${terminal}»`);
   const r = plantilla.replaceAll('{AAMMDD}', dia).replaceAll('{terminal}', terminal);
-  if (r.split(/[\\/]/).includes('..')) throw new Error('la ruta del reporte no puede llevar ..');
-  const abs = r === '~' || r.startsWith('~/') ? path.join(home, r.slice(1)) : r;
+  if (r.split(/[\\/]/).some((t) => t.startsWith('.'))) throw new Error('la ruta del reporte no puede llevar .. ni carpetas o archivos ocultos');
+  const abs = r.startsWith('~/') ? path.join(home, r.slice(1)) : r;
   if (!path.isAbsolute(abs)) throw new Error('la ruta del reporte debe ser absoluta o empezar con ~/');
+  if (!abs.startsWith(path.join(home, path.sep)) || !abs.endsWith('.md')) throw new Error('el reporte debe ser un .md dentro del home');
   return abs;
 }
 
-// Un slug (build_id, rama: segmentos de hasta 16 caracteres unidos por - _ . /)
-// no es un token aunque mida 32 o más; la regla genérica de redactar lo borraría.
-// Los prefijos de token conocidos nunca se guardan como slug.
-const SLUG = /(?<![A-Za-z0-9_-])[A-Za-z0-9]{1,16}(?:[-_./][A-Za-z0-9]{1,16})+(?![A-Za-z0-9_-])/g;
-const PREFIJO_TOKEN = /^(?:gh[pousr]_|github_pat_|sk-|xox[abpr]-|AKIA|ASIA|eyJ)/;
+// Un slug legible (build_id, rama: tramos de solo minúsculas o solo dígitos,
+// de hasta 16, unidos por - _ . /) no es un token aunque mida 32 o más; la
+// regla genérica de redactar lo borraría. Un tramo mixto (UUID, base64) o un
+// prefijo de token conocido en cualquier tramo nunca se guarda como slug.
+const SLUG = /(?<![A-Za-z0-9_-])(?:[a-z]{1,16}|[0-9]{1,16})(?:[-_./](?:[a-z]{1,16}|[0-9]{1,16}))+(?![A-Za-z0-9_-])/g;
+const PREFIJO_TOKEN = /(?:^|[-_./])(?:gh[pousr]_|github_pat|sk-|xox[abpr]-|aiza|akia|asia|eyj)/i;
 export function redactarReporte(texto) {
   const guardados = [];
   const t = String(texto ?? '').replace(SLUG, (s) => {
@@ -102,8 +109,8 @@ export function reportar({ cuerpo, terminal, build, descriptor, ahoraMs, host, h
   const c = parseReporte(descriptor);
   if (c.no) return { accion: 'no', mensaje: 'no: el contrato dice «Reporte: no»' };
   const bloque = armarBloque(cuerpo, { ahoraMs, zona: c.zona, build });
-  const corto = String(host).split('.')[0];
-  if (c.fuera && corto !== c.fuera.host) {
+  const corto = String(host).split('.')[0].toLowerCase();
+  if (c.fuera && corto !== c.fuera.host.toLowerCase()) {
     return { accion: 'link', direccion: c.fuera.link, bloque, mensaje: `link: ${c.fuera.link}\n\n${bloque}` };
   }
   const ruta = rutaDelReporte(c.ruta, { dia: diaDelReporte(ahoraMs, c), terminal, home });
@@ -113,7 +120,9 @@ export function reportar({ cuerpo, terminal, build, descriptor, ahoraMs, host, h
 
 function agregarAlArchivo(ruta, bloque) {
   fs.mkdirSync(path.dirname(ruta), { recursive: true });
-  const previo = fs.existsSync(ruta) && fs.statSync(ruta).size > 0;
+  const st = fs.lstatSync(ruta, { throwIfNoEntry: false });
+  if (st && !st.isFile()) throw new Error(`el reporte no es un archivo normal: ${ruta}`);
+  const previo = Boolean(st && st.size > 0);
   fs.appendFileSync(ruta, previo ? `\n${bloque}` : bloque);
 }
 

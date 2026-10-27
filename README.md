@@ -65,13 +65,13 @@ Todos los modos, también `continuar` y `autonomo`, terminan agregando un bloque
 - Retro: qué salió bien · qué salió mal · qué mejorar
 ```
 
-Lo escribe `scripts/reporte.mjs`, que redacta secretos y solo agrega, nunca borra. Por defecto va a `~/handoffs/reportes/{AAMMDD}-{terminal}.md`, con la fecha local. Una cuarta línea opcional en `## Cierre de sesión` lo cambia:
+Lo escribe `scripts/reporte.mjs`, que redacta secretos y solo agrega, nunca borra. Solo escribe en un `.md` dentro del home, sin carpetas ocultas ni symlinks. Por defecto va a `~/handoffs/reportes/{AAMMDD}-{terminal}.md`, con la fecha local. Una cuarta línea opcional en `## Cierre de sesión` lo cambia:
 
 ```
 - Reporte: ~/handoffs/dia-{AAMMDD}/reportes/{terminal}.md; corte 08:00 America/Mexico_City; fuera de srv1: link ana/srv1/coord
 ```
 
-- **`corte 08:00 <zona>`:** a partir de esa hora, el bloque va al reporte del día siguiente. Así la noche se lee en el reporte de la mañana.
+- **`corte 08:00 <zona>`:** el reporte de cada día junta lo que pasó desde las 08:00 del día anterior hasta las 07:59 de ese día, y se lee esa mañana.
 - **`fuera de <host>: link <dirección>`:** una sesión que corre en otro host no escribe nada. Manda el bloque a esa dirección por mensajería entre sesiones.
 - **`Reporte: no`:** apaga el reporte.
 

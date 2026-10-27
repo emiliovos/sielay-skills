@@ -39,6 +39,10 @@ test('sin la línea vale el valor por defecto; «no» apaga el reporte; una part
   assert.deepEqual(parseReporte('## Cierre de sesión\n- Reporte: no\n'), { no: true });
   assert.throws(() => parseReporte('## Cierre de sesión\n- Reporte: ~/r.md; cada hora\n'), /no se entiende/);
   assert.throws(() => parseReporte('## Cierre de sesión\n- Reporte: ~/r.md; corte 25:00\n'), /no se entiende/);
+  assert.throws(() => parseReporte('## Cierre de sesión\n- Reporte: ~/r.md; corte 00:00\n'), /no se entiende/);
+  assert.throws(() => parseReporte('## Cierre de sesión\n- Reporte: ~/r.md; corte 08:00 Marte/Olimpo\n'), /zona desconocida/);
+  assert.throws(() => parseReporte('## Cierre de sesión\n- Reporte: ~/r.md; fuera de srv1.ejemplo.com: link a/b/c\n'), /no se entiende/);
+  assert.deepEqual(parseReporte('## Cierre de sesión\n  - Reporte: no\n'), { ruta: RUTA_POR_DEFECTO, porDefecto: true });
 });
 
 test('con corte, lo de la noche y lo de antes del corte van al mismo día; desde el corte, al siguiente', () => {
@@ -50,11 +54,14 @@ test('con corte, lo de la noche y lo de antes del corte van al mismo día; desde
   assert.equal(diaDelReporte(Date.parse('2026-12-31T23:30:00Z'), { corte: { h: 20, m: 0 }, zona: 'UTC' }), '270101');
 });
 
-test('rutaDelReporte expande ~ y rechaza terminal rara, .. y rutas relativas', () => {
+test('rutaDelReporte expande ~ y solo acepta un .md visible dentro del home', () => {
   assert.equal(rutaDelReporte('~/r/{AAMMDD}-{terminal}.md', { dia: '261027', terminal: 't-2', home: '/h' }), '/h/r/261027-t-2.md');
   assert.throws(() => rutaDelReporte('~/r/{terminal}.md', { dia: '1', terminal: '../x', home: '/h' }), /terminal inválido/);
   assert.throws(() => rutaDelReporte('~/r/../{terminal}.md', { dia: '1', terminal: 't', home: '/h' }), /\.\./);
   assert.throws(() => rutaDelReporte('r/{terminal}.md', { dia: '1', terminal: 't', home: '/h' }), /absoluta/);
+  for (const malo of ['~/.bashrc', '~/.ssh/authorized_keys.md', '~/r/{terminal}.txt', '/etc/r/{terminal}.md', '/hx/{terminal}.md']) {
+    assert.throws(() => rutaDelReporte(malo, { dia: '1', terminal: 't', home: '/h' }), /\.md dentro del home|ocultos/, malo);
+  }
 });
 
 test('el bloque lleva hora de la zona y build, y exige Hecho, Quedó y Retro', () => {
@@ -73,6 +80,24 @@ test('redacta tokens y SHAs largos, pero deja los slugs largos (build_id, ramas)
   assert.equal(t.includes('ab12'.repeat(10)), false);
   assert.match(t, /password=\[redactado\]/);
   assert.equal(redactarReporte(`xoxb-${'1234567890ab-'.repeat(3)}x`).includes('1234567890ab'), false);
+  assert.match(redactarReporte('rama feat/261027-checkpoint-reporte-largo'), /feat\/261027-checkpoint-reporte-largo/);
+});
+
+test('formas de token que parecen slug se redactan igual que con redactar', () => {
+  // Valores inventados con la forma de cada familia de token.
+  const casos = [
+    `AIza${'SyD-9tSrke72PouQ'}MnMX-a7eZSW0jkFMBWY`,
+    ['123e4567', 'e89b', '12d3', 'a456', '426614174000'].join('-'),
+    `AAHd8kQ-x3Lm9pQrStUv_WxYz${'0123456789'}`,
+    `secrets/xoxb-${'1234567890ab-'.repeat(2)}abcdefgh`,
+    `cfg.sk-${'abcdefgh12345678-'.repeat(2)}x`,
+    `notas/sk-${'abcdefghijklmnop-'.repeat(2)}qr`,
+  ];
+  for (const c of casos) {
+    const t = redactarReporte(`dato ${c} fin`);
+    assert.match(t, /\[redactado\]/, c);
+    assert.equal(t.includes(c), false, c);
+  }
 });
 
 test('reportar agrega en el host declarado y, fuera de él, devuelve la dirección sin escribir', () => {
@@ -82,6 +107,7 @@ test('reportar agrega en el host declarado y, fuera de él, devuelve la direcci�
   const r = reportar({ ...base, host: 'srv1.ejemplo' });
   assert.equal(r.ruta, '/h/notas/dia-261027/reportes/t-2.md');
   assert.equal(escritos.length, 1);
+  assert.equal(reportar({ ...base, host: 'SRV1' }).accion, 'agregado');
   const l = reportar({ ...base, host: 'otra' });
   assert.equal(l.accion, 'link');
   assert.equal(l.direccion, 'ana/srv1/coord');
@@ -93,11 +119,10 @@ test('reportar agrega en el host declarado y, fuera de él, devuelve la direcci�
 test('la CLI agrega al archivo sin borrar lo anterior', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'reporte-'));
   const desc = path.join(dir, 'CLAUDE.md');
-  const ruta = path.join(dir, 'reportes', '{terminal}.md');
-  fs.writeFileSync(desc, `## Cierre de sesión\n- Reporte: ${ruta}\n`);
-  const correr = (build) => spawnSync(process.execPath,
-    [SCRIPT, '--terminal', 't-2', '--build', build, '--descriptor', desc, '--ahora', '2026-10-27T04:28:00Z'],
-    { input: CUERPO, encoding: 'utf8', env: { ...process.env, TZ: 'UTC' } });
+  fs.writeFileSync(desc, '## Cierre de sesión\n- Reporte: ~/reportes/{terminal}.md\n');
+  const correr = (build, terminal = 't-2') => spawnSync(process.execPath,
+    [SCRIPT, '--terminal', terminal, '--build', build, '--descriptor', desc, '--ahora', '2026-10-27T04:28:00Z'],
+    { input: CUERPO, encoding: 'utf8', env: { ...process.env, HOME: dir, TZ: 'UTC' } });
   for (const b of ['uno-x', 'dos-x']) {
     const r = correr(b);
     assert.equal(r.status, 0, r.stderr);
@@ -105,6 +130,10 @@ test('la CLI agrega al archivo sin borrar lo anterior', () => {
   }
   const txt = fs.readFileSync(path.join(dir, 'reportes', 't-2.md'), 'utf8');
   assert.equal(txt, `## 04:28 · uno-x\n${CUERPO}\n\n## 04:28 · dos-x\n${CUERPO}\n`);
+  fs.symlinkSync(desc, path.join(dir, 'reportes', 'enlace.md'));
+  const enlace = correr('tres-x', 'enlace');
+  assert.equal(enlace.status, 1);
+  assert.match(enlace.stderr, /no es un archivo normal/);
   const malo = spawnSync(process.execPath, [SCRIPT, '--terminal', 't-2'], { input: 'sin secciones', encoding: 'utf8' });
   assert.equal(malo.status, 1);
   fs.rmSync(dir, { recursive: true, force: true });

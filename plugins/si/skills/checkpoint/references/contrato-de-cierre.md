@@ -13,8 +13,9 @@ Referencia del Paso 0.2 de `checkpoint`. Léela cuando el repo no tenga la secci
 ```
 
 La línea `Reporte` es opcional; sus partes van separadas por `;`:
-- **Ruta:** absoluta o con `~/`. `{AAMMDD}` es el día del reporte y `{terminal}`, el nombre de la sesión. Sin `..`.
-- **`corte HH:MM <zona>`:** desde esa hora (en esa zona), el bloque va al reporte del día siguiente, para que la noche se lea en el reporte de la mañana. Sin corte, el día es la fecha local y la hora sale en la zona del proceso.
+- **Ruta:** un `.md` dentro del home (absoluta o con `~/`), sin `..` ni carpetas o archivos ocultos; si ya existe, debe ser un archivo normal (no un symlink). `{AAMMDD}` es el día del reporte y `{terminal}`, el nombre de la sesión.
+- **`corte HH:MM <zona>`:** el reporte de un día junta lo que pasó desde el corte del día anterior hasta su corte: con `corte 08:00`, lo de las 08:00 del 26 a las 07:59 del 27 va al reporte del 27, que se lee esa mañana. `00:00` no vale (es lo mismo que sin corte). Sin corte, el día es la fecha local y la hora sale en la zona del proceso.
+- **`fuera de <host>`:** el nombre corto del host, sin dominio; se compara sin mayúsculas.
 - **`fuera de <host>: link <dirección>`:** si la sesión corre en otro host (se compara el `hostname` corto), no se escribe nada: el bloque se manda por mensajería entre sesiones a esa dirección, y quien la atiende lo pega en el archivo.
 
 ```
