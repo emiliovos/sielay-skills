@@ -3,7 +3,7 @@ name: build-auto
 description: "Lleva un proyecto de la idea a merge o a producción con un flujo de 8 etapas (Frame → Evidencia → Plan → Implementar → Verificar → Revisar → Entregar → Cierre): tú apruebas el rumbo y después la evidencia junto con el plan; luego los agentes implementan en carriles paralelos, prueban, revisan y entregan solos, siempre por la compuerta de pruebas del repo, y al final queda una retro con cifras que alimenta el siguiente build. Con `--fix` corre el flujo corto de arreglo (Síntoma → Causa probada → Arreglo con prueba de regresión → Verificar → Revisar → Entregar) con una sola aprobación, la del diagnóstico. Descubre del repo cómo prueba, entrega y despliega (CLAUDE.md, README, hooks, scripts) y solo pregunta lo que falte. Usa AgentKit (/ak:*) si está instalado y, si no, subagentes que producen los mismos artefactos. Actívalo cuando el usuario diga '/build-auto' o pida explícitamente llevar un proyecto en modo autónomo hasta merge o producción. También ante un bug, una alerta, una prueba en rojo, una regresión o un «arregla X», aunque sea corto: propone `--fix`. Produce: contrato aprobado, plan con carriles y contrato congelado, un PR de integración o pushes revisados, evidencia de cada criterio, un reporte final y la retro."
 user-invocable: true
 when_to_use: "Invoke al arrancar trabajo de varias etapas en un repo (feature, integración, refactor grande) cuando el usuario quiere aprobar solo el rumbo y dejar que los agentes ejecuten hasta un alcance acordado (merge a la rama principal o producción). Sirve para repos con PRs y compuerta de merge y para repos que empujan directo a main y publican en el mismo servidor. No para un cambio de una línea ni para preguntas sueltas."
-argument-hint: "\"<objetivo>\" [--alcance merge|produccion] [--chico] [--fix] [--pausas] [--terminales [N]] [--checkpoint] | --semana"
+argument-hint: "\"<objetivo>\" [--alcance merge|produccion] [--chico] [--una] [--fix] [--pausas] [--terminales [N]] [--checkpoint] | --semana"
 keywords: [autonomo, backbone, agentkit, plan, paralelo, terminales, compuerta, pruebas, deploy, red-team, workflow]
 metadata:
   category: workflow
@@ -11,7 +11,7 @@ metadata:
   deps: "git en el repo destino. Recomendado: AgentKit (skills /ak:*); sin él, cada etapa se hace con subagentes nativos. Opcional: /si:checkpoint para el cierre (--checkpoint) y red a context7.com (o su MCP) para consultar la doc de dependencias en las etapas 2 y 3."
   installs: []
   risk: none
-  version: "2.6.1"
+  version: "2.7.0"
 ---
 
 # Build-auto: backbone de proyecto autónomo
@@ -27,7 +27,8 @@ Tú (el agente) coordinas un proyecto completo en **8 etapas**. El usuario aprue
 |---|---|
 | `"<objetivo>"` | Qué quiere el usuario y cómo se ve terminado. Si falta, es la primera pregunta del Frame. |
 | `--alcance merge\|produccion` | Hasta dónde llega la autonomía. `merge` = el cambio queda en la rama principal por la compuerta (merge del PR, o en `main directo` el push a main) y **no se publica**. `produccion` = además se publica. Sin el flag, se pregunta en el Frame; `produccion` nunca se asume. |
-| `--chico` | Variante corta **sin la etapa de Evidencia** (dos aprobaciones: Frame y plan): plan rápido (`/ak:plan --fast`; en modo nativo, un `planner` con plan de una o dos fases), sin red team ni paralelo, y `/ak:cook --auto` (o un `fullstack-developer`). |
+| `--chico` | Variante corta **sin la etapa de Evidencia** (dos aprobaciones: Frame y plan): plan rápido (`/ak:plan --fast`; en modo nativo, un `planner` con plan de una o dos fases), sin red team ni paralelo, y `/ak:cook --auto` (o un `fullstack-developer`). Con `--una` la aprobación del plan se une a la del Frame (ver `--una`). |
+| `--una` | Solo vale junto a `--chico`; sin `--chico` se ignora y se dice en el Frame. Pide **una sola aprobación**, en una tarjeta sobre la captura de antes y después del cambio (qué hay hoy y qué quedará), que nombra el alcance, el destino y si habrá deploy. El sí cubre el merge. Cubre además el deploy solo si el alcance es `--alcance produccion` y el repo declara un comando de deploy ligero en sus referencias (ver `references/receta-de-deploy.md`); si el repo no declara uno, cubre solo el merge y el deploy sigue con la receta de siempre, con su propia aprobación. No cambia las reglas de `--alcance` ni la de «Nunca publicar sin `--alcance produccion`»: sin `produccion` no hay deploy. |
 | `--fix` | Flujo de **arreglo** para un bug, una alerta, una prueba en rojo o una regresión, aunque sea corto. Seis etapas reales: 1 Síntoma, 2 Causa, 4 Arreglo, 5 Verificar, 6 Revisar y 7 Entregar; no hay Plan (etapa 3). **Una sola aprobación**: el diagnóstico (síntoma + causa + arreglo propuesto) al cerrar la etapa 2. Detalle en «Flujo `--fix`». Incompatible con `--terminales`: ese flag se ignora, y se dice en el Frame. |
 | `--pausas` | Vuelve a **tres aprobaciones** (Frame, Evidencia y Plan por separado). Sin el flag, la Evidencia y el Plan se presentan juntos en una sola aprobación. |
 | `--terminales [N]` | Apagado por defecto. Además de subagentes, reparte carriles a **otras sesiones de Claude Code** en la misma máquina: reusa sesiones `idle` y abre nuevas, hasta N (3 si no se da). Necesita mensajes entre sesiones y tmux; si faltan, se dice en la ficha y todo va a subagentes. Con `--chico` o `--fix` se ignora, y se dice en el Frame. Detalle en `references/terminales.md`. |
@@ -97,7 +98,7 @@ Cada build aprende de los anteriores. Antes de escribir el contrato, lee las ret
 
   Cada «sí» dice dónde se aplica (un paso del plan, un criterio, una regla del carril). Las cifras de esta tabla van al marcador del cierre (`references/cierre-y-retro.md`).
 
-**Elegir el flujo.** Si el pedido es arreglar algo que ya existe (un bug, una alerta, una prueba en rojo, una regresión, «arregla X»), aunque sea corto, el Frame propone `--fix` y lo dice en una línea ("Propongo `--fix`: es un arreglo y queda registrado por etapas"); la persona lo cambia si quiere. `--chico` es para features chicas: si el objetivo cabe en uno o dos archivos y no tiene carriles paralelos, sugiere `--chico`. Con un `--fix` o `--chico` ya dado, no lo discutas.
+**Elegir el flujo.** Si el pedido es arreglar algo que ya existe (un bug, una alerta, una prueba en rojo, una regresión, «arregla X»), aunque sea corto, el Frame propone `--fix` y lo dice en una línea ("Propongo `--fix`: es un arreglo y queda registrado por etapas"); la persona lo cambia si quiere. `--chico` es para features chicas: si el objetivo cabe en uno o dos archivos y no tiene carriles paralelos, sugiere `--chico`. Con un `--fix` o `--chico` ya dado, no lo discutas. Si el cambio es chico, de riesgo bajo y sin datos, auth, compuerta ni deploy pesado, el Frame puede sugerir `--chico --una` en una línea; la persona decide.
 
 ## Contrato entre etapas
 Cada etapa recibe y deja este contrato compacto: **Goal · Scope y no-goals · Evidencia y decisiones · Artefactos · Criterios de aceptación · Riesgos abiertos · Estimado · Autoridad concedida.**
@@ -153,6 +154,7 @@ El costo de un build crece con el tamaño del contexto por el número de turnos.
 | 7 | Entregar | el **comando de entrega del plan**; en `rama+PR`, `/ak:ship` sin `--merge` solo sirve para abrir el PR | el comando de entrega del plan | Autónomo hasta el alcance |
 | 8 | Cierre | retro y marcador (sección «Etapa 8: Cierre») | igual | Autónomo |
 
+- **Con `--chico --una` hay una sola aprobación**, en la etapa 1: la tarjeta (captura de antes y después, alcance, destino y si habrá deploy) cubre el Frame y el plan rápido juntos, y se reporta con un solo `gate`. Cubre el merge; cubre el deploy solo con `--alcance produccion` y con un comando ligero declarado por el repo. Sin esas dos condiciones, el deploy pide su aprobación como siempre. Una autoridad que la tarjeta no nombra no queda concedida.
 - **Cada aprobación cubre el gate que se está mostrando.** Al pedirla, nombra ese gate y el siguiente. Un "sí" o "adelante" a secas aprueba solo ese gate.
 - **Evidencia y Plan van seguidos.** Al aprobarse el Frame, la Evidencia corre en un solo turno en paralelo (exploradores por área de código y, si aplica, un agente de solo lectura sobre datos reales, todos lanzados juntos; tope de ~30 min, y si se pasa, se reporta) y en seguida el Plan. Se presentan juntos en la aprobación 2. Juntarlos no cambia el alcance ni la autoridad concedida, y nunca convierte `merge` en `produccion`.
 - **Pausa automática:** si la Evidencia contradice un supuesto del Frame (el Goal, un criterio, un no-goal o la autoridad), detente ahí, muestra la contradicción y pregunta antes de planear. Con `--pausas`, la Evidencia siempre tiene su propio gate.

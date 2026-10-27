@@ -136,6 +136,14 @@ Solo con `status: "done"`; sale de `retro.yaml` (`cierre-y-retro.md`):
 - **Reestima** cuando el total previsto se mueve más que ±max(0,5 h, 10 % del programado), o al cerrar un carril que se pasó de lo estimado. Siempre con `reason`.
 - Una reestimación es un dato, no una enmienda: no pide aprobación. Solo la pide si el motivo cambia el Goal, los criterios, los no-goals o la autoridad, y entonces es una enmienda normal.
 
+## Deploy ligero de sielay (`--chico --una`)
+Es la declaración que pide `receta-de-deploy.md` para este repo:
+- El comando ligero es la cola de merge con `SIELAY_AUTO_DEPLOY` encendido: al vaciarse la cola publica por sí sola, dentro de la ventana horaria y sin tocar migraciones, dependencias ni `.env`.
+- El sí por PR es la etiqueta `deploy-ok`. La sesión la pone solo con un `aut#N` de Emilio verificado con `authorization_check`, y con un tope de 3 PRs en el rango a publicar.
+- Si la cola sale con código 10 (no es ligero), o el cambio cae fuera de la ventana, el deploy va por `deploy-auto` con su ritual y su aprobación.
+- No existe un camino `--approved`.
+- `flow` sigue siendo `full`, `chico` o `fix`. Con `--una` el flujo es `chico` y hay un solo `gate`, el de la etapa 1.
+
 ## `outcome`
 - `delivered`: se llegó al alcance acordado (merge, o merge y publicación con `produccion`).
 - `stopped`: se detuvo a propósito antes del alcance: lo paró el usuario, quedó un Critical/High tras el tope, un guardarraíl o falta autoridad.

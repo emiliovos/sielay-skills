@@ -30,5 +30,13 @@ Sigue el procedimiento de deploy que declare el repo y que quedó fijado en el p
 - Umbrales medidos con datos de producción, no supuestos.
 - La reinstalación por host es un **momento humano** explícito del plan.
 
+## Deploy ligero declarado (`--una`)
+Con `--chico --una` y `--alcance produccion`, el sí de la tarjeta única puede cubrir el deploy, pero solo a través de un **comando de deploy ligero que el repo declare** en sus referencias. La declaración dice tres cosas:
+- el comando exacto que publica;
+- sus condiciones (por ejemplo, que el cambio no toque migraciones, dependencias ni configuración de entorno, o que caiga dentro de una ventana horaria);
+- cómo se da el sí por cada cambio (una etiqueta, una autorización verificable u otra marca que ponga la persona).
+
+Si el repo no declara ese comando, `--una` no publica: el sí cubre solo el merge y el deploy sigue esta receta con su aprobación propia. Si el comando se niega o el cambio no cumple sus condiciones, el deploy también vuelve a esta receta. Nada de esto sustituye el respaldo, el sello ni la prueba de humo: el comando ligero los trae o no es ligero.
+
 ## Reporte del deploy
 Commit publicado, backup tomado (ruta y chequeo), resultado de cada punto de la prueba de humo y cómo hacer rollback.
