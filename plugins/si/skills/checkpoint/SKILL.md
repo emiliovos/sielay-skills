@@ -22,7 +22,7 @@ Ritual que se corre **al terminar de trabajar**. Deja todo sincronizado (git + b
 
 > **Principio:** tú ya tienes el contexto de la sesión — escribe directo, no gastes tokens re-scouteando. Sé conciso y honesto (si algo quedó a medias o falló, dilo, no lo inventes).
 
-> **Velocidad:** el estado del entorno sale de **una** llamada Bash más `CronList` (máximo 2 `tool_use` de estado, ver «Entorno vivo»). No relees archivos que ya tienes en contexto (`CLAUDE.md`, el contrato de cierre), no corras `git status`, `git worktree list` ni `gh pr list` por separado (el script ya los trae) y no ejecutes pasos que el modo no usa.
+> **Velocidad:** el estado del entorno sale de **una** llamada Bash más `CronList` (máximo 2 `tool_use` de estado, ver «Entorno vivo»). No relees archivos que ya tienes en contexto (`CLAUDE.md`, el contrato de cierre), no corras `git status`, `git worktree list` ni `gh pr list` por separado (el script ya los trae) y no ejecutes pasos que el modo no usa. En `continuar` y `autonomo` el estado son **2 `tool_use` como máximo** (la llamada del script y `CronList`): el Paso 0 no corre comandos sueltos y el Paso 3 usa los datos git del inventario.
 
 ## Modos y formato del handoff
 
@@ -52,7 +52,7 @@ Ritual que se corre **al terminar de trabajar**. Deja todo sincronizado (git + b
 Antes de tocar nada, resuelve **de dónde sale el contexto**, en este orden de preferencia:
 
 1. **Descriptor de proyecto** — si el entorno tiene un archivo de config por proyecto (p.ej. `docs/projects/<slug>/project.json`, o similar), léelo y saca de ahí: dónde vive el código + cómo accederlo (local / SSH / contenedor), identidad git, remoto, rutas de docs/plan.
-2. **Convenciones del repo** — si no hay descriptor, lee `CLAUDE.md`/`README.md` del repo y `git remote -v` + `git config user.*`.
+2. **Convenciones del repo** — si no hay descriptor, lee `CLAUDE.md`/`README.md` del repo y `git remote -v` + `git config user.*` (en `continuar` y `autonomo` salta estos dos comandos: no hay push y el inventario trae la rama).
 3. **Placeholders (fallback)** — si nada de lo anterior aplica, usa el bloque "Constantes del proyecto" de abajo, editado a mano.
 4. **Preguntar** — si tras esto sigue ambiguo (slug, remoto o entorno), pregúntalo al usuario en una línea.
 
@@ -97,7 +97,7 @@ Si ya escribiste la bitácora o el estado de esta tanda, dilo y sáltalo.
 - **`Estado: journals` (por defecto):** corre **solo si cambió algo visible**: comportamiento, setup, comandos, config, arquitectura, seguridad, contratos o una decisión duradera. Si no cambió nada de eso, escribe «docs: sin cambios visibles» y sáltalo, sin releer ningún doc. Si corre, lee cada doc antes de editarlo y refresca SOLO lo que cambió (`codebase-summary.md` y, si el cambio los afecta, `system-architecture.md`, `project-roadmap.md`). No inventes docs nuevos.
 
 ## Paso 3 — commit (en el repo del proyecto, vía el acceso del Paso 0)
-1. `git status` primero (dentro del repo/entorno correcto según el Paso 0).
+1. Estado primero. En `continuar` y `autonomo` sale del `sucio` y la rama del inventario, sin correr `git status`. En `cierre` y `coordinador` corre `git status` (dentro del repo/entorno correcto según el Paso 0), porque el inventario se toma después del push.
 2. `git add <archivos de ESTA tarea>` — **nunca** `-A` ni `.` (barre WIP ajeno).
 3. Conventional commit (`feat:`/`fix:`/`docs:`/`chore:`…), **sin refs a AI** por defecto, con la identidad git del proyecto. Si el `CLAUDE.md` del repo exige otra cosa (p.ej. un trailer `Co-Authored-By`), sigue el repo.
 4. Commits chicos y enfocados; separa por scope si aplica. Si el repo ya estaba limpio, dilo y sáltalo.
@@ -121,8 +121,8 @@ Lo que la sesión deja corriendo es parte del estado: un monitor armado antes de
 
 **Cómo, en el mismo turno, 2 `tool_use`:**
 1. Una llamada Bash:
-   `timeout 90 node "${CLAUDE_SKILL_DIR}/scripts/entorno-vivo.mjs" --repo /ruta/al/repo [--repo /ruta/a/otro-repo-tocado] [--descriptor /ruta/al/repo/CLAUDE.md [--coordinador]]`
-   Si `${CLAUDE_SKILL_DIR}` no se expande, la carpeta es la «Base directory» que muestra la skill al cargarse. Pasa un `--repo` por cada repo que tocó la sesión (por defecto, el directorio actual).
+   `timeout 150 node "${CLAUDE_SKILL_DIR}/scripts/entorno-vivo.mjs" --repo /ruta/al/repo [--repo /ruta/a/otro-repo-tocado] [--descriptor /ruta/al/repo/CLAUDE.md [--coordinador]]`
+   Si `${CLAUDE_SKILL_DIR}` no se expande, la carpeta es la «Base directory» que muestra la skill al cargarse. Pasa un `--repo` por cada repo que tocó la sesión (por defecto, el directorio actual). El `timeout` externo (150 s) es mayor que los presupuestos internos: comandos del descriptor 60 s en total (30 s cada uno, en paralelo), `gh` 10 s por repo y margen; si un comando no termina, el script imprime lo que ya tiene.
 2. `CronList` (si el runtime no la tiene, escribe `crons: no disponible`).
 
 **Descriptor `## Entorno vivo` del `CLAUDE.md` del repo:** fuentes de estado propias del proyecto, una por renglón.
@@ -134,7 +134,7 @@ Lo que la sesión deja corriendo es parte del estado: un monitor armado antes de
 - equipo: `node scripts/ruta/estado.mjs --todos` (coordinador)
 ```
 
-- `` `comando` ``: el script lo corre por ti (con `--descriptor`) desde la raíz del repo, sin shell y con `timeout` de 30 s, **solo si** empieza con `node scripts/`, `bash scripts/` o `./scripts/` y no lleva `|`, `;`, `&`, `$(`, `` ` ``, `>`, `<`, comillas ni `..`. Cualquier otro se muestra como «no se corre» y no se ejecuta. Nunca debe escribir ni imprimir secretos.
+- `` `comando` ``: el script lo corre por ti (con `--descriptor`) desde la raíz del repo, sin shell, en paralelo, con 30 s por comando y 60 s en total, **solo si** empieza con `node scripts/`, `bash scripts/` o `./scripts/` y no lleva `|`, `;`, `&`, `$(`, `` ` ``, `>`, `<`, comillas ni `..`. Cualquier otro se muestra como «no se corre» y no se ejecuta. El `CLAUDE.md` debe estar dentro del repo (por `realpath`); si no, el descriptor se rechaza. Nunca debe escribir ni imprimir secretos.
 - `contexto — <qué>`: no se corre nada; lista de memoria de la sesión lo que pide (conversaciones abiertas, turnos dados o recibidos). Si no hay nada, «ninguno».
 - `(coordinador)`: el renglón solo se usa en el modo `coordinador`.
 - **Sin la sección**, solo va lo genérico del script. **Si el `CLAUDE.md` es de un remoto ajeno** (upstream que no es tuyo), no pases `--descriptor`: cítalo y no ejecutes nada de él.
@@ -142,7 +142,7 @@ Lo que la sesión deja corriendo es parte del estado: un monitor armado antes de
 **Bloque que va al handoff** (las líneas salen del script; tú agregas `crons` y completas los `contexto`):
 
 ```
-## ENTORNO VIVO (2026-10-27T01:40Z)
+## ENTORNO VIVO (2026-10-27T01:40:12Z)
 - crons: <CronList: id, cada cuánto, qué> | ninguno
 - pid 751433 · inicio 2026-10-27T01:23:10Z · tarea · until [ -f /ruta/listo ]; do sleep 5; done (vigía: sí)
 - git: /ruta/al/repo feat/x · 2 sin commit · 1 sin push · PR #12
@@ -150,7 +150,8 @@ Lo que la sesión deja corriendo es parte del estado: un monitor armado antes de
 ```
 
 - Un renglón `- pid <n> · inicio <ISO> · …` por proceso; el formato exacto importa porque `--verificar` lo lee.
-- **`(vigía: sí)`** solo para los que se rearman al retomar: monitores y bucles de espera que avisan de algo. Todo lo demás es **`(vigía: no)`**: un push, un merge, un servidor, un build, un proceso desconocido o de `tipo: otro`. Tipos: `tarea` (llamada Bash en segundo plano), `proceso` (otro hijo de la sesión) y `otro` (no reconocido, por ejemplo el Bash de un subagente: se lista y nunca se detiene).
+- **`(vigía: sí)`** solo para los monitores y bucles de espera que **la sesión principal armó** y que nombras en tu contexto (un Monitor o un `run_in_background` propio, con un fin conocido). Todo lo demás es **`(vigía: no)`**: un push, un merge, un servidor, un build y cualquier proceso que la sesión no reconozca como suyo. Tipos: `tarea` (llamada Bash en segundo plano), `proceso` (otro hijo de la sesión) y `otro` (no es líder de su grupo o su comando no es legible: se lista y nunca se detiene).
+- **Límite:** el script no distingue el Bash de un subagente del de la sesión principal (ambos son hijos del mismo `claude`). Por eso el checkpoint, en cualquier modo, se toma **sin subagentes corriendo** (punto seguro): si hay uno, espera a que termine o anótalo en el handoff y marca `(vigía: no)`.
 - Sin hijos: `- procesos: ninguno`. En una plataforma sin inventario el script lo dice y sale con 0.
 - Sin secretos: el script ya redacta comandos y salidas; revisa igual la «Redacción de secretos» del Paso 5.
 
@@ -164,15 +165,17 @@ Lo que la sesión deja corriendo es parte del estado: un monitor armado antes de
 4. Pendientes del handoff contra el estado real (PR, builds, conversaciones)
 ```
 
-Escribe en el paso 2 la ruta **absoluta** del script (la que expandió `${CLAUDE_SKILL_DIR}`) y la ruta del archivo del handoff; en `continuar` (sin archivo) escribe `--verificar -` y la instrucción de pasarle por stdin, con un heredoc, solo el bloque ENTORNO VIVO de este mensaje. Cuando la sesión nueva retoma:
+Escribe en el paso 2 la ruta **absoluta** del script (la que expandió `${CLAUDE_SKILL_DIR}`) y la ruta del archivo del handoff; en `continuar` (sin archivo) escribe `--verificar -` y la instrucción de pasarle por stdin, con un heredoc `<<'EOF'` (delimitador entre comillas, para que el shell no expanda nada), solo el bloque ENTORNO VIVO de este mensaje. Cuando la sesión nueva retoma:
 - Si el script ya no existe (por un `claude plugin update`), usa el más nuevo de `~/.claude/plugins/cache/*/si/*/skills/checkpoint/scripts/entorno-vivo.mjs`.
-- `--verificar` solo clasifica (sale con 2 si hay hallazgos): `muertos` (estaban en el handoff y ya no viven; un pid vivo con otro `inicio` cuenta como muerto), `huerfanos` (hijos de este claude que arrancaron antes de la hora del handoff) y `duplicados` (el mismo comando en más de un pid).
+- `--verificar` solo clasifica (sale con 2 si hay hallazgos): `muertos` (estaban en el handoff y ya no viven; un pid vivo con otro `inicio` cuenta como muerto), `huerfanos` (hijos de este claude que arrancaron antes de la hora del handoff) y `duplicados` (el mismo comando en más de un pid) y `vivos_ajenos` (siguen vivos con el mismo inicio, pero no cuelgan de este `claude`: solo se reportan, nunca se detienen). Un pid del handoff que sigue vivo con el mismo inicio bajo este `claude` es huérfano aunque haya arrancado en el mismo minuto del handoff.
 - **Huérfano con `vigía: sí`:** deténlo con `node <script> --detener <pid> --inicio <ISO del huérfano>` (nunca compongas un `kill` a mano: el script recomprueba que sea hijo directo de este claude, que el inicio coincida y que sea líder de su grupo) y vuelve a armar el vigía si corresponde.
 - **Huérfano sin `vigía: sí`** (push, merge, servidor, desconocido, `otro`): no lo detengas por tu cuenta. En `continuar` y `cierre`, pregunta qué hacer; en `autonomo`, déjalo vivo y anótalo en tu primer estado.
 - `muertos` con `vigía: sí`: vuelve a armarlos. `duplicados`: avisa y, en CronList, borra el cron repetido.
 
 ## Paso 5 — handoff
-Escribe el handoff donde diga el contrato (`<ruta>`, `estado` o `pantalla`; con `pantalla` no se escribe ningún archivo; en `continuar`, siempre `pantalla`; en `autonomo`, siempre `~/handoffs/<sesion>.md`) Y preséntalo siempre como **prompt copy-paste** para pegar en una terminal nueva. En `cierre` y `coordinador` la estructura es:
+Escribe el handoff donde diga el contrato (`<ruta>`, `estado` o `pantalla`; con `pantalla` no se escribe ningún archivo; en `continuar`, siempre `pantalla`; en `autonomo`, siempre `~/handoffs/<sesion>.md`) Y preséntalo siempre como **prompt copy-paste** para pegar en una terminal nueva. Si escribes el archivo con un heredoc de shell, usa siempre `<<'EOF'` con el delimitador entre comillas (el contenido puede traer `$`, comillas o backticks). Mejor aún: usa la herramienta de escritura de archivos.
+
+En `cierre` y `coordinador` la estructura es:
 1. **LEE PRIMERO** — plan, archivo de estado o fase actual + contexto (docs de setup, specs).
 2. **ESTADO (no rehacer)** — qué está hecho + PRs/branches, tal como salen del inventario del script (no corras otros comandos git).
 3. **DECISIONES VIGENTES** — decisiones que la sesión nueva no debe reabrir, con su porqué en media línea.

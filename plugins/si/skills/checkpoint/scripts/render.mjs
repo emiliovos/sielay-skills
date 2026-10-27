@@ -1,5 +1,6 @@
 // Salida en markdown del inventario, lista para pegar en el handoff.
-const hhmm = (iso) => iso.slice(0, 16) + 'Z';
+// Con segundos: un vigía armado en el mismo minuto del handoff debe quedar antes de `desde`.
+const hora = (iso) => iso;
 
 function lineaGit(g) {
   if (g.error) return `- git: ${g.repo} · ${g.error}`;
@@ -19,7 +20,7 @@ function lineasDescriptor(d) {
 }
 
 export function renderMarkdown(r) {
-  const out = [`## ENTORNO VIVO (${hhmm(r.generado)})`];
+  const out = [`## ENTORNO VIVO (${hora(r.generado)})`];
   if (r.claude) {
     const c = r.claude;
     out.push(`- claude: pid ${c.pid}${c.name ? ` · sesión ${c.name}` : ''}${c.tmux ? ` · tmux ${c.tmux}` : ''}`);
@@ -33,15 +34,17 @@ export function renderMarkdown(r) {
   if (r.sesiones.length) {
     out.push(`- otras sesiones: ${r.sesiones.map((s) => `${s.name ?? s.pid} (${s.status ?? '?'}${s.tmux ? `, ${s.tmux}` : ''})`).join('; ')}`);
   }
+  if (r.descriptor_rechazado) out.push(`- descriptor: rechazado (${r.descriptor_rechazado})`);
   for (const d of r.descriptor ?? []) out.push(...lineasDescriptor(d));
   const v = r.verificacion;
   if (v) {
-    out.push(`## VERIFICACIÓN (handoff de ${hhmm(v.desde)})`);
+    out.push(`## VERIFICACIÓN (handoff de ${hora(v.desde)})`);
     for (const m of v.muertos) out.push(`- muerto: pid ${m.pid} · ${m.comando}`);
     for (const h of v.huerfanos) {
       out.push(`- huérfano: pid ${h.pid} · inicio ${h.inicio} · ${h.tipo} · vigía: ${h.vigia === true ? 'sí' : h.vigia === false ? 'no' : 'desconocido'} · ${h.comando}`);
     }
     for (const d of v.duplicados) out.push(`- duplicado: pids ${d.pids.join(', ')} · ${d.comando}`);
+    for (const a of v.vivos_ajenos) out.push(`- vivo ajeno (no cuelga de este claude, solo se reporta): pid ${a.pid} · inicio ${a.inicio} · ${a.comando}`);
     for (const n of v.nuevos) out.push(`- nuevo: pid ${n.pid} · inicio ${n.inicio} · ${n.comando}`);
     if (!v.muertos.length && !v.huerfanos.length && !v.duplicados.length) out.push('- limpio: nada muerto, huérfano ni duplicado');
   }

@@ -1,7 +1,8 @@
 // Descriptor `## Entorno vivo` del CLAUDE.md del repo: fuentes de estado extra.
 // Un comando solo corre si es un script del propio repo y no lleva nada que un
-// shell interpretaría. Se ejecuta SIN shell, con timeout de 30 s.
-import { spawnSync } from 'node:child_process';
+// shell interpretaría. Se ejecuta SIN shell, en paralelo, con 30 s por comando
+// y un presupuesto total de 60 s: lo que no termine se reporta como tal.
+import { spawn } from 'node:child_process';
 import { redactar } from './redactar.mjs';
 
 const PREFIJO = /^(?:node scripts\/|bash scripts\/|\.\/scripts\/)/;
@@ -38,10 +39,25 @@ export function parseDescriptor(texto) {
   return fuentes;
 }
 
-function correr(argv, repo) {
-  const r = spawnSync(argv[0], argv.slice(1), { cwd: repo, timeout: 30000, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
-  if (r.error) return { ok: false, salida: r.error.code === 'ETIMEDOUT' ? 'timeout de 30 s' : String(r.error.code ?? r.error.message) };
-  return { ok: r.status === 0, salida: (r.stdout || r.stderr || '').trim() };
+const MAX_SALIDA = 1 << 20;
+export const POR_COMANDO_MS = 30000;
+export const PRESUPUESTO_MS = 60000;
+
+function correr(argv, repo, { timeoutMs = POR_COMANDO_MS, signal } = {}) {
+  return new Promise((resolve) => {
+    let salida = '';
+    let h;
+    try {
+      h = spawn(argv[0], argv.slice(1), { cwd: repo, signal, timeout: timeoutMs, stdio: ['ignore', 'pipe', 'pipe'] });
+    } catch (e) { resolve({ ok: false, salida: String(e.code ?? e.message) }); return; }
+    const juntar = (b) => { if (salida.length < MAX_SALIDA) salida += b; };
+    h.stdout.setEncoding('utf8').on('data', juntar);
+    h.stderr.setEncoding('utf8').on('data', juntar);
+    h.on('error', (e) => resolve({ ok: false, salida: e.name === 'AbortError' ? 'cancelado' : String(e.code ?? e.message) }));
+    h.on('close', (code, sig) => resolve(sig
+      ? { ok: false, salida: `${salida.trim()}\n(terminado por ${sig}: pasó los ${timeoutMs / 1000} s)`.trim() }
+      : { ok: code === 0, salida: salida.trim() }));
+  });
 }
 
 function acotar(texto) {
@@ -50,12 +66,28 @@ function acotar(texto) {
   return corto.length > MAX_CHARS || lineas.length > MAX_LINEAS ? `${corto.slice(0, MAX_CHARS)}\n…(recortado)` : corto;
 }
 
-export function resolverDescriptor(fuentes, { repo, coordinador = false, run = correr }) {
-  return fuentes.filter((f) => coordinador || !f.coordinador).map((f) => {
+export async function resolverDescriptor(fuentes, { repo, coordinador = false, run = correr,
+  presupuestoMs = PRESUPUESTO_MS, porComandoMs = POR_COMANDO_MS }) {
+  const items = fuentes.filter((f) => coordinador || !f.coordinador).map((f) => {
     if (f.tipo === 'contexto') return { fuente: f.fuente, tipo: 'contexto', texto: f.texto };
     const v = comandoPermitido(f.comando);
-    if (!v.ok) return { fuente: f.fuente, tipo: 'comando', comando: f.comando, ejecutado: false, motivo: v.motivo };
-    const r = run(v.argv, repo);
-    return { fuente: f.fuente, tipo: 'comando', comando: f.comando, ejecutado: true, ok: r.ok, salida: acotar(r.salida) };
+    // El comando rechazado viene de un archivo ajeno: también se redacta.
+    if (!v.ok) return { fuente: f.fuente, tipo: 'comando', comando: redactar(f.comando), ejecutado: false, motivo: v.motivo };
+    return { fuente: f.fuente, tipo: 'comando', comando: f.comando, ejecutado: true, argv: v.argv };
   });
+  const ac = new AbortController();
+  const fin = new Set();
+  const lanzadas = items.filter((i) => i.argv).map((i) => Promise.resolve(run(i.argv, repo, { timeoutMs: porComandoMs, signal: ac.signal }))
+    .catch((e) => ({ ok: false, salida: String(e?.message ?? e) }))
+    .then((r) => { i.ok = r.ok; i.salida = acotar(r.salida); fin.add(i); }));
+  let reloj;
+  const vencido = new Promise((res) => { reloj = setTimeout(() => res('vencido'), presupuestoMs); });
+  const resultado = await Promise.race([Promise.all(lanzadas).then(() => 'listo'), vencido]);
+  clearTimeout(reloj);
+  if (resultado === 'vencido') ac.abort();
+  for (const i of items) {
+    if (i.argv && !fin.has(i)) { i.ok = false; i.salida = `(no terminó dentro del presupuesto de ${presupuestoMs / 1000} s)`; }
+    delete i.argv;
+  }
+  return items;
 }

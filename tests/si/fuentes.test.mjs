@@ -35,8 +35,8 @@ test('fuenteLinux arma la tabla con btime + ticks y salta procesos que murieron'
   };
   const f = fuenteLinux(io);
   assert.deepEqual(f.listar(), [
-    { pid: 10, ppid: 1, pgid: 10, comm: 'claude', inicioMs: 1005000 },
-    { pid: 11, ppid: 10, pgid: 11, comm: 'bash', inicioMs: 1015000 },
+    { pid: 10, ppid: 1, pgid: 10, comm: 'claude', ticks: 500, inicioMs: 1005000 },
+    { pid: 11, ppid: 10, pgid: 11, comm: 'bash', ticks: 1500, inicioMs: 1015000 },
   ]);
   assert.equal(f.cmdline(11), 'bash -c eval x');
   assert.equal(f.cmdline(99), null);
@@ -57,10 +57,20 @@ test('parsePs lee pid, ppid, pgid, lstart y comando', () => {
   assert.match(t[2].cmdline, /^\/bin\/bash -c source/);
 });
 
-test('fuenteMac usa ps con los campos pedidos', () => {
+test('fuenteMac pide ps sin recorte de línea y fuerza el locale C', () => {
   let llamada;
-  const f = fuenteMac((cmd, args) => { llamada = [cmd, args]; return PS; });
+  const f = fuenteMac((cmd, args, opts) => { llamada = [cmd, args, opts]; return PS; });
   assert.equal(f.listar().length, 3);
-  assert.deepEqual(llamada, ['ps', ['-A', '-o', 'pid=,ppid=,pgid=,lstart=,command=']]);
+  assert.equal(llamada[0], 'ps');
+  assert.deepEqual(llamada[1], ['-ww', '-A', '-o', 'pid=,ppid=,pgid=,lstart=,command=']);
+  assert.equal(llamada[2].env.LC_ALL, 'C');
   assert.match(f.cmdline(501), /eval 'sleep 5'/);
+});
+
+test('fuenteMac: una línea larga llega entera hasta el eval del envoltorio', () => {
+  const largo = `/bin/bash -c source /x/shell-snapshots/snapshot-bash-1.sh 2>/dev/null || true && ${'export CK_X="valor largo"\n'.repeat(120)}: && shopt -u extglob 2>/dev/null || true && eval 'until [ -f /tmp/listo ]; do sleep 5; done' && pwd -P >| /tmp/c`;
+  assert.ok(largo.length > 3000);
+  const t = parsePs(` 77 1 77 Mon Oct 26 09:15:07 2026 ${largo.replace(/\n/g, ' ')}`);
+  assert.equal(t.length, 1);
+  assert.match(t[0].cmdline, /eval 'until \[ -f \/tmp\/listo \]; do sleep 5; done' && pwd -P/);
 });

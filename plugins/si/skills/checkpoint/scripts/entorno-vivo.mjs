@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { fuenteDelSistema } from './fuentes.mjs';
-import { encontrarClaude, datosClaude, dirSesiones, inventario, listarSesiones } from './procesos.mjs';
+import { encontrarClaude, datosClaude, dirSesiones, inventario, listarSesiones, sesionVigente } from './procesos.mjs';
 import { estadoGit, ejecutar } from './git.mjs';
 import { parseHandoff, verificar, hayHallazgos } from './verificar.mjs';
 import { detener } from './detener.mjs';
@@ -38,9 +38,20 @@ export function parseArgs(argv) {
   return o;
 }
 
+function toplevel(repo, d) {
+  const r = d.run('git', ['-C', repo, 'rev-parse', '--show-toplevel']);
+  if (!r.ok) return null;
+  try { return d.io.realpathSync(r.salida.trim()); } catch { return null; }
+}
+
+function dentro(raiz, ruta) {
+  const rel = path.relative(raiz, ruta);
+  return rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel);
+}
+
 const iso = (ms) => new Date(ms).toISOString().replace(/\.\d{3}Z$/, 'Z');
 
-export function correr(argv, deps = {}) {
+export async function correr(argv, deps = {}) {
   const d = {
     fuente: deps.fuente === undefined ? fuenteDelSistema() : deps.fuente,
     ahora: deps.ahora ?? Date.now(),
@@ -55,7 +66,8 @@ export function correr(argv, deps = {}) {
   try { o = parseArgs(argv); } catch (e) { return { codigo: 1, err: `${e.message}\n${USO}` }; }
 
   const tabla = d.fuente ? d.fuente.listar() : null;
-  const claudePid = tabla ? encontrarClaude(new Map(tabla.map((p) => [p.pid, p])), d.propioPid, { dir: d.sesionesDir, io: d.io }) : null;
+  const porPid = new Map((tabla ?? []).map((p) => [p.pid, p]));
+  const claudePid = tabla ? encontrarClaude(porPid, d.propioPid, { dir: d.sesionesDir, io: d.io }) : null;
   const procesos = () => inventario({ tabla, fuente: d.fuente, claudePid, propioPid: d.propioPid, ahoraMs: d.ahora });
 
   if (o.detener !== undefined) {
@@ -74,29 +86,41 @@ export function correr(argv, deps = {}) {
   const desde = o.desde ? Date.parse(o.desde) : handoff?.desde;
   if (o.verificar && !Number.isFinite(desde)) return { codigo: 1, err: 'el handoff no trae la hora en «## ENTORNO VIVO (ISO)»: pásala con --desde' };
 
-  const vivo = (pid) => {
-    if (tabla) return tabla.some((p) => p.pid === pid);
-    try { process.kill(pid, 0); return true; } catch (e) { return e.code === 'EPERM'; }
+  // Con inventario, la sesión debe seguir siendo el mismo proceso (pid reciclado = sesión vieja).
+  const vivo = (s) => {
+    if (tabla) return sesionVigente(s, porPid.get(s.pid));
+    try { process.kill(s.pid, 0); return true; } catch (e) { return e.code === 'EPERM'; }
   };
   const lista = tabla && claudePid ? procesos() : tabla ? [] : null;
   const repos = (o.repos.length ? o.repos : [d.cwd]).map((p) => path.resolve(d.cwd, p));
   const r = {
     generado: iso(d.ahora),
-    claude: claudePid ? datosClaude(claudePid, d.sesionesDir, d.io) : null,
+    claude: claudePid ? datosClaude(claudePid, d.sesionesDir, d.io, porPid.get(claudePid)) : null,
     procesos: lista,
-    sesiones: listarSesiones(d.sesionesDir, d.io).filter((s) => s.pid !== claudePid && vivo(s.pid))
+    sesiones: listarSesiones(d.sesionesDir, d.io).filter((s) => s.pid !== claudePid && vivo(s))
       .map((s) => ({ pid: s.pid, name: s.name, status: s.status, tmux: s.tmux })),
     git: repos.map((p) => estadoGit(p, d.run)),
   };
   if (o.descriptor) {
+    const top = toplevel(repos[0], d);
+    const archivo = path.resolve(d.cwd, o.descriptor);
+    let texto = null;
+    let motivo = null;
     try {
-      r.descriptor = resolverDescriptor(parseDescriptor(d.io.readFileSync(o.descriptor, 'utf8')), { repo: repos[0], coordinador: o.coordinador, run: deps.runDescriptor });
+      const real = d.io.realpathSync(archivo);
+      if (!top) motivo = 'el repo no es un checkout git';
+      else if (!dentro(top, real)) motivo = 'el CLAUDE.md no está dentro del repo (se cita, no se ejecuta)';
+      else texto = d.io.readFileSync(real, 'utf8');
     } catch (e) { return { codigo: 1, err: `no se pudo leer ${o.descriptor}: ${e.code ?? e.message}` }; }
+    if (texto != null) {
+      r.descriptor = await resolverDescriptor(parseDescriptor(texto), { repo: top, coordinador: o.coordinador, run: deps.runDescriptor,
+        ...(deps.presupuestoMs ? { presupuestoMs: deps.presupuestoMs } : {}) });
+    } else r.descriptor_rechazado = motivo;
   }
   if (tabla === null) r.nota = 'sin inventario de procesos en esta plataforma';
   let codigo = 0;
   if (handoff) {
-    r.verificacion = verificar({ filas: handoff.filas, desde, tabla, procesos: lista });
+    r.verificacion = verificar({ filas: handoff.filas, desde, tabla, procesos: lista, claudePid });
     if (hayHallazgos(r.verificacion)) codigo = 2;
   }
   return { codigo, out: o.json ? JSON.stringify(r, null, 2) : renderMarkdown(r) };
@@ -108,7 +132,7 @@ const esPrincipal = () => {
 
 if (esPrincipal()) {
   let res;
-  try { res = correr(process.argv.slice(2)); } catch (e) { res = { codigo: 1, err: `error: ${e.message}` }; }
+  try { res = await correr(process.argv.slice(2)); } catch (e) { res = { codigo: 1, err: `error: ${e.message}` }; }
   if (res.out) process.stdout.write(`${res.out}\n`);
   if (res.err) process.stderr.write(`${res.err}\n`);
   process.exitCode = res.codigo;

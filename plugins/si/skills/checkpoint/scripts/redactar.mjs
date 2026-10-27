@@ -3,10 +3,14 @@
 // recortar primero podría dejar un fragmento de secreto sin reconocer.
 const REGLAS = [
   [/-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?(-----END [A-Z ]*PRIVATE KEY-----|$)/g, '[redactado]'],
+  [/(\/\/)[^\s\/:@]+:[^\s\/@]+@/g, '$1[redactado]@'],
   [/Authorization:\s*\S+(\s+\S+)?/gi, 'Authorization: [redactado]'],
+  [/\bX-[\w-]*(?:key|token|secret|auth)[\w-]*:\s*\S+/gi, 'X-Auth: [redactado]'],
+  [/(\s)-u\s+\S+:\S*/g, '$1-u [redactado]'],
+  [/--(?:password|passwd)[= ]\S+/g, '--password=[redactado]'],
   [/Bearer\s+\S+/g, 'Bearer [redactado]'],
   [/--token[= ]\S+/g, '--token=[redactado]'],
-  [/\b(token|password|passwd|secret|api[_-]?key)=\S+/gi, '$1=[redactado]'],
+  [/\b(\w*(?:token|password|passwd|secret|api[_-]?key)\w*)=\S+/gi, '$1=[redactado]'],
   [/\bgh[pousr]_[A-Za-z0-9]{20,}/g, '[redactado]'],
   [/\bgithub_pat_[A-Za-z0-9_]{20,}/g, '[redactado]'],
   [/\bsk-[A-Za-z0-9-]{20,}/g, '[redactado]'],

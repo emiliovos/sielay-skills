@@ -26,3 +26,20 @@ test('recortar colapsa espacios y corta a 160', () => {
   assert.equal(recortar('a\n  b'), 'a b');
   assert.equal(recortar('x'.repeat(300)).length, 160);
 });
+
+test('redacta variables con sufijo y prefijo: DB_PASSWORD, MDPUSH_TOKEN, GH_TOKEN', () => {
+  const t = redactar('DB_PASSWORD=hunter2 MDPUSH_TOKEN=abc GH_TOKEN=def MY_API_KEY=ghi run');
+  for (const v of ['hunter2', 'abc', 'def', 'ghi']) assert.ok(!t.includes(v), v);
+  assert.match(t, /DB_PASSWORD=\[redactado\]/);
+  assert.ok(t.endsWith(' run'));
+});
+
+test('redacta credenciales en URL, curl -u, --password y cabeceras X-Api-Key', () => {
+  assert.ok(!redactar('git clone https://usuario:pw123@host.example/r.git').includes('pw123'));
+  assert.ok(!redactar('curl -u usuario:pw123 https://host.example').includes('pw123'));
+  assert.ok(!redactar('cli --password hunter2 x').includes('hunter2'));
+  assert.ok(!redactar('cli --password=hunter2 x').includes('hunter2'));
+  assert.ok(!redactar('curl -H "X-Api-Key: abc999" https://host.example').includes('abc999'));
+  assert.ok(!redactar('curl -H "X-Auth-Token: abc999"').includes('abc999'));
+  assert.equal(redactar('git clone https://host.example/r.git'), 'git clone https://host.example/r.git');
+});

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { extraerComando, inventario, encontrarClaude, esEnvoltorio, SIN_COMANDO } from '../../plugins/si/skills/checkpoint/scripts/procesos.mjs';
+import { extraerComando, inventario, encontrarClaude, esEnvoltorio, sesionVigente, SIN_COMANDO } from '../../plugins/si/skills/checkpoint/scripts/procesos.mjs';
 import { arbol, envoltorio, T0 } from './helpers.mjs';
 
 test('extrae el comando de eval y desescapa las comillas simples', () => {
@@ -30,10 +30,33 @@ test('sin ancestro claude devuelve null', () => {
   assert.equal(encontrarClaude(m, 5), null);
 });
 
-test('un sessions/<pid>.json cuenta como claude aunque el comm sea otro', () => {
-  const m = new Map([[5, { pid: 5, ppid: 7, comm: 'bash' }], [7, { pid: 7, ppid: 1, comm: 'node' }], [1, { pid: 1, ppid: 0, comm: 'init' }]]);
-  const io = { readFileSync: (p) => { if (p.endsWith('/7.json')) return '{"pid":7}'; throw new Error('no'); } };
-  assert.equal(encontrarClaude(m, 5, { dir: '/s', io }), 7);
+const sesion = (extra = {}) => JSON.stringify({ pid: 7, procStart: '999', ...extra });
+const arbolSesion = (ticks) => new Map([[5, { pid: 5, ppid: 7, comm: 'bash' }], [7, { pid: 7, ppid: 1, comm: 'node', ticks, inicioMs: T0 }], [1, { pid: 1, ppid: 0, comm: 'init' }]]);
+const ioSesion = (txt) => ({ readFileSync: (p) => { if (p.endsWith('/7.json')) return txt; throw new Error('no'); } });
+
+test('un sessions/<pid>.json vigente cuenta como claude aunque el comm sea otro', () => {
+  assert.equal(encontrarClaude(arbolSesion(999), 5, { dir: '/s', io: ioSesion(sesion()) }), 7);
+});
+
+test('un sessions/<pid>.json viejo (pid reciclado, otro procStart) no cuenta', () => {
+  assert.equal(encontrarClaude(arbolSesion(123), 5, { dir: '/s', io: ioSesion(sesion()) }), null);
+});
+
+test('en macOS la sesión vale si startedAt cae a ±2 s del lstart', () => {
+  const rec = { pid: 7, inicioMs: T0 };
+  assert.equal(sesionVigente({ pid: 7, startedAt: T0 + 1500 }, rec), true);
+  assert.equal(sesionVigente({ pid: 7, startedAt: T0 + 5000 }, rec), false);
+  assert.equal(sesionVigente({ pid: 7 }, rec), false);
+});
+
+test('el comm claude basta aunque no haya archivo de sesión', () => {
+  const m = new Map([[5, { pid: 5, ppid: 7, comm: 'bash' }], [7, { pid: 7, ppid: 1, comm: 'claude' }], [1, { pid: 1, ppid: 0, comm: 'init' }]]);
+  assert.equal(encontrarClaude(m, 5, { dir: '/s', io: ioSesion('{}') }), 7);
+});
+
+test('el corte del comando se ancla en el envoltorio aunque el comando traiga su propio eval', () => {
+  const c = "echo 'a' || true && eval 'x' ; echo fin";
+  assert.equal(extraerComando(envoltorio(c)), c);
 });
 
 test('inventario: excluye la cadena de la llamada y clasifica por tipo', () => {

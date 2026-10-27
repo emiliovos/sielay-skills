@@ -27,29 +27,36 @@ export function parseHandoff(texto) {
   return { desde: Number.isFinite(desde) ? desde : null, filas, bloque: true };
 }
 
-export function verificar({ filas, desde, tabla, procesos }) {
+const mismoInicio = (a, b) => Number.isFinite(a) && Math.abs(a - b) <= TOLERANCIA_MS;
+
+export function verificar({ filas, desde, tabla, procesos, claudePid }) {
   const porPid = new Map(tabla.map((p) => [p.pid, p]));
-  const muertos = filas
-    .filter((f) => {
-      const vivo = porPid.get(f.pid);
-      // Un pid vivo con otro inicio es un pid reciclado: el original murió.
-      return !vivo || !Number.isFinite(f.inicioMs) || Math.abs(vivo.inicioMs - f.inicioMs) > TOLERANCIA_MS;
-    })
-    .map((f) => ({ pid: f.pid, comando: f.comando }));
-  const anteriores = procesos.filter((p) => Date.parse(p.inicio) < desde);
-  const huerfanos = anteriores.map((p) => {
-    const fila = filas.find((f) => f.pid === p.pid && Math.abs(f.inicioMs - Date.parse(p.inicio)) <= TOLERANCIA_MS);
-    return { pid: p.pid, inicio: p.inicio, tipo: p.tipo, comando: p.comando, vigia: fila ? fila.vigia : null };
-  });
+  const vivaIgual = (f) => {
+    const p = porPid.get(f.pid);
+    return p && mismoInicio(f.inicioMs, p.inicioMs) ? p : null;
+  };
+  // Un pid vivo con otro inicio es un pid reciclado: el original murió.
+  const muertos = filas.filter((f) => !vivaIgual(f)).map((f) => ({ pid: f.pid, comando: f.comando }));
+  // Huérfano: hijo del claude actual anterior al handoff, o que el handoff
+  // ya nombra con el mismo pid e inicio (un vigía del mismo minuto del handoff).
+  const filaDe = (p) => filas.find((f) => f.pid === p.pid && mismoInicio(f.inicioMs, Date.parse(p.inicio)));
+  const esHuerfano = (p) => Date.parse(p.inicio) < desde || Boolean(filaDe(p));
+  const huerfanos = procesos.filter(esHuerfano).map((p) => ({
+    pid: p.pid, inicio: p.inicio, tipo: p.tipo, comando: p.comando, vigia: filaDe(p)?.vigia ?? null,
+  }));
   const porComando = new Map();
   for (const p of procesos) {
     if (p.comando === SIN_COMANDO) continue;
     porComando.set(p.comando, [...(porComando.get(p.comando) ?? []), p.pid]);
   }
   const duplicados = [...porComando].filter(([, pids]) => pids.length > 1).map(([comando, pids]) => ({ comando, pids }));
-  const nuevos = procesos.filter((p) => Date.parse(p.inicio) >= desde)
-    .map((p) => ({ pid: p.pid, inicio: p.inicio, comando: p.comando }));
-  return { desde: new Date(desde).toISOString().replace('.000Z', 'Z'), muertos, huerfanos, duplicados, nuevos };
+  const nuevos = procesos.filter((p) => !esHuerfano(p)).map((p) => ({ pid: p.pid, inicio: p.inicio, comando: p.comando }));
+  // Vivos con el mismo inicio pero que no cuelgan de este claude: de otra
+  // sesión o de otro árbol. Solo se reportan; nunca se detienen.
+  const vivos_ajenos = filas.map(vivaIgual).filter((p) => p && p.ppid !== claudePid)
+    .map((p) => ({ pid: p.pid, inicio: new Date(p.inicioMs).toISOString().replace('.000Z', 'Z'),
+      comando: filas.find((f) => f.pid === p.pid).comando }));
+  return { desde: new Date(desde).toISOString().replace('.000Z', 'Z'), muertos, huerfanos, duplicados, nuevos, vivos_ajenos };
 }
 
 export function hayHallazgos(v) {

@@ -140,7 +140,9 @@ Todos los modos agregan al handoff un bloque `ENTORNO VIVO` (crons de `CronList`
 | `/si:checkpoint autonomo` | Igual que `continuar`, sin preguntas, para terminales de un build | archivo `~/handoffs/<sesion>.md` | hasta 40 líneas |
 | `/si:checkpoint coordinador` | Cierre completo y, además, las demás sesiones de la máquina y los renglones marcados `(coordinador)` | según tu `## Cierre de sesión` | completo |
 
-Al retomar, `entorno-vivo.mjs --verificar <handoff>` clasifica lo que quedó: procesos muertos (un PID reciclado con otra hora de inicio cuenta como muerto), huérfanos anteriores al handoff y duplicados. No mata nada por sí solo. La sesión nueva detiene (con `--detener <pid>`, que solo acepta hijos directos de su propio `claude`) los huérfanos que el handoff marca `vigía: sí`, es decir, monitores y bucles de espera que se vuelven a armar; los demás se reportan y se pregunta qué hacer (en `autonomo` se dejan vivos). Hay inventario de procesos en Linux y macOS; en otras plataformas el script lo avisa y sigue con lo demás.
+Al retomar, `entorno-vivo.mjs --verificar <handoff>` clasifica lo que quedó: procesos muertos (un PID reciclado con otra hora de inicio cuenta como muerto), huérfanos anteriores al handoff y duplicados. No mata nada por sí solo. La sesión nueva detiene (con `--detener <pid>`, que solo acepta hijos directos de su propio `claude`) los huérfanos que el handoff marca `vigía: sí`, es decir, monitores y bucles de espera que se vuelven a armar; los demás se reportan y se pregunta qué hacer (en `autonomo` se dejan vivos). También reporta, sin detenerlos, los procesos del handoff que siguen vivos con el mismo inicio pero no cuelgan de ese `claude` (`vivos_ajenos`). Hay inventario de procesos en Linux y macOS; en otras plataformas el script lo avisa y sigue con lo demás.
+
+**Límite:** el script no distingue el Bash de un subagente del de la sesión principal, porque ambos son hijos del mismo `claude`. Por eso `vigía: sí` solo va en los monitores y bucles de espera que la sesión principal armó y conoce, y el checkpoint se toma sin subagentes corriendo.
 
 ### Fuentes de estado propias del repo
 
@@ -153,7 +155,7 @@ Una sección opcional del `CLAUDE.md` suma fuentes al ENTORNO VIVO. Sin ella sol
 - equipo: `node scripts/ruta/estado.mjs --todos` (coordinador)
 ```
 
-Un renglón con comando entre backticks se ejecuta desde la raíz del repo con un `timeout` de 30 s, solo si empieza con `node scripts/`, `bash scripts/` o `./scripts/` y no lleva `|`, `;`, `&`, `$(`, backticks, `>`, `<`, comillas ni `..`; cualquier otro se cita y no se corre. Un renglón `contexto — …` se completa de memoria de la sesión. El `CLAUDE.md` de un remoto ajeno nunca se ejecuta.
+Un renglón con comando entre backticks se ejecuta desde la raíz del repo, en paralelo, con 30 s por comando y 60 s en total, solo si empieza con `node scripts/`, `bash scripts/` o `./scripts/` y no lleva `|`, `;`, `&`, `$(`, backticks, `>`, `<`, comillas ni `..`; cualquier otro se cita y no se corre. Un renglón `contexto — …` se completa de memoria de la sesión. El `CLAUDE.md` debe estar dentro del repo, y el de un remoto ajeno nunca se ejecuta.
 
 ## Skills
 

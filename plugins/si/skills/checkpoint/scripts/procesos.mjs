@@ -5,6 +5,7 @@ import path from 'node:path';
 import { redactar, recortar } from './redactar.mjs';
 
 export const SIN_COMANDO = '(no legible)';
+const INICIO_EVAL = "|| true && eval '";
 const ENVOLTORIO = /^(?:\S*\/)?bash -c source \S*snapshot/;
 
 // El envoltorio de cada llamada Bash del claude es
@@ -13,9 +14,12 @@ const ENVOLTORIO = /^(?:\S*\/)?bash -c source \S*snapshot/;
 // original escapada como '"'"'. Nunca se devuelve el preámbulo.
 export function extraerComando(cmdline) {
   if (!ENVOLTORIO.test(cmdline)) return null;
-  const ini = cmdline.indexOf("eval '");
+  // Ancla en el cierre del propio envoltorio (`|| true && eval '`), no en un
+  // `eval '` cualquiera: el primero que aparece es el del envoltorio, porque
+  // un comando de usuario viene después y lleva sus comillas escapadas.
+  const ini = cmdline.indexOf(INICIO_EVAL);
   if (ini < 0) return null;
-  const cuerpo = cmdline.slice(ini + 6);
+  const cuerpo = cmdline.slice(ini + INICIO_EVAL.length);
   let fin = -1;
   for (const m of cuerpo.matchAll(/'(?:\s*<\s*\S+)?\s*&&\s*pwd -P/g)) fin = m.index;
   if (fin < 0) return null;
@@ -48,6 +52,16 @@ export function leerSesion(dir, pid, io = fs) {
   } catch { return null; }
 }
 
+// Un sessions/<pid>.json sobrevive a su proceso: solo vale si el proceso que
+// hoy tiene ese pid es el mismo que lo escribió. Linux compara `procStart` con
+// el campo 22 de stat; macOS compara `startedAt` con el lstart (±2 s).
+export function sesionVigente(sesion, rec) {
+  if (!sesion || !rec) return false;
+  if (rec.ticks != null && sesion.procStart != null) return String(rec.ticks) === String(sesion.procStart);
+  if (sesion.startedAt != null) return Math.abs(rec.inicioMs - Number(sesion.startedAt)) <= 2000;
+  return false;
+}
+
 export function listarSesiones(dir, io = fs) {
   let nombres;
   try { nombres = io.readdirSync(dir); } catch { return []; }
@@ -55,19 +69,20 @@ export function listarSesiones(dir, io = fs) {
     .filter((s) => s && Number.isInteger(s.pid));
 }
 
-// claude = ancestro más cercano con comm `claude` o con un sessions/<pid>.json.
+// claude = ancestro más cercano con comm `claude` o con un sessions/<pid>.json vigente.
 export function encontrarClaude(porPid, desdePid, { dir, io = fs } = {}) {
   for (const pid of ancestros(porPid, desdePid)) {
     if (pid === desdePid) continue;
-    if (porPid.get(pid).comm === 'claude') return pid;
-    if (dir && leerSesion(dir, pid, io)) return pid;
+    const rec = porPid.get(pid);
+    if (rec.comm === 'claude') return pid;
+    if (dir && sesionVigente(leerSesion(dir, pid, io), rec)) return pid;
   }
   return null;
 }
 
-export function datosClaude(pid, dir, io = fs) {
+export function datosClaude(pid, dir, io = fs, rec = null) {
   const s = leerSesion(dir, pid, io);
-  if (!s) return { pid };
+  if (!s || (rec && !sesionVigente(s, rec))) return { pid };
   return { pid, session_id: s.sessionId, name: s.name, tmux: s.tmux };
 }
 

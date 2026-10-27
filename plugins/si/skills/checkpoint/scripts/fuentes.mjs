@@ -46,7 +46,7 @@ export function fuenteLinux(io = fs) {
         const txt = leer(`/proc/${nombre}/stat`);
         const s = txt && parseStat(txt);
         if (!s) continue; // el proceso murió entre el listado y la lectura
-        out.push({ pid: s.pid, ppid: s.ppid, pgid: s.pgid, comm: s.comm,
+        out.push({ pid: s.pid, ppid: s.ppid, pgid: s.pgid, comm: s.comm, ticks: s.ticks,
           inicioMs: Math.floor(btime + s.ticks / CLK_TCK) * 1000 });
       }
       return out;
@@ -76,9 +76,13 @@ export function parsePs(texto) {
   return out;
 }
 
-export function fuenteMac(ejecutar = (...a) => execFileSync(...a, { encoding: 'utf8', timeout: 10000 })) {
+// -ww: sin recorte de línea (el envoltorio de Bash es largo). LC_ALL=C: lstart
+// en inglés y con formato fijo, sea cual sea el idioma del sistema.
+export const PS_ARGS = ['-ww', '-A', '-o', 'pid=,ppid=,pgid=,lstart=,command='];
+
+export function fuenteMac(ejecutar = (cmd, args, opts) => execFileSync(cmd, args, { encoding: 'utf8', timeout: 10000, maxBuffer: 64 * 1024 * 1024, ...opts })) {
   let cache = null;
-  const cargar = () => (cache ??= parsePs(ejecutar('ps', ['-A', '-o', 'pid=,ppid=,pgid=,lstart=,command='])));
+  const cargar = () => (cache ??= parsePs(ejecutar('ps', PS_ARGS, { env: { ...process.env, LC_ALL: 'C' } })));
   return {
     plataforma: 'darwin',
     listar: () => cargar().map(({ cmdline, ...resto }) => resto),
