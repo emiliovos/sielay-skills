@@ -151,13 +151,18 @@ export function createInboundHandler({ store, adapter, readMode, onStrip, onConv
       }
       for (const n of (Array.isArray(data.notices) ? data.notices : []).filter(isHubNotice)) {
         const quiet = show !== undefined && isQuietNotice(n)
-        const text = quiet ? hubNoticeLine(n) : frameHubNotice(n)
-        if (!text) continue
         try {
-          if (quiet) await show(`aviso del hub · ${text}`)
-          else await adapter.inject(text)
+          // The hub marks a notice delivered when it serves it: if the log fails, the notice falls back to a turn.
+          if (quiet) {
+            const line = hubNoticeLine(n)
+            if (line) {
+              try { await show(`aviso del hub · ${line}`); continue } catch { /* falls back to a turn */ }
+            }
+          }
+          const framed = frameHubNotice(n)
+          if (framed) await adapter.inject(framed)
         } catch (err) {
-          log(`hub notice ${n.id} not injected: ${err instanceof Error ? err.message : String(err)}`)
+          try { log(`hub notice ${n.id} not delivered: ${err instanceof Error ? err.message : String(err)}`) } catch { /* nothing left to report to */ }
         }
       }
       if (Array.isArray(data.strip)) {

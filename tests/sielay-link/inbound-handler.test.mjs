@@ -144,7 +144,7 @@ test('notice ci_finished with conclusion success: shown in the log, no turn', as
 })
 
 test('notice ci_finished that is not success opens a turn', async () => {
-  for (const conclusion of ['failure', 'cancelled', 'timed_out', undefined]) {
+  for (const conclusion of ['failure', 'cancelled', 'timed_out', undefined, 'SUCCESS', 'Success', true]) {
     const { injected, shown } = await pollNotices([notice('ci_finished', { workflow: 'validate', repo: 'o/r', branch: 'x', conclusion })])
     assert.equal(shown.length, 0, String(conclusion))
     assert.equal(injected.length, 1, String(conclusion))
@@ -180,4 +180,12 @@ test('without a show hook, a quiet kind still reaches the model', async () => {
   const h = createInboundHandler({ store: memStore(), adapter: { inject: async t => void injected.push(t) }, readMode: async () => ({ mode: 'default', fresh: false }), onStrip: async () => {} })
   await h.handlePoll('inst', { messages: [], strip: [], notices: [notice('repo_merge_started', merge)] })
   assert.equal(injected.length, 1)
+})
+
+test('a quiet notice whose log fails still reaches the model', async () => {
+  const injected = []
+  const h = createInboundHandler({ store: memStore(), adapter: { inject: async t => void injected.push(t) }, readMode: async () => ({ mode: 'default', fresh: false }), onStrip: async () => {}, show: () => { throw new Error('x') }, log: () => { throw new Error('y') } })
+  await h.handlePoll('inst', { messages: [], strip: [], notices: [notice('repo_merge_started', merge), notice('repo_merged', merge)] })
+  assert.equal(injected.length, 2)
+  assert.match(injected[0], /^— Aviso del hub de sielay/)
 })
