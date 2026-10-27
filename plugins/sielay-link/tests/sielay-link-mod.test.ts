@@ -601,7 +601,16 @@ test('UserMessage that is a hub notice: one dim line; ctrl+o leaves the whole te
 // --- Threads (formato A): the turn is marked when it happens, the rows only read the mark.
 
 const THREADS = { plugin: 'sielay-link', key: 'threads' } as const
-const registryOf = async ($: any) => (await $.state.get(THREADS)).value
+/** The test's `$` has no state noun: the registry is read off the mod's writes as they cross beneath it. */
+function watchThreads(on: any) {
+  let held: any
+  on('state.set', async ($: any, e: any, next: any) => {
+    const r = await next(e)
+    if (e.plugin === THREADS.plugin && e.key === THREADS.key && (r?.value ?? r)?.isSet !== false) held = e.value
+    return r
+  })
+  return () => held
+}
 
 test('link_send marks its turn under the tool_use_id: ToolUse draws the header and the turn, ToolResult the strip state', { options: { link_token: 'test-token' } }, async ($, on) => {
   const NOW = Date.UTC(2026, 9, 26, 19, 45)
@@ -609,6 +618,7 @@ test('link_send marks its turn under the tool_use_id: ToolUse draws the header a
   mock.store(on)
   mock.env(on, { HOME: '/nowhere' })
   fakeHost(on)
+  const registryOf = watchThreads(on)
   fakeHub(on, path =>
     path === '/api/link/poll' ? { session: { id: 's', address: 'emilio/vps-sielay/sielay-6' }, messages: [], strip: [], poll_after_ms: 60_000 }
       : path === '/api/link/send' ? { id: 'm1', conversation_id: 'c9', turn: 1, turns_left: 39, gate: 'strip', status: 'queued' } : {},
@@ -617,7 +627,7 @@ test('link_send marks its turn under the tool_use_id: ToolUse draws the header a
   await clock.advance(10)
   await clock.settle()
   await $.tool.call({ tool: 'mcp__sielay-link__link_send', to: 'emilio/pve2/sielay-3', text: 'Demo lista' } as any)
-  const marks = (await registryOf($)).marks
+  const marks = registryOf().marks
   const [id] = Object.keys(marks)
   expect(id, 'the tool call must carry a tool_use_id').toBeTruthy()
   expect(marks[id!]).toMatchObject({ conv: 'c9', n: 1, crossed: false, first: true, out: true, state: 'strip', peer: 'emilio/pve2/sielay-3' })
@@ -641,6 +651,7 @@ test('link_read with two conversations: one block each, and the rows carry their
   mock.store(on)
   mock.env(on, { HOME: '/nowhere' })
   fakeHost(on)
+  const registryOf = watchThreads(on)
   const other = { ...message('m2'), conversation_id: 'c2', from: { address: 'bob/laptop/web', mode: 'auto' }, turn: 1, sent_at: '2026-10-26T19:44:00.000Z' }
   let served = false
   fakeHub(on, path => {
@@ -650,6 +661,7 @@ test('link_read with two conversations: one block each, and the rows carry their
     return { session: { id: 's', address: 'eva/box/mi-sesion' }, messages, strip: [], poll_after_ms: 60_000 }
   })
   await $.session.start({ cwd: '/srv/p', surface: 'terminal', isInteractive: true })
+  await $.classic.UserPromptSubmit({ prompt: 'x', permission_mode: 'bypassPermissions' })
   await clock.advance(10)
   await clock.settle()
   const r: any = await $.tool.call({ tool: 'mcp__sielay-link__link_read' } as any)
@@ -658,7 +670,7 @@ test('link_read with two conversations: one block each, and the rows carry their
   expect(blocks[0]!.split('\n')[0]).toBe('① ana/api ⇄ mi-sesion · laptop')
   expect(blocks[1]!.split('\n')[0]).toBe('② bob/web ⇄ mi-sesion · laptop')
   expect(blocks[1]).toContain('turno 1 de 10\n│ hola m2')
-  const registry = await registryOf($)
+  const registry = registryOf()
   const ui = await $.ui.mount({
     plugin: 'sielay-link', surface: 'terminal', component: 'ToolResult', requestId: 'r1',
     viewport: { columns: 80, rows: 30 }, props: { tool_use_id: 'r1', tool: 'mcp__sielay-link__link_read', output: r.result, isErrored: false, isExpanded: false },
@@ -686,6 +698,7 @@ test('a delivery that says its conversation closed draws the closure once, and l
   mock.store(on)
   mock.env(on, { HOME: '/nowhere' })
   fakeHost(on)
+  const registryOf = watchThreads(on)
   const closing = { ...message('m1'), turn: 3, sent_at: SENT_AT, conversation: { status: 'closed', closed_reason: 'end', closed_by: 'ana/laptop/api' } }
   let polls = 0
   fakeHub(on, path => {
@@ -695,6 +708,7 @@ test('a delivery that says its conversation closed draws the closure once, and l
     return { session: { id: 's', address: 'eva/box/mi-sesion' }, messages, strip: [], poll_after_ms: 1000 }
   })
   await $.session.start({ cwd: '/srv/p', surface: 'terminal', isInteractive: true })
+  await $.classic.UserPromptSubmit({ prompt: 'x', permission_mode: 'bypassPermissions' })
   await clock.advance(10)
   await clock.settle()
   const hh = hhmmOf(Date.parse(SENT_AT))
@@ -703,7 +717,7 @@ test('a delivery that says its conversation closed draws the closure once, and l
   // the same turn redelivered (run=1) is the same mark: nothing is counted twice
   await clock.advance(1_000)
   await clock.settle()
-  const registry = await registryOf($)
+  const registry = registryOf()
   expect(Object.keys(registry.marks)).toEqual(['c1#3'])
   expect(registry.threads.c1).toMatchObject({ turns: 3, closed: { by: 'ana/laptop/api', reason: 'end' } })
 })
