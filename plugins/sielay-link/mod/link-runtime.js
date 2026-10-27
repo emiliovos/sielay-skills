@@ -102,7 +102,9 @@ export async function isMinimal($) {
 }
 
 /** @param {Engine} $ */
-const newThreads = $ => createThreads({ get: async () => (await $.state.get(THREADS)).value, set: v => $.state.set(THREADS, v), now: () => $.clock.now() })
+function newThreads($) {
+  return createThreads({ get: async () => (await $.state.get(THREADS)).value, set: v => $.state.set(THREADS, v), now: () => $.clock.now() })
+}
 
 /**
  * The session's thread registry. startLink makes it with the `$` of session.start, so a
