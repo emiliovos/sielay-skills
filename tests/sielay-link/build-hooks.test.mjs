@@ -196,6 +196,7 @@ test('a write that loses the version race is retried, not lost', async () => {
 test('the poll carries the other open builds; with the current one gone it sends build null with them', async () => {
   const h = engine()
   await declareFromTool(h.$, h.rt, min)
+  await afterPoll(h.$, h.rt, { build: (await pollBuildFields(h.$, h.rt)).build })
   await declareFromTool(h.$, h.rt, { ...min, build_id: 'sielay-261025-otro' })
   const fields = await pollBuildFields(h.$, h.rt)
   assert.equal(fields.build.build_id, 'sielay-261025-otro')

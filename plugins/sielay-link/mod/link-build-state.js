@@ -8,6 +8,7 @@
 
 import { validateBuild } from './link-build-validate.js'
 import { displace, pruneOpen } from './link-build-open.js'
+import { enqueuePending, prunePending, takePending } from './link-build-pending.js'
 
 export { openBuildIds } from './link-build-open.js'
 
@@ -52,19 +53,23 @@ export function declareBuild(state, input, now) {
   const picked = {}
   for (const k of DECLARED_KEYS) if (input[k] !== undefined && !(k === 'estimate' && input[k] === null)) picked[k] = input[k]
   const same = state !== null && !state.closed && state.declared.build_id === picked.build_id
-  const prev = same ? state.declared : {}
+  const queued = same ? undefined : takePending(state, String(picked.build_id))
+  const prev = same ? state.declared : queued?.declared ?? {}
   const declared = { ...prev, ...picked }
   if (isObj(prev.delivery) && isObj(picked.delivery)) declared.delivery = { ...prev.delivery, ...picked.delivery }
-  if (picked.stage_since === undefined && (!same || prev.stage !== declared.stage)) declared.stage_since = iso(now)
+  if (picked.stage_since === undefined && (!(same || queued) || prev.stage !== declared.stage)) declared.stage_since = iso(now)
   // waiting lives while the build waits: running or done drops it, as the hub does
   if (declared.status === 'running' || declared.status === 'done') delete declared.waiting
   const subagents = pruneExpired(state, now)?.subagents ?? {}
   const open = displace(state, same, String(declared.build_id), now)
+  const pending = enqueuePending(state, same, String(declared.build_id), now)
   return {
     declared,
     touched_at: now,
     open,
-    started_at: same ? state.started_at : iso(now),
+    ...(pending.length > 0 ? { pending } : {}),
+    unsent: true,
+    started_at: same ? state.started_at : queued?.started_at ?? iso(now),
     subagents,
     peak: same ? state.peak : liveCount(subagents, now),
     usage: same ? state.usage : null,
@@ -118,11 +123,14 @@ export function subagentDown(state, id) {
 export function pruneExpired(state, now) {
   if (!state) return state
   const open = pruneOpen(state.open, now)
-  if (state.closed && Object.keys(open).length === 0) return null
+  const pending = prunePending(state.pending, now)
+  if (state.closed && Object.keys(open).length === 0 && pending.length === 0) return null
   const kept = Object.values(state.subagents).filter(s => now - s.seen <= SUBAGENT_EXPIRY_MS)
   const openSame = Object.keys(open).length === Object.keys(state.open ?? {}).length
-  if (kept.length === Object.keys(state.subagents).length && openSame) return state
-  return { ...state, open, subagents: Object.fromEntries(kept.map(s => [s.id, s])) }
+  const pendingSame = pending.length === (state.pending?.length ?? 0)
+  if (kept.length === Object.keys(state.subagents).length && openSame && pendingSame) return state
+  const { pending: _p, ...base } = state
+  return { ...base, open, ...(pending.length > 0 ? { pending } : {}), subagents: Object.fromEntries(kept.map(s => [s.id, s])) }
 }
 
 /**
@@ -171,7 +179,7 @@ export function addActiveTime(state, durationMs) {
 export function forgetIfDone(state, sent) {
   if (!state || !isObj(sent) || sent.status !== 'done') return state
   if (state.closed || state.declared.build_id !== sent.build_id || state.declared.status !== 'done') return state
-  return Object.keys(state.open ?? {}).length > 0 ? { ...state, closed: true } : null
+  return Object.keys(state.open ?? {}).length > 0 || state.pending?.length ? { ...state, closed: true } : null
 }
 
 /**
