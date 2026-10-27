@@ -71,10 +71,10 @@ test('a lone thread is never crossed, and a thread idle for 30 minutes no longer
   const { h, threads } = rig()
   await recordInbound(threads, delivery('a', 1))
   h.now += THREAD_ACTIVE_MS + 1
-  const later = await recordInbound(threads, delivery('b', 1))
+  const later = await recordInbound(threads, delivery('b', 1, { sent_at: new Date(h.now).toISOString() }))
   assert.deepEqual([later.crossed, later.n], [false, 1], 'a is idle: b takes its number and is not crossed')
   h.now += 5 * MIN
-  const back = await recordInbound(threads, delivery('a', 2))
+  const back = await recordInbound(threads, delivery('a', 2, { sent_at: new Date(h.now).toISOString() }))
   assert.deepEqual([back.n, back.first, back.crossed], [2, true, true], 'a came back while b holds ①: new number and its header again')
 })
 
