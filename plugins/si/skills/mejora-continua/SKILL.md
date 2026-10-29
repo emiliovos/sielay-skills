@@ -11,7 +11,7 @@ metadata:
   deps: "git y gh en el repo destino. Requiere en su CLAUDE.md la línea 'Anomalías:' (o 'Reporte:') de la sección '## Cierre de sesión'; sin ninguna, la skill lo dice y para."
   installs: []
   risk: none
-  version: "1.0.0"
+  version: "1.0.1"
 ---
 
 # mejora-continua: de la bitácora de anomalías a PRs revisables

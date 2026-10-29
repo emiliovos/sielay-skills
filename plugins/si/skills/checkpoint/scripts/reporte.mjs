@@ -161,7 +161,13 @@ export function parseArgs(argv) {
   return o;
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+// Node resuelve los symlinks del script principal en import.meta.url, no en
+// argv[1]: sin realpath en los dos lados, llamado por un enlace no haría nada.
+const esPrincipal = () => {
+  try { return fs.realpathSync(process.argv[1]) === fs.realpathSync(fileURLToPath(import.meta.url)); } catch { return false; }
+};
+
+if (esPrincipal()) {
   try {
     const o = parseArgs(process.argv.slice(2));
     const r = reportar({

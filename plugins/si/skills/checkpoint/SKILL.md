@@ -11,7 +11,7 @@ metadata:
   deps: "git configurado en el repo destino. Opcional: una sección '## Cierre de sesión' en el CLAUDE.md del repo o un descriptor de proyecto (p.ej. docs/projects/<slug>/project.json) para fijar archivo de estado, flujo de push y destino del handoff; si no existen, se usan los valores por defecto."
   installs: []
   risk: none
-  version: "2.7.0"
+  version: "2.7.1"
 ---
 
 # Checkpoint — cierre de sesión + handoff
