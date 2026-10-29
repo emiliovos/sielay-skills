@@ -303,7 +303,7 @@ test('every status carries a stable code for link_build_stage: one per hub answe
   assert.equal(unpaired.codes.at(-1), 'unpaired')
 })
 
-test('429 too_many_sessions names the live-session cap, not a 7-day count', async () => {
+test('429 too_many_sessions names both caps: live sessions and new sessions in 7 days', async () => {
   const details = []
   const timers = []
   const loop = createPollLoop({
@@ -317,8 +317,8 @@ test('429 too_many_sessions names the live-session cap, not a 7-day count', asyn
   loop.start()
   timers.shift()()
   await new Promise(r => setImmediate(r))
-  assert.match(details.at(-1), /16 sesiones en línea/)
-  assert.doesNotMatch(details.at(-1), /7 días/)
+  assert.match(details.at(-1), /16 en línea/)
+  assert.match(details.at(-1), /200 nuevas en 7 días/)
   loop.stop()
 })
 
