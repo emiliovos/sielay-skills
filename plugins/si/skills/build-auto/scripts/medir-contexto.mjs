@@ -5,8 +5,8 @@
 //
 // Uso: node medir-contexto.mjs [--sesion <id|ruta.jsonl>] [--desde <ISO>] [--hasta <ISO>] [--umbral <tokens>]
 // Salida: JSON en stdout. Sin dependencias.
-import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs';
-import { join, basename, dirname, resolve } from 'node:path';
+import { readFileSync, readdirSync, existsSync, statSync, realpathSync } from 'node:fs';
+import { join, basename, dirname } from 'node:path';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
@@ -169,4 +169,10 @@ function main() {
 }
 
 // Solo corre como CLI; corte-contexto.mjs lo importa por `measure`.
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main();
+// Node resuelve los symlinks del script principal en import.meta.url, no en
+// argv[1]: sin realpath en los dos lados, llamado por un enlace no haría nada.
+const esPrincipal = () => {
+  try { return realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url)); } catch { return false; }
+};
+
+if (esPrincipal()) main();

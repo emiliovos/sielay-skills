@@ -176,6 +176,12 @@ function main() {
     console.log(`agregado: ${rutas.reporte}`);
   } else throw new Error('uso: bitacora.mjs ruta|arreglo|reporte [--opcion valor]…');
 }
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
+// Node resuelve los symlinks del script principal en import.meta.url, no en
+// argv[1]: sin realpath en los dos lados, llamado por un enlace no haría nada.
+const esPrincipal = () => {
+  try { return fs.realpathSync(process.argv[1]) === fs.realpathSync(fileURLToPath(import.meta.url)); } catch { return false; }
+};
+
+if (esPrincipal()) {
   try { main(); } catch (e) { console.error(`error: ${e.message}`); process.exit(1); }
 }
