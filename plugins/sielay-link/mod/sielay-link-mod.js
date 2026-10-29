@@ -66,6 +66,7 @@ async function callTool($, rt, name, input) {
     newId: () => crypto.randomUUID(),
     selfAddress: async () => (await $.state.get(STATUS)).value?.address,
     notePrefix: prefix => void (rt.addressPrefix = prefix),
+    sendHeaders: await $.env.get('SIELAY_LINK_SEND_HEADERS'),
     read: {
       inbox: rt.inbox,
       instanceId: async () => (await sessionPayload($, rt)).instance_id,

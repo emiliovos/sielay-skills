@@ -13,6 +13,7 @@ import { LINK_TOOL_SPECS, MAX_RECIPIENTS } from './link-tool-specs.js'
 import { ownAddress, selfPrefixOf } from './link-discovery-context.js'
 import { ADDRESS } from './link-tool-address.js'
 import { CODE_MESSAGES, describeHubError, closedConversationNote, sendAnswer, resultLine } from './link-tool-messages.js'
+import { parseSendHeaders, checkSendHeader } from './link-send-headers.js'
 
 export { describeHubError, closedConversationNote, LINK_TOOL_SPECS }
 
@@ -65,6 +66,7 @@ function isConvId(id) {
  *   newId: () => string,
  *   selfAddress: () => Promise<unknown>,
  *   notePrefix?: (prefix: string) => void,
+ *   sendHeaders?: string | null,
  *   build?: import('./link-build-tool.js').BuildToolDeps,
  *   read?: import('./link-read-tool.js').ReadToolDeps,
  *   onSent?: (sent: { conv: string, to: string, end?: boolean, gate?: unknown, turn?: unknown, closed?: { by?: unknown, reason?: unknown } }) => Promise<unknown>,
@@ -129,6 +131,8 @@ export async function runLinkTool(name, input, deps) {
 
     const textError = checkText(input.text)
     if (textError) return { deny: textError }
+    const headerError = name === 'link_send' ? checkSendHeader(String(input.text), parseSendHeaders(deps.sendHeaders)) : null
+    if (headerError) return { deny: headerError }
     const attachment = checkAttachment(input.attachment)
     if (typeof attachment === 'string') return { deny: attachment }
     /** @type {Record<string, unknown>} */
