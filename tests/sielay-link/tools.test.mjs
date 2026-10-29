@@ -153,8 +153,8 @@ test('an unknown tool name is denied', async () => {
 })
 
 test('too_many_sessions explains the session quota', async () => {
-  assert.match(describeHubError(new HubError('rate_limited', 'x', { status: 429, code: 'too_many_sessions' })), /16 sesiones/)
-  assert.match(describeHubError(new HubError('rate_limited', 'x', { status: 429, code: 'too_many_sessions' })), /16 sesiones en línea/)
+  assert.match(describeHubError(new HubError('rate_limited', 'x', { status: 429, code: 'too_many_sessions' })), /16 en línea/)
+  assert.match(describeHubError(new HubError('rate_limited', 'x', { status: 429, code: 'too_many_sessions' })), /200 sesiones nuevas en 7 días/)
 })
 
 const buildInput = { build_id: 'sielay-plan', role: 'coordinator', stage: 2, status: 'running' }

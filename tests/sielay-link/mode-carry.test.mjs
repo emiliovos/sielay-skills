@@ -1,12 +1,12 @@
 // The mode across a /clear: the host empties `$.state` and session.start does
 // not run again, so the last sample seen is carried in memory and restored
 // into the new conversation. A shift+tab seen before the /clear wins, the
-// sample keeps its age (the 24 h cap still applies) and nothing is invented.
+// sample keeps its age (the 7-day bypass and auto cap still applies) and nothing is invented.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { carryModeOnClear, restoreModeCarry, latestSample } from '../../plugins/sielay-link/mod/link-mode-carry.js'
 import { readMode } from '../../plugins/sielay-link/mod/link-session-payload.js'
-import { MODE_FRESH_MAX_MS } from '../../plugins/sielay-link/mod/link-mode-freshness.js'
+import { AUTO_RUN_FRESH_MAX_MS } from '../../plugins/sielay-link/mod/link-mode-freshness.js'
 
 const NOW = 10_000_000
 
@@ -71,8 +71,8 @@ test('an auto sample seen by a hook survives /clear and stays fresh', async () =
   assert.deepEqual([m.mode, m.fresh], ['auto', true])
 })
 
-test('the carried sample keeps its age: past the 24 h cap it is not fresh', async () => {
-  const at = NOW - MODE_FRESH_MAX_MS - 1
+test('the carried sample keeps its age: past the 7-day cap it is not fresh', async () => {
+  const at = NOW - AUTO_RUN_FRESH_MAX_MS - 1
   const h = engine({ samples: [{ mode: 'bypassPermissions', at, event: 'Stop' }], lastStopAt: at })
   const rt = runtime()
   await carryModeOnClear(h.$, rt, { reason: 'clear' })
