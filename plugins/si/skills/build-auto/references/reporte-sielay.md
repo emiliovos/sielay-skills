@@ -132,6 +132,7 @@ Solo con `status: "done"`; sale de `retro.yaml` (`cierre-y-retro.md`):
 }
 ```
 - Cada envío lleva el estimado **completo**: reemplaza al anterior, no se mezcla con él. `reason` solo en una reestimación.
+- `total_h` es el **trabajo** calibrado (el «≈» de `SKILL.md`, «Estimado»). El «a más tardar» y la espera de personas, que no entra en `total_h`, van en `assumption`: "a más tardar 1,25 h (p80 0,58, 30 builds de sielay); espera de personas aparte, mediana 0,1 h".
 - Límites: `total_h` mayor que 0 y hasta 999 (se redondea a 0,1); hasta 20 fases, cada una con `name` (máximo 80) y `h` de 0 a 999; `assumption` máximo 200; `reason` máximo 120; el objeto entero, máximo 2048 bytes.
 - **Reestima** cuando el total previsto se mueve más que ±max(0,5 h, 10 % del programado), o al cerrar un carril que se pasó de lo estimado. Siempre con `reason`.
 - Una reestimación es un dato, no una enmienda: no pide aprobación. Solo la pide si el motivo cambia el Goal, los criterios, los no-goals o la autoridad, y entonces es una enmienda normal.
