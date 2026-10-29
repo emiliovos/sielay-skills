@@ -88,7 +88,7 @@ EOF
 El archivo es el de la línea `Reporte:`; sin esa línea la skill no inventa uno y muestra el bloque en pantalla. Con `Reporte: no`, solo pantalla. En `<repo>` va solo el nombre del repo, sin `/`.
 
 ## Reporte a /builds
-Solo si la sesión tiene la herramienta `link_build_stage`. `build_id: "<repo>-mejora-continua-<AAMMDD>"`, flujo de arreglo o chico, `role: "coordinator"`. Cierra con `status: "done"` y `outcome`: `delivered` (PR abiertos), `stopped` (nada que arreglar, `--solo-diagnostico` o solo hallazgos) o `failed`. Sin la herramienta o con `reported: false`, sigue sin avisar.
+Solo si la sesión tiene la herramienta `link_build_stage`. `build_id: "<repo>-mejora-continua-<AAMMDD>"`, flujo de arreglo o chico, `role: "coordinator"`. Cierra con `status: "done"` y `outcome`: `delivered` (PR abiertos), `stopped` (nada que arreglar, `--solo-diagnostico` o solo hallazgos) o `failed`, y en esa misma llamada la `retro` que sale de la línea `Retro` del reporte: `kind`, `entregado` (los PR), `bien`, `mal`, `pendientes` (los hallazgos que esperan a alguien) y `propuestas` (lo que mejorar, con `applies_to`); hasta 5 por lista y 160 caracteres cada uno. Sin `retro`, el vigía anota el build como `build_sin_retro`. Sin la herramienta o con `reported: false`, sigue sin avisar.
 
 ## Reporte final (en español, corto)
 - Día leído, ruta de la bitácora, líneas válidas e inválidas.
