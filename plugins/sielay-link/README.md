@@ -81,6 +81,7 @@ Si otra carpeta ya usa ese nombre y está en línea, el hub te asigna `nombre-2`
 | `/link name <x>` | Fija el nombre de la sesión para esta carpeta |
 | `/link off` / `on` | Apaga o enciende la recepción en esta sesión. `SIELAY_LINK_OFF=1 claude` lo apaga del todo, sin herramientas |
 | `SIELAY_LINK_MINIMAL=1` | Modo mínimo: solo `link_send`, `link_reply`, `link_peers` y `link_read`, sin la línea de descubrimiento (ver «Novedades de la 1.9.0») |
+| `SIELAY_LINK_SEND_HEADERS=…` | Exige un encabezado en la primera línea de cada `link_send` (ver «Novedades de la 1.14.0») |
 | `SIELAY_LINK_FULL=1` | Un mensaje entra como la tarjeta completa, como antes de la 1.10.0, en vez de la línea «📨 mensaje de …» (ver «Cómo entra un mensaje») |
 | `/link peers` | Tu dirección y las sesiones con las que puedes hablar (solo pares) |
 | `/link pair <slot>` | Empareja la máquina |
@@ -98,6 +99,11 @@ Para que el modelo las use sin preguntarte cada vez, agrégalas a `permissions.a
 ```json
 { "permissions": { "allow": ["mcp__sielay-link__link_send", "mcp__sielay-link__link_reply", "mcp__sielay-link__link_peers", "mcp__sielay-link__link_read", "mcp__sielay-link__link_build_stage", "mcp__sielay-link__link_watch"] } }
 ```
+
+## Novedades de la 1.14.0
+
+- **Encabezado obligatorio en `link_send`, opt-in:** con `SIELAY_LINK_SEND_HEADERS` (encabezados separados por `|`; `#k` pide `#` y un número), `link_send` niega antes del hub un mensaje cuya primera línea no vacía no empieza con uno de ellos. `link_reply` queda libre. Sin la variable no cambia nada. Ej.: `"SIELAY_LINK_SEND_HEADERS": "DECISIÓN #k|AVANCE|ALERTA|DUDA #k"` en el `env` de `~/.claude/settings.json`. Va en el plugin porque un hook `PreToolUse` no alcanza las herramientas que registra un mod (probado: el mismo matcher sí dispara sobre `Agent`). Código en `mod/link-send-headers.js`.
+- **Para tomarla:** `claude plugin update sielay-link@sielay` y `/reload-plugins` en cada sesión abierta (o reiniciarla).
 
 ## Novedades de la 1.13.0
 
