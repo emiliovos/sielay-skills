@@ -36,6 +36,19 @@ function ago(ms) {
   return s < 90 ? `hace ${s} s` : s < 5400 ? `hace ${Math.round(s / 60)} min` : `hace ${Math.round(s / 3600)} h`
 }
 
+/**
+ * A copy loaded mid-session (/reload-plugins) never sees session.start, so its hub and token
+ * are unset without being invalid: say that instead of an error.
+ * @param {Runtime} rt @param {boolean} off
+ */
+function hubLine(rt, off) {
+  if (rt.hubUrl) return `Hub: ${rt.hubUrl} · token: ${rt.tokenSource}`
+  if (rt.hubError) return `Hub: inválido (${rt.hubError}) · token: ${rt.tokenSource}`
+  return off
+    ? 'Hub: sin arrancar (sielay-link apagado)'
+    : 'Hub: esta copia del plugin aún no arrancó en esta sesión (recarga sin inicio); el poll lo hace otra copia, o reinicia la sesión'
+}
+
 /** @param {Engine} $ @param {Runtime} rt */
 async function statusText($, rt) {
   const [{ value: st }, { value: strip = [] }, built, off] = await Promise.all([
@@ -47,7 +60,7 @@ async function statusText($, rt) {
   const mode = built.mode
   return [
     `Estado: ${off ? 'apagado' : (st?.loop ?? 'iniciando')}${st?.detail ? ` (${st.detail})` : ''}`,
-    `Hub: ${rt.hubUrl ?? `inválido (${rt.hubError})`} · token: ${rt.tokenSource}`,
+    hubLine(rt, off),
     `Dirección: ${st?.address ?? '(sin asignar)'} · nombre: ${built.session.name} (${built.nameSource})`,
     `Modo: ${mode.mode} (${mode.fresh ? 'fresco' : 'no fresco'}, visto ${ago(mode.ageMs)}) · estado: ${mode.state}`,
     `Entrega: ${rt.adapter?.mode ?? '—'} · en franja: ${strip.length}`,

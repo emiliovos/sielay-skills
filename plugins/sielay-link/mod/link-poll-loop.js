@@ -128,10 +128,10 @@ export function createPollLoop({ schedule, getClient, buildSession, handler, isO
           await safeStatus('unauthorized', 'el hub rechazó el token: si corriste /up en esta máquina, /reload-plugins; si no, conéctala con curl -fsSL <hub>/up | bash', 'unauthorized')
         }
       } else if (e.code === 'too_many_sessions') {
-        // The device's cap on sessions online at once (16), not a request rate:
-        // nothing changes by retrying sooner, so wait steadily and say why.
+        // The device's cap (16 online at once, or 200 new sessions in 7 days), not a request
+        // rate: nothing changes by retrying sooner, so wait steadily and say why.
         delay = MAX_DELAY_MS
-        await safeStatus('backoff', 'esta máquina ya tiene 16 sesiones en línea (el tope); reintento cada minuto', 'too_many_sessions')
+        await safeStatus('backoff', 'esta máquina llegó al tope de sesiones (16 en línea o 200 nuevas en 7 días); reintento cada minuto', 'too_many_sessions')
       } else if (e.kind === 'paused') {
         delay = PAUSE_MS
         await safeStatus('paused', 'sielay-link está apagado en el hub', 'paused')

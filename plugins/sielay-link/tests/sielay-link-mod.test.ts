@@ -987,3 +987,28 @@ test('closing the terminal gives up after 3 s when reading the off switch hangs;
   await $.session.end({ reason: 'other', sessionId: 'sess-1', resume: {} } as any)
   expect(ends()).toBe(0)
 })
+
+test('/link on a copy that never saw session.start says it has not started, not an invalid hub', { options: { link_token: 'test-token' } }, async ($, on) => {
+  mock.clock(on, { now: 3_000_000 })
+  mock.store(on)
+  mock.env(on, { HOME: '/nowhere' })
+  fakeHost(on)
+  const sent = fakeHub(on, () => ({}))
+  const r: any = await $.command.run({ command: 'link', args: '' } as any)
+  const hub = String(r.text).split('\n').find((l: string) => l.startsWith('Hub:'))!
+  expect(hub).not.toContain('inválido')
+  expect(hub).toContain('aún no arrancó')
+  expect(sent.length).toBe(0)
+})
+
+test('a 429 too_many_sessions names both caps: 16 online and 200 new sessions in 7 days', { options: { link_token: 'test-token' } }, async ($, on) => {
+  mock.clock(on, { now: 4_000_000 })
+  mock.store(on)
+  mock.env(on, { HOME: '/nowhere' })
+  fakeHost(on)
+  on('http.fetch', () => ({ value: { status: 429, ok: false, headers: {}, text: JSON.stringify({ code: 'too_many_sessions' }) } }))
+  await $.session.start({ cwd: '/srv/p', surface: 'terminal', isInteractive: true })
+  const r: any = await $.tool.call({ tool: 'mcp__sielay-link__link_send', to: 'ana/laptop/api', text: 'hola' } as any)
+  expect(String(r.deny)).toContain('16 en línea')
+  expect(String(r.deny)).toContain('200 sesiones nuevas en 7 días')
+})

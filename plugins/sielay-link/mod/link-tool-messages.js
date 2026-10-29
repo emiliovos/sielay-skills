@@ -15,7 +15,7 @@ export const CODE_MESSAGES = {
   too_large: 'El mensaje pasa de 16 KB. Resúmelo o divídelo.',
   invalid: 'El hub rechazó el mensaje por formato inválido.',
   forbidden: 'Solo una sesión de una persona admin puede vigilar ramas con link_watch.',
-  too_many_sessions: 'Esta máquina ya tiene 16 sesiones en línea, el tope. Cierra una o reusa una sesión (mismo nombre y carpeta), o pide a un admin que revise.',
+  too_many_sessions: 'Esta máquina llegó a su tope de sesiones: 16 en línea a la vez, o más de 200 sesiones nuevas en 7 días. Cierra una, reusa una sesión (mismo nombre y carpeta), o pide a un admin que revise.',
 }
 
 /** Where a 409 link_paused says sielay-link is off (`scope`). */

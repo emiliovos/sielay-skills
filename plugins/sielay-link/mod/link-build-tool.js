@@ -19,7 +19,7 @@ export const BUILD_TOOL_SPEC = Object.freeze({
     'el uso de tokens y started_at los pone el plugin. El build se guarda siempre. reported:true significa que el hub acepta ' +
     'los polls de esta sesión, no que registró el build (puede ignorarlo por su tope de builds, un build cerrado o el visor ' +
     'apagado). Con reported:false, el campo reason dice por qué: pending (aún no hubo poll), too_many_sessions (la máquina ' +
-    'llegó a su tope de sesiones en línea), paused, unauthorized, unpaired, off o unreachable (red o hub caído). ' +
+    'llegó a su tope de sesiones: 16 en línea o 200 nuevas en 7 días), paused, unauthorized, unpaired, off o unreachable (red o hub caído). ' +
     'No reintentes por eso: el siguiente poll lo lleva si la sesión vuelve a estar en línea.',
   inputSchema: {
     type: 'object',
