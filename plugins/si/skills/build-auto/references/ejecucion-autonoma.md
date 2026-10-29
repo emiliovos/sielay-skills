@@ -28,6 +28,7 @@ En `main directo` el aislamiento por worktree y el orden de integración se mant
   - que termine con `Status: DONE | DONE_WITH_CONCERNS | BLOCKED`.
 
   Quien verifica entrega un artefacto (log, captura, salida de comandos); "revisé el código" no cuenta como verificación.
+  Un encargo termina en `DONE` solo con un artefacto citado: la ruta del log o de la captura, o el id de la corrida leído con `gh run view`. Sin artefacto, el estado es `BLOCKED`.
 - **Un agente por carril, de punta a punta:** el que implementa escribe sus pruebas; no hay cadena implementador → tester → revisor. Solo el revisor es otro agente, con contexto fresco.
 - **Tope por agente:** tras 3 vueltas sobre el mismo error, reemplázalo por un agente nuevo desde el último commit de su rama, con el error y lo ya intentado en el encargo. No repitas el mismo encargo.
 

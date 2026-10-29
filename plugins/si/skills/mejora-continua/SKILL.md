@@ -1,8 +1,8 @@
 ---
 name: mejora-continua
-description: "Convierte la bitácora de anomalías del día en arreglos chicos con PR: lee las anomalías que la operación anotó, las agrupa por causa, elige de 1 a 3 repetidas o costosas con causa demostrable, las arregla en una rama propia con prueba de regresión y deja los PR y los hallazgos en el reporte de la mañana. Nunca mergea, nunca publica, nunca debilita pruebas. Úsala cuando pidan '/mejora-continua', 'revisa las anomalías del día', 'mejora continua', 'qué se repitió ayer y arréglalo', o desde un cron de madrugada."
+description: "Convierte la bitácora de anomalías del día en 1 a 3 arreglos chicos con PR y prueba de regresión; nunca mergea ni publica. Actívala con '/mejora-continua', 'qué se repitió ayer y arréglalo' o desde un cron de madrugada."
 user-invocable: true
-when_to_use: "Invoke cuando un repo lleva una bitácora de anomalías (una línea JSON por anomalía) y se quiere convertir lo que se repite o cuesta caro en arreglos revisables, sin tocar producción. Para el cierre de una sesión usa checkpoint; para una falla puntual en rojo, un flujo de arreglo normal."
+when_to_use: "Cuando el repo lleva bitácora de anomalías. Para cerrar sesión usa checkpoint."
 argument-hint: "[--dia AAMMDD] [--solo-diagnostico] [--max 1-3]"
 keywords: [anomalias, mejora-continua, bitacora, causa-raiz, arreglo, regresion, reporte, madrugada]
 metadata:
@@ -11,7 +11,7 @@ metadata:
   deps: "git y gh en el repo destino. Requiere en su CLAUDE.md la línea 'Anomalías:' (o 'Reporte:') de la sección '## Cierre de sesión'; sin ninguna, la skill lo dice y para."
   installs: []
   risk: none
-  version: "1.0.1"
+  version: "1.0.2"
 ---
 
 # mejora-continua: de la bitácora de anomalías a PRs revisables

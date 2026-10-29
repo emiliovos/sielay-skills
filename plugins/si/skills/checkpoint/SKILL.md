@@ -1,8 +1,8 @@
 ---
 name: checkpoint
-description: "Ritual de cierre de sesión + handoff genérico para cualquier proyecto. Úsalo al terminar de trabajar: resuelve el contexto y el contrato de cierre del proyecto (CLAUDE.md o descriptor) → bitácora/estado → docs → commit → push según el flujo del repo → handoff copy-paste para seguir en otra terminal con contexto limpio. Si el CLAUDE.md del repo declara su cierre en la sección '## Cierre de sesión', lo sigue sin crear archivos nuevos (salvo el archivo de reporte del Paso 6); si no, usa los valores por defecto. Actívalo cuando el usuario diga '/checkpoint', 'checkpoint', 'cierra la sesión', 'termina y dame handoff', 'cerremos', 'wrap up', 'dame el handoff', o al final de una tanda de trabajo. Modo 'continuar' (/checkpoint continuar, 'checkpoint para seguir', 'voy a limpiar contexto'): sin bitácora ni docs ni push, solo commit local + handoff corto (≤25 líneas) en pantalla para seguir la misma tarea tras /clear. Todos los modos incluyen el ENTORNO VIVO de la sesión (crons, procesos en segundo plano con PID, estado git), un ARRANQUE que lo verifica al retomar y el bloque de REPORTE (hecho, quedó, retro) agregado al archivo de reportes que declara el repo."
+description: "Cierre de sesión y handoff: estado, docs, commit y push según el repo, y un handoff para seguir con contexto limpio. Actívalo con 'checkpoint', '/checkpoint', 'cierra la sesión', 'termina y dame handoff' o 'voy a limpiar contexto'."
 user-invocable: true
-when_to_use: "Invoke al cerrar una sesión de trabajo: deja el trabajo commiteado (en el repo/entorno correcto), la bitácora o el archivo de estado y los docs al día, y un prompt de handoff para retomar en frío. Resuelve acceso, rutas, flujo de push y destino del handoff por proyecto en vez de asumir constantes fijas — una sola skill sirve para proyectos con y sin convenciones propias. Para proyectos SIN buzón de coordinación (trabajo en solitario)."
+when_to_use: "Al cerrar una sesión en un proyecto sin buzón de coordinación; '/checkpoint continuar' deja commit local y handoff corto."
 argument-hint: "[continuar|autonomo|coordinador] [<slug-del-proyecto>] [nota opcional de cierre]"
 keywords: [cierre, handoff, journal, estado, docs, commit, push, wrap-up, sesion, continuar, compact]
 metadata:
@@ -11,7 +11,7 @@ metadata:
   deps: "git configurado en el repo destino. Opcional: una sección '## Cierre de sesión' en el CLAUDE.md del repo o un descriptor de proyecto (p.ej. docs/projects/<slug>/project.json) para fijar archivo de estado, flujo de push y destino del handoff; si no existen, se usan los valores por defecto."
   installs: []
   risk: none
-  version: "2.7.1"
+  version: "2.7.2"
 ---
 
 # Checkpoint — cierre de sesión + handoff
