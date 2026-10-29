@@ -6,14 +6,16 @@ import {
   IDLE_POLICY_LAST_SEEN,
   IDLE_POLICY_STRICT,
   IDLE_FRESH_MAX_MS,
+  AUTO_RUN_FRESH_MAX_MS,
+  freshMaxMs,
 } from '../../plugins/sielay-link/mod/link-mode-freshness.js'
 
 const H = 3_600_000
 const bypass = (at, event = 'PostToolUse') => ({ mode: 'bypassPermissions', at, event })
 
-test('the default idle policy is "last seen mode" with a 24 h window', () => {
+test('the default idle policy is "last seen mode" with a 7-day window', () => {
   assert.equal(IDLE_POLICY, IDLE_POLICY_LAST_SEEN)
-  assert.equal(IDLE_FRESH_MAX_MS, 24 * H)
+  assert.equal(IDLE_FRESH_MAX_MS, 7 * 24 * H)
 })
 
 for (const policy of [IDLE_POLICY_STRICT, IDLE_POLICY_LAST_SEEN]) {
@@ -57,7 +59,7 @@ test('[strict] idle after Stop without a live source is not fresh', () => {
   assert.equal(s.ageMs, 1)
 })
 
-test('[last seen] idle bypass stays fresh up to 24 h, then goes stale', () => {
+test('[last seen] idle bypass stays fresh up to 7 days, then goes stale', () => {
   const at = 1_000
   const inWindow = modeState({ samples: [bypass(at, 'Stop')], lastStopAt: at, now: at + IDLE_FRESH_MAX_MS, policy: IDLE_POLICY_LAST_SEEN })
   assert.equal(inWindow.fresh, true)
@@ -75,7 +77,7 @@ test('[last seen] idle in default, plan or acceptEdits is never fresh', () => {
   }
 })
 
-test('[last seen] idle auto mode counts like bypass: fresh up to 24 h, then stale', () => {
+test('[last seen] idle auto mode counts like bypass: fresh up to 7 days, then stale', () => {
   const auto = { mode: 'auto', at: 1_000, event: 'Stop' }
   const inWindow = modeState({ samples: [auto], lastStopAt: 1_000, now: 1_000 + IDLE_FRESH_MAX_MS, policy: IDLE_POLICY_LAST_SEEN })
   assert.deepEqual([inWindow.mode, inWindow.fresh, inWindow.state], ['auto', true, 'idle'])
@@ -122,20 +124,38 @@ test('an unknown policy falls back to strict (fail closed)', () => {
 import { MODE_FRESH_MAX_MS } from '../../plugins/sielay-link/mod/link-mode-freshness.js'
 
 for (const policy of [IDLE_POLICY_STRICT, IDLE_POLICY_LAST_SEEN]) {
-  test(`[${policy}] a "running" turn with no Stop is capped at 24 h`, () => {
-    const within = modeState({ samples: [bypass(0, 'UserPromptSubmit')], lastStopAt: null, now: MODE_FRESH_MAX_MS, policy })
+  test(`[${policy}] a "running" bypass turn with no Stop is capped at 7 days`, () => {
+    const within = modeState({ samples: [bypass(0, 'UserPromptSubmit')], lastStopAt: null, now: AUTO_RUN_FRESH_MAX_MS, policy })
     assert.equal(within.fresh, true)
-    const later = modeState({ samples: [bypass(0, 'UserPromptSubmit')], lastStopAt: null, now: 25 * H, policy })
+    const later = modeState({ samples: [bypass(0, 'UserPromptSubmit')], lastStopAt: null, now: AUTO_RUN_FRESH_MAX_MS + 1, policy })
     assert.equal(later.fresh, false)
-    assert.equal(later.state, 'unknown', 'a turn silent for 24 h is not reported as working')
+    assert.equal(later.state, 'unknown', 'a turn silent for 7 days is not reported as working')
   })
 
-  test(`[${policy}] the review probe: a sample after an older Stop, 48 h later, is not fresh`, () => {
-    const s = modeState({ samples: [bypass(10, 'PostToolUse')], lastStopAt: 5, now: 48 * H, policy })
+  test(`[${policy}] a "running" turn in default, plan or acceptEdits keeps the 24 h cap`, () => {
+    for (const mode of ['default', 'plan', 'acceptEdits']) {
+      const sample = { mode, at: 0, event: 'UserPromptSubmit' }
+      assert.equal(modeState({ samples: [sample], lastStopAt: null, now: MODE_FRESH_MAX_MS, policy }).fresh, true, mode)
+      const later = modeState({ samples: [sample], lastStopAt: null, now: 25 * H, policy })
+      assert.deepEqual([later.fresh, later.state], [false, 'unknown'], mode)
+    }
+  })
+
+  test(`[${policy}] the review probe: a sample after an older Stop, 8 days later, is not fresh`, () => {
+    const s = modeState({ samples: [bypass(10, 'PostToolUse')], lastStopAt: 5, now: 8 * 24 * H, policy })
     assert.equal(s.fresh, false)
   })
 }
 
-test('the 24 h cap is one constant shared by both branches', () => {
-  assert.equal(MODE_FRESH_MAX_MS, IDLE_FRESH_MAX_MS)
+test('[last seen] a bypass session idle over a weekend (3 days) stays fresh', () => {
+  const s = modeState({ samples: [bypass(0, 'Stop')], lastStopAt: 0, now: 72 * H, policy: IDLE_POLICY_LAST_SEEN })
+  assert.equal(s.fresh, true)
+})
+
+test('only bypass and auto get the 7-day cap; every other mode keeps 24 h', () => {
+  assert.equal(MODE_FRESH_MAX_MS, 24 * H)
+  assert.equal(freshMaxMs('bypassPermissions'), AUTO_RUN_FRESH_MAX_MS)
+  assert.equal(freshMaxMs('auto'), AUTO_RUN_FRESH_MAX_MS)
+  for (const mode of ['default', 'plan', 'acceptEdits', 'unknown']) assert.equal(freshMaxMs(mode), MODE_FRESH_MAX_MS, mode)
+  assert.equal(IDLE_FRESH_MAX_MS, AUTO_RUN_FRESH_MAX_MS)
 })

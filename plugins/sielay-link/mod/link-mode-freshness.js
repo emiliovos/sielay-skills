@@ -31,10 +31,18 @@ export const IDLE_POLICY = IDLE_POLICY_LAST_SEEN
  * The oldest a mode reading may be and still count as fresh, in every branch:
  * idle under the last-seen policy, and a "running" turn too, since a turn
  * that ends on Esc or an API error may leave no end mark at all.
+ *
+ * Bypass and auto keep their reading for 7 days, so a terminal left in bypass
+ * over a weekend still takes its peer's messages; the hub still auto-runs one
+ * only from a pair with auto_run on. Every other mode keeps 24 h.
  */
+export const AUTO_RUN_FRESH_MAX_MS = 7 * 24 * 60 * 60 * 1000
 export const MODE_FRESH_MAX_MS = 24 * 60 * 60 * 1000
-/** The same cap, by the name the idle policy uses. */
-export const IDLE_FRESH_MAX_MS = MODE_FRESH_MAX_MS
+/** Only bypass and auto can be fresh while idle, so the idle window is theirs. */
+export const IDLE_FRESH_MAX_MS = AUTO_RUN_FRESH_MAX_MS
+
+/** @param {string} mode */
+export const freshMaxMs = (mode) => (isAutoRunMode(mode) ? AUTO_RUN_FRESH_MAX_MS : MODE_FRESH_MAX_MS)
 
 /**
  * @typedef {{ mode: string, at: number, event?: string }} ModeSample
@@ -56,7 +64,7 @@ function isSample(s) {
  *
  * - No sample: `unknown`, not fresh.
  * - A live source (none exists today; kept for a future build): fresh.
- * - Older than MODE_FRESH_MAX_MS: never fresh, whatever the branch.
+ * - Older than its mode's cap (freshMaxMs): never fresh, whatever the branch.
  * - The newest sample is newer than the last turn end: a turn is running, fresh.
  * - Otherwise the session is idle and the policy decides.
  *
@@ -80,7 +88,7 @@ export function modeState({ samples, lastStopAt, liveSource, now, policy = IDLE_
 
   const ageMs = Math.max(0, now - latest.at)
   const state = stateOf(latest, lastStopAt)
-  if (ageMs > MODE_FRESH_MAX_MS) {
+  if (ageMs > freshMaxMs(latest.mode)) {
     return { mode: latest.mode, fresh: false, state: state === 'working' ? 'unknown' : state, ageMs }
   }
   if (state === 'working') return { mode: latest.mode, fresh: true, state, ageMs }

@@ -99,6 +99,13 @@ Para que el modelo las use sin preguntarte cada vez, agrégalas a `permissions.a
 { "permissions": { "allow": ["mcp__sielay-link__link_send", "mcp__sielay-link__link_reply", "mcp__sielay-link__link_peers", "mcp__sielay-link__link_read", "mcp__sielay-link__link_build_stage", "mcp__sielay-link__link_watch"] } }
 ```
 
+## Novedades de la 1.13.0
+
+- **Bypass y auto valen 7 días en idle:** una terminal que se queda en bypass o en auto un fin de semana sigue recibiendo en automático lo de un par con auto-ejecución (antes, a las 24 h sin un turno, todo caía a la franja). El tope vale también para un turno que quedó abierto sin fin. Los demás modos siguen con 24 h, y un par sin auto-ejecución sigue mandando todo a la franja: eso lo decide el hub, no la frescura. Constantes `AUTO_RUN_FRESH_MAX_MS` y `MODE_FRESH_MAX_MS` en `mod/link-mode-freshness.js`.
+- **`/link` en una copia que no arrancó:** tras un `/reload-plugins` a mitad de sesión ya no dice «Hub inválido (null) · token: none»; dice que esa copia aún no arrancó y que el poll lo lleva otra copia o hay que reiniciar la sesión.
+- **El tope de sesiones nombra sus dos causas:** el 429 `too_many_sessions` dice «16 en línea a la vez, o más de 200 sesiones nuevas en 7 días».
+- **Para tomarla:** `claude plugin update sielay-link@sielay` y `/reload-plugins` en cada sesión abierta (o reiniciarla).
+
 ## Novedades de la 1.12.0
 
 - **Avisos del hub que solo informan ya no abren turno:** «empezó el merge de un PR» (`repo_merge_started`) y «terminó el CI» con resultado `success` (`ci_finished`) se escriben en el log de la terminal como «aviso del hub · …», sin gastar un turno del modelo. Todo lo demás abre turno como antes: el merge terminado (`repo_merged`, trae la instrucción de rebasar), un CI que no salió en `success`, `peer_unread`, los avisos de /builds y cualquier tipo que esta versión no conozca. La lista de tipos silenciosos está en `isQuietNotice` (`mod/link-hub-notice-framing.js`), con una prueba por caso.
@@ -137,7 +144,7 @@ Para que el modelo las use sin preguntarte cada vez, agrégalas a `permissions.a
 ## Novedades de la 1.9.1
 
 - **El modo sobrevive a un /clear:** antes, una sesión en bypass recién limpiada con `/clear` y ociosa reportaba `unknown` hasta su primer prompt, y un mensaje de un par con auto-ejecución caía en la franja. Al hacer `/clear` el host empieza una sesión nueva con el estado vacío y no vuelve a correr `session.start`, así que la muestra de arranque no se repetía. Ahora el plugin guarda en memoria la última muestra de modo al cerrar con `/clear` y la pone en la conversación nueva si esta no tiene una propia, marcada como ociosa.
-- **Lo que no cambia:** se lleva la última muestra vista, no una lectura nueva: un shift+tab visto antes del `/clear` sigue ganando, la muestra conserva su edad (el tope, hoy de 24 h, cuenta desde que se vio) y un modo distinto de bypass (o de auto, desde la 1.9.2) sigue sin auto-ejecutar. Salir, `/resume` o reiniciar no llevan nada.
+- **Lo que no cambia:** se lleva la última muestra vista, no una lectura nueva: un shift+tab visto antes del `/clear` sigue ganando, la muestra conserva su edad (el tope, hoy de 7 días para bypass y auto, cuenta desde que se vio) y un modo distinto de bypass (o de auto, desde la 1.9.2) sigue sin auto-ejecutar. Salir, `/resume` o reiniciar no llevan nada.
 
 ## Novedades de la 1.9.0
 
@@ -226,14 +233,14 @@ Cualquier otro mensaje va a la **franja** de arriba del prompt. La franja muestr
 
 **Frescura del modo.** Claude Code solo informa el modo de permisos en los hooks de un turno: al enviar un prompt, al usar una herramienta y al terminar. Con la sesión en idle no hay lectura en vivo: un shift+tab no avisa a nadie. La regla vigente (`IDLE_POLICY` en `mod/link-mode-freshness.js`) es «último modo visto»:
 
-- si al terminar el último turno la sesión estaba en bypass o en auto, ese modo sigue contando como fresco hasta **24 h** en idle (12 h hasta la 1.9.1);
+- si al terminar el último turno la sesión estaba en bypass o en auto, ese modo sigue contando como fresco hasta **7 días** en idle (24 h hasta la 1.12.0 y 12 h hasta la 1.9.1);
 - pasado ese tiempo, o con otro modo, el mensaje va a la franja.
 
-El fin de turno se toma de `turn.complete`, que también llega cuando interrumpes con Esc o cuando un error de API corta el turno; `classic.Stop` no llega en esos casos. El tope de 24 h vale en todos los casos: una lectura más vieja nunca cuenta como fresca, aunque el turno parezca seguir abierto.
+El fin de turno se toma de `turn.complete`, que también llega cuando interrumpes con Esc o cuando un error de API corta el turno; `classic.Stop` no llega en esos casos. El tope vale en todos los casos (7 días para bypass y auto, 24 h para los demás modos): una lectura más vieja nunca cuenta como fresca, aunque el turno parezca seguir abierto.
 
 El hub recibe en cada poll el modo, si está fresco y su antigüedad (`mode_age_s`), para mostrarlo en el dashboard. Al arrancar (sesión nueva o `--resume`), y sin otra lectura todavía, el plugin toma el modo con que se lanzó Claude Code: `--dangerously-skip-permissions` o `--permission-mode <modo>`, leídos del proceso con `ps`; si no hay ninguno, `permissions.defaultMode` de los settings. La sesión cuenta como idle. Así, una terminal lanzada en bypass recibe en automático desde el primer poll, sin esperar a su primer prompt (desde la 1.5.1). Un `/reload-plugins` no pisa un modo ya visto.
 
-**Organizaciones.** Donde una organización gestiona Claude Code, los hooks `classic.*` de un plugin instalado por la persona no corren. Ahí solo cuenta el modo de arranque: hasta 24 h en idle, como cualquier lectura, y sin ver un shift+tab posterior.
+**Organizaciones.** Donde una organización gestiona Claude Code, los hooks `classic.*` de un plugin instalado por la persona no corren. Ahí solo cuenta el modo de arranque: hasta 7 días en idle, como cualquier lectura de bypass, y sin ver un shift+tab posterior.
 
 ## Cómo entra un mensaje
 
