@@ -11,7 +11,7 @@ metadata:
   deps: "git en el repo destino. Recomendado: AgentKit (skills /ak:*); sin él, cada etapa se hace con subagentes nativos. Opcional: /si:checkpoint para el cierre (--checkpoint) y red a context7.com (o su MCP) para consultar la doc de dependencias en las etapas 2 y 3."
   installs: []
   risk: none
-  version: "2.10.3"
+  version: "2.10.4"
 ---
 
 # Build-auto: backbone de proyecto autónomo
@@ -127,6 +127,7 @@ El costo de un build crece con el tamaño del contexto por el número de turnos.
     4. termina el turno. En tmux, el gancho limpia la sesión sola (`scripts/limpiar-terminal.mjs`: solo toca el pane si sigue corriendo Claude y está libre, sin turno, diálogo ni texto en la caja; manda `/reload-plugins` y `/clear`, pega «Retoma desde <handoff>» con el Enter aparte, confirma cada paso en pantalla y deja «limpio» o «limpiar-fallo» en la bitácora; con un fallo antes del `/clear`, el siguiente fin de turno lo reintenta) y nadie más la toca. Sin tmux, avisa al coordinador por `link_send` (o, si tú coordinas, a quien te lanzó; sin link, a la persona en pantalla) «listo para clear, handoff en <ruta>», con su modelo y su `contexto_max`, y el coordinador la limpia como dice `references/terminales.md`.
   Nunca un `/clear` sin checkpoint. La sesión retomada sigue desde el handoff y, si coordina, vuelve a `status: "running"`.
   Nunca autocompactar a ciegas en el coordinador. Una lectura grande se delega a un subagente; no se usa la ventana de 1 M en builds autónomos.
+- **Lectura dirigida.** Busca primero con `grep -n` y lee por rango; recorta las salidas de Bash (`grep`, `head`, `tail`, `--stat`). Una lectura amplia va a un subagente Explore que regresa un resumen: cada resultado se queda en el contexto y se vuelve a leer en cada turno. Un AVANCE o un handoff lleva solo qué pasó, el PR o la evidencia y qué falta.
 - **Tope de tokens por carril**, declarado en el plan. Si un carril lo pasa, para en un punto seguro y reporta; el coordinador decide si sigue. Si la persona fija un tope global de la corrida, también se respeta.
 - **Concurrencia según dónde corren las pruebas.** Con CI remoto, hasta **4** carriles (subagentes o terminales) a la vez, cada uno con el mismo corte a 150 K (apunta a quedar por debajo de 100 K). Con pruebas locales, **2**. El número de carriles lo da el plan; la concurrencia es solo cuántos corren a la vez. Lo único que va en fila es lo que satura la máquina local: una instalación de dependencias a la vez.
 - **Modelo fijo por rol, en cada llamada.** Todo subagente se lanza pasando el parámetro `model` en la llamada (`Agent`/`Task`); omitirlo deja el modelo al azar de la definición del agente o lo hereda del coordinador, y el build entero termina en el más caro. Tabla fija:
