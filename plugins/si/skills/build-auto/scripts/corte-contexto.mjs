@@ -18,7 +18,7 @@ import { measure, findTranscript } from './medir-contexto.mjs';
 import { leer, escribir, bitacora, clave, archivoActivo, archivoEstado, idPane, buildActivo, scriptDelGancho, conControl } from './corte-estado.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const UMBRAL = Number(process.env.SI_BUILD_CORTE_UMBRAL) || 150000;
+const UMBRAL = Number(process.env.SI_BUILD_CORTE_UMBRAL) || 250000;
 const RE_AVISO = 20000; // vuelve a pedir el corte solo si el contexto creció esto desde el último aviso
 const LIMPIANDO_MS = 120000; // un limpiador ya lanzado no se repite antes de esto
 
@@ -31,7 +31,7 @@ function instrucciones(k, buildId) {
     'Si hay un subagente o una espera corriendo, o algo a medio commitear, termínalo sin empezar nada nuevo y vuelve a parar; el corte se pide de nuevo más adelante.',
     'Si no:',
     '1. /si:checkpoint autonomo: commit local y handoff en ~/handoffs/<sesion>.md con el build_id, la etapa, lo hecho, lo que sigue, las decisiones vigentes y las esperas en segundo plano que haya que relanzar.',
-    '2. Solo si coordinas y reportas a sielay: link_build_stage con status "blocked" y waiting {on: "terminal", what: "corte de contexto a 150 K", next: "retomar desde <handoff>"}.',
+    `2. Solo si coordinas y reportas a sielay: link_build_stage con status "blocked" y waiting {on: "terminal", what: "corte de contexto a ${Math.round(UMBRAL / 1000)} K", next: "retomar desde <handoff>"}.`,
     `3. node "${join(HERE, 'corte-contexto.mjs')}" --listo <ruta del handoff>`,
     '4. Termina el turno sin más trabajo.',
     sigue,

@@ -11,7 +11,7 @@ import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 function parseArgs(argv) {
-  const out = { umbral: 150000 };
+  const out = { umbral: 250000 };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     const next = () => {
