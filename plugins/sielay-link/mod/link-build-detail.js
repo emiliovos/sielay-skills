@@ -117,31 +117,31 @@ export function deliveryExtras(delivery, now) {
 
 /** The JSON schema of the blocks above for link_build_stage. */
 export const DETAIL_SCHEMA = Object.freeze({
-  flow: { type: 'string', enum: [...BUILD_FLOWS], description: 'Flujo del build (solo el coordinador): full (por omisión), chico o fix; dice qué etapas existen' },
+  flow: { type: 'string', enum: [...BUILD_FLOWS], description: 'Solo coordinador; full por omisión' },
   stage_detail: {
     type: 'object', additionalProperties: false, required: ['stage'],
-    description: 'Detalle de una etapa (solo el coordinador): reemplaza el último enviado. Nunca secretos',
+    description: 'Solo coordinador; reemplaza el anterior; sin secretos',
     properties: {
       stage: { type: 'integer', minimum: 1, maximum: 7 },
       items: {
-        type: 'array', maxItems: DETAIL_ITEMS_MAX, description: 'Evidencia de la etapa; los de más de 8 se recortan',
+        type: 'array', maxItems: DETAIL_ITEMS_MAX, description: 'Evidencia',
         items: {
           type: 'object', additionalProperties: false, required: ['label'],
           properties: {
-            label: { type: 'string', description: `Máximo ${DETAIL_TEXT_MAX.label}` },
-            value: { type: 'string', description: `Máximo ${DETAIL_TEXT_MAX.value}` },
-            href: { type: 'string', description: `URL https: o ruta relativa (máximo ${BUILD_TEXT_MAX.link}); si no es válida se descarta` },
+            label: { type: 'string', description: `Máx. ${DETAIL_TEXT_MAX.label}` },
+            value: { type: 'string', description: `Máx. ${DETAIL_TEXT_MAX.value}` },
+            href: { type: 'string', description: `https: o ruta relativa (máx. ${BUILD_TEXT_MAX.link})` },
           },
         },
       },
       live: {
         type: ['object', 'null'], additionalProperties: false, required: ['label'],
-        description: 'Lo que pasa ahora en la etapa; null lo borra',
+        description: 'Qué pasa ahora; null lo borra',
         properties: {
-          label: { type: 'string', description: `Máximo ${DETAIL_TEXT_MAX.live}` },
+          label: { type: 'string', description: `Máx. ${DETAIL_TEXT_MAX.live}` },
           done: { type: 'integer', minimum: 0 },
           total: { type: 'integer', minimum: 0 },
-          at: { type: 'string', description: 'ISO 8601' },
+          at: { type: 'string' },
         },
       },
     },
@@ -151,14 +151,14 @@ export const DETAIL_SCHEMA = Object.freeze({
 /** The schema of `delivery.merge_queue` and `delivery.deploy`. */
 export const DELIVERY_EXTRA_SCHEMA = Object.freeze({
   merge_queue: {
-    type: 'object', description: 'Fila de merge del PR; un campo inválido descarta el objeto',
+    type: 'object', description: 'Un campo inválido lo descarta',
     properties: {
       position: { type: ['integer', 'null'], minimum: 1 }, total: { type: ['integer', 'null'], minimum: 1 },
-      reason: { type: 'string', description: `Máximo ${DETAIL_TEXT_MAX.reason}` }, since: { type: 'string', description: 'ISO 8601' },
+      reason: { type: 'string', description: `Máx. ${DETAIL_TEXT_MAX.reason}` }, since: { type: 'string' },
     },
   },
   deploy: {
-    type: 'object', required: ['state'], description: 'Estado del deploy; un campo inválido descarta el objeto',
-    properties: { state: { type: 'string', enum: [...DEPLOY_STATES] }, at: { type: 'string', description: 'ISO 8601' } },
+    type: 'object', required: ['state'], description: 'Un campo inválido lo descarta',
+    properties: { state: { type: 'string', enum: [...DEPLOY_STATES] }, at: { type: 'string' } },
   },
 })

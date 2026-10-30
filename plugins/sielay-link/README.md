@@ -100,6 +100,11 @@ Para que el modelo las use sin preguntarte cada vez, agrégalas a `permissions.a
 { "permissions": { "allow": ["mcp__sielay-link__link_send", "mcp__sielay-link__link_reply", "mcp__sielay-link__link_peers", "mcp__sielay-link__link_read", "mcp__sielay-link__link_build_stage", "mcp__sielay-link__link_watch"] } }
 ```
 
+## Novedades de la 1.14.1
+
+- **`link_build_stage` más ligero:** la descripción y las de sus campos bajan de ~7,9 KB a ~6 KB de esquema por petición, sin quitar ningún campo, enum ni límite (la estructura sola pesa ~4 KB). El validador sigue igual.
+- **Para tomarla:** `claude plugin update sielay-link@sielay` y `/reload-plugins` (o reiniciar la sesión).
+
 ## Novedades de la 1.14.0
 
 - **Encabezado obligatorio en `link_send`, opt-in:** con `SIELAY_LINK_SEND_HEADERS` (encabezados separados por `|`; `#k` pide `#` y un número), `link_send` niega antes del hub un mensaje cuya primera línea no vacía no empieza con uno de ellos. `link_reply` queda libre. Sin la variable no cambia nada. Ej.: `"SIELAY_LINK_SEND_HEADERS": "DECISIÓN #k|AVANCE|ALERTA|DUDA #k"` en el `env` de `~/.claude/settings.json`. Va en el plugin porque un hook `PreToolUse` no alcanza las herramientas que registra un mod (probado: el mismo matcher sí dispara sobre `Agent`). Código en `mod/link-send-headers.js`.

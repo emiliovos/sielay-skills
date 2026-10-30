@@ -13,69 +13,64 @@ const str = (/** @type {string} */ description) => ({ type: 'string', descriptio
 export const BUILD_TOOL_SPEC = Object.freeze({
   name: 'link_build_stage',
   description:
-    'Solo informa a sielay en qué va el build de /si:build-auto de esta sesión (etapa, estado, resumen, entrega); ' +
-    'no controla nada: no aprueba etapas, no mergea ni dispara acciones. El hub lo recibe en el siguiente poll (≤ 25 s). ' +
-    'Cada llamada mezcla sus campos con los del mismo build_id; un build_id nuevo empieza otro build. Los subagentes, ' +
-    'el uso de tokens y started_at los pone el plugin. El build se guarda siempre. reported:true significa que el hub acepta ' +
-    'los polls de esta sesión, no que registró el build (puede ignorarlo por su tope de builds, un build cerrado o el visor ' +
-    'apagado). Con reported:false, el campo reason dice por qué: pending (aún no hubo poll), too_many_sessions (la máquina ' +
-    'llegó a su tope de sesiones: 16 en línea o 200 nuevas en 7 días), paused, unauthorized, unpaired, off o unreachable (red o hub caído). ' +
-    'No reintentes por eso: el siguiente poll lo lleva si la sesión vuelve a estar en línea.',
+    'Solo informa a sielay en qué va el build de /si:build-auto (etapa, estado, resumen, entrega); no controla nada. ' +
+    'Cada llamada mezcla sus campos con los del mismo build_id. reported:true significa que el hub acepta los polls de ' +
+    'esta sesión, no que registró el build; con reported:false, reason dice por qué. No reintentes: lo lleva el siguiente poll.',
   inputSchema: {
     type: 'object',
     additionalProperties: false,
     required: ['build_id', 'role', 'stage', 'status'],
     properties: {
-      build_id: { type: 'string', pattern: '^[a-z0-9][a-z0-9._-]{2,79}$', description: '<repo>-<carpeta-del-plan>, con -r2, -r3… en una segunda corrida' },
-      role: { type: 'string', enum: [...BUILD_ROLES], description: 'coordinator manda etapa y estado; worker solo aporta su fase' },
+      build_id: { type: 'string', pattern: '^[a-z0-9][a-z0-9._-]{2,79}$', description: '<repo>-<carpeta-del-plan>; -r2… en otra corrida' },
+      role: { type: 'string', enum: [...BUILD_ROLES], description: 'coordinator: etapa y estado; worker: solo su fase' },
       stage: { type: 'integer', minimum: 1, maximum: BUILD_STAGES.length, description: `Etapa 1..7: ${BUILD_STAGES.join(', ')}` },
       status: { type: 'string', enum: [...BUILD_STATUSES] },
-      outcome: { type: 'string', enum: ['delivered', 'stopped', 'failed'], description: 'Solo con status done' },
-      title: str('Título del build (máximo 120)'),
+      outcome: { type: 'string', enum: ['delivered', 'stopped', 'failed'], description: 'Solo con done' },
+      title: str('Máx. 120'),
       repo: str('owner/repo'),
       plan: str('Ruta del plan.md'),
-      branch: str('Rama de trabajo'),
-      pr: { type: ['integer', 'null'], minimum: 1, description: 'Número del PR' },
-      flags: { type: 'array', items: { type: 'string' }, description: 'Banderas de la corrida' },
+      branch: { type: 'string' },
+      pr: { type: ['integer', 'null'], minimum: 1 },
+      flags: { type: 'array', items: { type: 'string' } },
       plan_progress: {
         type: 'object', additionalProperties: false, required: ['done', 'total'],
         properties: { done: { type: 'integer', minimum: 0 }, total: { type: 'integer', minimum: 0 } },
       },
-      phase: str('Fase en curso (worker o coordinador)'),
+      phase: { type: 'string' },
       gate: {
         type: 'object', additionalProperties: false, required: ['stage'],
-        properties: { stage: { type: 'integer', minimum: 1, maximum: BUILD_STAGES.length }, approved_by: str('Quién aprobó'), approved_at: str('ISO 8601') },
+        properties: { stage: { type: 'integer', minimum: 1, maximum: BUILD_STAGES.length }, approved_by: { type: 'string' }, approved_at: str('ISO 8601') },
       },
-      summary: str('Resumen corto de la etapa (máximo 600); nunca secretos'),
+      summary: str('Máx. 600; sin secretos'),
       delivery: {
         type: 'object', additionalProperties: false,
         properties: {
           merge_pr: { type: ['string', 'null'], enum: ['pending', 'running', 'merged', 'failed', null] },
-          stamp: { type: ['string', 'null'], description: 'SHA del sello (7 a 40 hex)' },
+          stamp: { type: ['string', 'null'], description: 'SHA del sello' },
           deploy_pending: { type: 'boolean' },
           ...DELIVERY_EXTRA_SCHEMA,
         },
       },
-      linear: str('Issue de Linear, p. ej. VOS-260'),
+      linear: str('p. ej. VOS-260'),
       links: {
         type: 'array',
-        items: { type: 'object', additionalProperties: false, required: ['href'], properties: { label: { type: 'string' }, href: str('Ruta relativa o URL https:') } },
+        items: { type: 'object', additionalProperties: false, required: ['href'], properties: { label: { type: 'string' }, href: str('https: o ruta relativa') } },
       },
-      stage_since: str('ISO 8601; si falta, el plugin la pone al cambiar de etapa'),
+      stage_since: str('ISO 8601; si falta, la pone el plugin'),
       estimate: {
         type: ['object', 'null'], additionalProperties: false, required: ['total_h'],
-        description: 'Estimado completo en horas de reloj (solo el coordinador): reemplaza al anterior entero; null o ausente lo deja como estaba',
+        description: 'Horas de reloj, solo coordinador: reemplaza al anterior entero; null lo deja igual',
         properties: {
-          total_h: { type: 'number', exclusiveMinimum: 0, maximum: BUILD_ESTIMATE_H_MAX, description: 'Horas totales; se redondea a 0,1' },
+          total_h: { type: 'number', exclusiveMinimum: 0, maximum: BUILD_ESTIMATE_H_MAX },
           phases: {
-            type: 'array', maxItems: BUILD_ESTIMATE_PHASES_MAX, description: 'Desglose por fase',
+            type: 'array', maxItems: BUILD_ESTIMATE_PHASES_MAX,
             items: {
               type: 'object', additionalProperties: false, required: ['name', 'h'],
-              properties: { name: str(`Nombre de la fase (máximo ${BUILD_TEXT_MAX.phase})`), h: { type: 'number', minimum: 0, maximum: BUILD_ESTIMATE_H_MAX, description: 'Horas; se redondea a 0,1' } },
+              properties: { name: str(`Máx. ${BUILD_TEXT_MAX.phase}`), h: { type: 'number', minimum: 0, maximum: BUILD_ESTIMATE_H_MAX } },
             },
           },
-          assumption: str(`Supuesto del que depende el estimado (máximo ${BUILD_TEXT_MAX.assumption})`),
-          reason: str(`Motivo de la reestimación (máximo ${BUILD_TEXT_MAX.reason})`),
+          assumption: str(`Supuesto (máx. ${BUILD_TEXT_MAX.assumption})`),
+          reason: str(`Por qué se reestima (máx. ${BUILD_TEXT_MAX.reason})`),
         },
       },
       ...WAITING_RETRO_SCHEMA,
