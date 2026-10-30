@@ -81,27 +81,27 @@ export function retro(v, status) {
 export const WAITING_RETRO_SCHEMA = Object.freeze({
   waiting: {
     type: ['object', 'null'], additionalProperties: false, required: ['on'],
-    description: 'Qué espera el build (con blocked o waiting_approval); null lo borra. Al pasar a running o done se borra solo',
+    description: 'Con blocked o waiting_approval; null, running o done lo borran',
     properties: {
-      on: { type: 'string', enum: [...WAITING_ON], description: 'you: la persona; terminal, pr, ci, external: otra cosa; error: falla' },
-      who: { type: 'string', description: `Dirección de link, número de PR o nombre (máximo ${WAITING_TEXT_MAX.who})` },
-      what: { type: 'string', description: `Qué se espera (máximo ${WAITING_TEXT_MAX.what})` },
-      next: { type: 'string', description: `Qué pasa al resolverse (máximo ${WAITING_TEXT_MAX.next})` },
-      href: { type: 'string', description: `Dónde entrar: URL https: o ruta que empieza con / (máximo ${BUILD_TEXT_MAX.link})` },
+      on: { type: 'string', enum: [...WAITING_ON], description: 'you: la persona; error: falla' },
+      who: { type: 'string', description: `Link, PR o nombre (máx. ${WAITING_TEXT_MAX.who})` },
+      what: { type: 'string', description: `Máx. ${WAITING_TEXT_MAX.what}` },
+      next: { type: 'string', description: `Al resolverse (máx. ${WAITING_TEXT_MAX.next})` },
+      href: { type: 'string', description: `https: o ruta con / (máx. ${BUILD_TEXT_MAX.link})` },
     },
   },
   retro: {
     type: 'object', additionalProperties: false,
-    description: 'Solo con status done: cómo salió el build, para el reporte de cierre',
+    description: 'Solo con done: reporte de cierre',
     properties: {
       kind: { type: 'string', enum: [...RETRO_KINDS] },
-      bien: { type: 'array', maxItems: RETRO_LIST_MAX, items: { type: 'string' }, description: `Salió bien (cada uno máximo ${RETRO_TEXT_MAX})` },
-      mal: { type: 'array', maxItems: RETRO_LIST_MAX, items: { type: 'string' }, description: 'Salió mal' },
-      batallo: { type: 'array', maxItems: RETRO_LIST_MAX, items: { type: 'string' }, description: 'Con qué se batalló' },
-      entregado: { type: 'array', maxItems: RETRO_LIST_MAX, items: { type: 'string' }, description: 'Qué se entregó (PRs, versiones, cambios visibles)' },
-      pendientes: { type: 'array', maxItems: RETRO_LIST_MAX, items: { type: 'string' }, description: 'Qué quedó pendiente y de quién' },
+      bien: { type: 'array', maxItems: RETRO_LIST_MAX, items: { type: 'string' }, description: `Máx. ${RETRO_TEXT_MAX} c/u` },
+      mal: { type: 'array', maxItems: RETRO_LIST_MAX, items: { type: 'string' } },
+      batallo: { type: 'array', maxItems: RETRO_LIST_MAX, items: { type: 'string' } },
+      entregado: { type: 'array', maxItems: RETRO_LIST_MAX, items: { type: 'string' }, description: 'PRs, versiones, cambios visibles' },
+      pendientes: { type: 'array', maxItems: RETRO_LIST_MAX, items: { type: 'string' }, description: 'Y de quién' },
       propuestas: {
-        type: 'array', maxItems: RETRO_PROPOSALS_MAX, description: 'Propuestas para el siguiente build',
+        type: 'array', maxItems: RETRO_PROPOSALS_MAX,
         items: {
           type: 'object', additionalProperties: false, required: ['text'],
           properties: { text: { type: 'string' }, applies_to: { type: 'string', enum: [...RETRO_APPLIES_TO] } },
