@@ -11,7 +11,7 @@ metadata:
   deps: "git en el repo destino. Recomendado: AgentKit (skills /ak:*); sin él, cada etapa se hace con subagentes nativos. Opcional: /si:checkpoint para el cierre (--checkpoint) y red a context7.com (o su MCP) para consultar la doc de dependencias en las etapas 2 y 3."
   installs: []
   risk: none
-  version: "2.10.1"
+  version: "2.10.2"
 ---
 
 # Build-auto: backbone de proyecto autónomo
@@ -138,7 +138,7 @@ El costo de un build crece con el tamaño del contexto por el número de turnos.
   | Leer, explorar, buscar, git | `Explore`, `researcher`, scout, `git-manager` | `haiku` |
   | Revisión fresca, red team, plan | `code-reviewer`, `planner` | `opus` |
 
-  Implementar va con esfuerzo medio. Una terminal de carril se lanza con `--model sonnet` (o `haiku` si solo lee). El modelo se fija al lanzar y nunca se cambia a mitad de sesión: cambiarlo invalida el caché. Si el entorno no deja fijar el modelo de un rol, dilo en la ficha. Al volver cada subagente, `medir-contexto.mjs` muestra con qué modelo corrió (`subagentes[].modelo`); uno que no coincide con la tabla es un hallazgo de la retro.
+  Implementar va con esfuerzo medio. El `code-reviewer` va con `effort: medium` por omisión y con `effort: high` solo si el carril o el PR toca auth, seguridad, migraciones o datos de producción: en un banco de 40 revisiones contra bugs conocidos, `high` encontró los mismos bugs con +44 % de tokens y el doble de tiempo. Una terminal de carril se lanza con `--model sonnet` (o `haiku` si solo lee). El modelo se fija al lanzar y nunca se cambia a mitad de sesión: cambiarlo invalida el caché. Si el entorno no deja fijar el modelo de un rol, dilo en la ficha. Al volver cada subagente, `medir-contexto.mjs` muestra con qué modelo corrió (`subagentes[].modelo`); uno que no coincide con la tabla es un hallazgo de la retro.
 - **Asesor fuerte** (`kongming` o equivalente): se consulta solo antes de algo irreversible (migración destructiva, borrar datos, deploy, cambio de compuerta), no por rutina.
 - **Menos subagentes: se divide por contexto, no por tipo de trabajo.** En cada carril, el mismo agente implementa y escribe sus pruebas; un revisor con contexto fresco revisa. Nada de cadenas implementador → tester → revisor con agentes distintos. Subagente solo para: carriles paralelos independientes, leer mucho y devolver la conclusión, y la revisión fresca.
 - **Pruebas remotas = ninguna local.** Si la compuerta corre en CI remoto, nunca corras pruebas locales, tampoco en subagentes: empuja y mira la corrida.
@@ -154,7 +154,7 @@ El costo de un build crece con el tamaño del contexto por el número de turnos.
 | 3 | Plan | `/ak:plan "<contrato>" --parallel --tdd`, luego `/ak:plan red-team <plan>`, con el pase de `references/puntos-ciegos-y-context7.md` | subagente `planner` + red team con `code-reviewer`, con el mismo pase | **Aprobación (la última)** de la evidencia y el plan juntos: plan validado (`ak plan validate <ruta>` si existe), con pre-mortem, carriles con su riesgo y los «sí» de la tabla en la fase 0 |
 | 4 | Implementar | `/ak:cook <plan> --parallel --auto` (cada agente incluye las pruebas de su carril) | subagentes `fullstack-developer`, uno por carril | Autónomo |
 | 5 | Verificar | las afectadas del carril (o la CI remota de su push), hechas por quien implementó, y el e2e real y las capturas **una vez** sobre `build/<slug>` (`/ak:test ui <url>` si hay UI); con UI, además la pasada «captura contra referencia, por pantalla» (`references/ejecucion-autonoma.md`); el verificador corre la compuerta completa del repo | igual, con evidencia real | Autónomo |
-| 6 | Revisar | evaluador: `/ak:code-review` por carril con contexto fresco, con la profundidad de su riesgo, y una revisión de integración del PR final | subagente `code-reviewer`, igual | Autónomo; Critical/High se arreglan antes de entregar |
+| 6 | Revisar | evaluador: `/ak:code-review` por carril con contexto fresco, con el esfuerzo de su riesgo (`medium`; `high` en auth, seguridad, migraciones o datos de producción), y una revisión de integración del PR final | subagente `code-reviewer`, igual | Autónomo; Critical/High se arreglan antes de entregar |
 | 7 | Entregar | el **comando de entrega del plan**; en `rama+PR`, `/ak:ship` sin `--merge` solo sirve para abrir el PR | el comando de entrega del plan | Autónomo hasta el alcance |
 | 8 | Cierre | retro y marcador (sección «Etapa 8: Cierre») | igual | Autónomo |
 
@@ -177,7 +177,7 @@ Para arreglar algo que ya existe. Reglas del Frame, la ficha y la precedencia ig
 | 2 | Causa | `/ak:debug` | subagente `debugger` | **Aprobación única** del diagnóstico |
 | 4 | Arreglo | `/ak:fix`, con prueba de regresión | `fullstack-developer` | Autónomo |
 | 5 | Verificar | como la etapa 5 de las 8: la prueba de regresión y la compuerta del repo | igual | Autónomo |
-| 6 | Revisar | revisor fresco, con la profundidad del riesgo | `code-reviewer` | Autónomo; Critical/High se arreglan antes de entregar |
+| 6 | Revisar | revisor fresco, con `effort: medium` (`high` si toca auth, seguridad, migraciones o datos de producción) | `code-reviewer` | Autónomo; Critical/High se arreglan antes de entregar |
 | 7 | Entregar | el comando de entrega de la ficha | igual | Autónomo hasta el alcance |
 - **Causa probada antes de tocar código.** Lista de hipótesis (config, payload, estado de los datos, entorno) con una verificación por cada una; se corren y la causa queda confirmada con su evidencia. Si no queda probada, **para y reporta** lo descartado y lo que falta.
 - **Diagnóstico = la aprobación.** Se presenta en una tarjeta: síntoma y cómo reproducirlo, causa probada con su evidencia (archivo:línea), arreglo propuesto con los archivos que toca, la prueba de regresión, el riesgo, el alcance de entrega y el estimado. Es el gate de la etapa 2 y lo único que se aprueba; aprueba también la autoridad de la tarjeta, nunca más de lo que dice.
