@@ -61,6 +61,11 @@ function buildLine(kind, p) {
     return `Un admin cerró tu build ${id} (${clean(p.outcome, 20)})${absorbed}. El hub ignora los reportes nuevos de ese build: ` +
       'deja de trabajar en él y, si sigue habiendo trabajo, repórtalo con otro build_id.'
   }
+  if (kind === 'build_no_project') {
+    return id
+      ? `Tu build ${id} sale en /builds como «Sin proyecto». En tu próximo link_build_stage di de qué proyecto es con [Proyecto] al inicio del title (sielay, Tablero360, fdash, Infra) o con repo.`
+      : 'Estás trabajando sin build y en /builds sales como «Sin proyecto». Abre un build con link_build_stage o pide tu encargo con [Proyecto] al inicio.'
+  }
   return undefined
 }
 
