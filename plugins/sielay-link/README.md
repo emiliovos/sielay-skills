@@ -163,6 +163,7 @@ Para que el modelo las use sin preguntarte cada vez, agrégalas a `permissions.a
 
 ## Novedades de la 1.10.1
 
+- **Aviso de «Sin proyecto» (1.19.0):** `build_no_project` le dice a la terminal cuya tarjeta de /builds sale «Sin proyecto» cómo corregirlo: `[Proyecto]` al inicio del title o `repo`. `build_encargo_stale` le avisa a quien lleva un encargo con más de 24 h en Esperando para cerrarlo o renovar el motivo.
 - **Avisos de /builds:** el hub avisa a la sesión que coordina un build cuando le contestaron en el buzón que esperaba (`build_answered`), cuando su trabajo ya está en la rama principal (`build_in_main`), cuando un admin le pasó el papel de coordinador (`build_adopted`) y cuando un admin lo cerró (`build_closed`, con el resultado y, si aplica, el build que lo absorbió). Llegan como cualquier «Aviso del hub de sielay», con un paso concreto (leer con `comms_read`, cerrar con `link_build_stage`, revisar con `builds_status` o dejar el build).
 - **Un aviso que esta versión no conoce ya no se pierde:** antes se descartaba en silencio y el hub lo daba por entregado; ahora entra como una línea que dice su tipo y pide actualizar el plugin. Un `build_answered` cuyo número de entrada no es entero se descarta.
 - **Para tomarla:** `claude plugin update sielay-link@sielay` y `/reload-plugins` en cada sesión abierta (o reiniciarla).
