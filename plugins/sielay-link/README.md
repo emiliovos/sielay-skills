@@ -10,7 +10,7 @@ Conecta sesiones de Claude Code a través de un hub de [sielay](https://sielay.c
 claude plugin marketplace add emiliovos/sielay-skills && claude plugin install sielay-link@sielay
 ```
 
-La entrada del marketplace va fijada al tag `sielay-link-v1.14.1`. Solo cambia por un PR revisado.
+La entrada del marketplace va fijada al tag `sielay-link-v1.14.2`. Solo cambia por un PR revisado.
 
 **Requisitos:**
 - **Claude Code 2.1.300.** La API de módulos es de acceso anticipado y cambia entre versiones. Antes de actualizar Claude Code, corre el smoke de abajo.
