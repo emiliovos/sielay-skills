@@ -3,13 +3,16 @@
 // - `seen.<instance_id>`: [id, outcome] of the last SEEN_MAX deliveries, the
 //   dedupe that keeps a redelivered message from running twice;
 // - `accepted.<instance_id>`: accepted messages whose delivery has not landed
-//   yet, retried on every poll.
+//   yet, retried on every poll;
+// - `held.<instance_id>`: quiet messages waiting for the next turn, oldest
+//   first, already acked to the hub (its lease allows too few retries to wait on).
 // No token is ever stored here. Pure (the store is injected).
 
 export const SEEN_MAX = 500
 
 /**
  * @typedef {import('./link-inbound-framing.js').Delivery} Delivery
+ * @typedef {{ delivery: Delivery, at: number }} HeldMessage
  * @typedef {{ get: (key: string) => Promise<unknown>, set: (key: string, value: unknown) => Promise<void> }} StoreLike
  */
 
@@ -41,5 +44,16 @@ export function createInboundStore(store) {
     await store.set(`accepted.${instanceId}`, pending)
   }
 
-  return { readSeen, remember, readPending, updatePending }
+  /** @param {string} instanceId @returns {Promise<HeldMessage[]>} */
+  async function readHeld(instanceId) {
+    const v = await store.get(`held.${instanceId}`)
+    return Array.isArray(v) ? v : []
+  }
+
+  /** @param {string} instanceId @param {HeldMessage[]} held */
+  async function writeHeld(instanceId, held) {
+    await store.set(`held.${instanceId}`, held)
+  }
+
+  return { readSeen, remember, readPending, updatePending, readHeld, writeHeld }
 }

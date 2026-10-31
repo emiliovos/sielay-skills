@@ -88,6 +88,31 @@ test('bypass in a running turn: polled as fresh, injected through the socket hel
   expect(again.result).toBe('No hay mensajes sin leer.')
 })
 
+test('SIELAY_LINK_QUIET_HEADERS: an AVANCE to an idle session waits for its next main turn; a subagent turn does not count', { options: { link_token: 'test-token' } }, async ($, on) => {
+  const clock = mock.clock(on, { now: 1_000_000 })
+  mock.store(on)
+  mock.env(on, { HOME: '/nowhere', SIELAY_LINK_QUIET_HEADERS: 'AVANCE', SIELAY_LINK_FULL: '1' })
+  const { helper } = fakeHost(on)
+  on('turn.start', ($: any, e: any) => ({ turnId: e.turnId }))
+  on('turn.complete', () => ({ text: '' }))
+  fakeHub(on, (path, body, n) =>
+    path === '/api/link/poll'
+      ? { session: { id: 's', address: 'eva/box/mi-sesion', name_assigned: body.session.name }, messages: n === 2 ? [{ ...message('m1'), body: 'AVANCE listo', sent_at: SENT_AT }] : [], strip: [], poll_after_ms: 1000 }
+      : {},
+  )
+  await $.session.start({ cwd: '/srv/proyecto', surface: 'terminal', isInteractive: true })
+  await $.classic.UserPromptSubmit({ prompt: 'x', permission_mode: 'bypassPermissions' })
+  await clock.advance(10)
+  await clock.advance(1_000)
+  await clock.settle()
+  expect(helper).toEqual([])
+  await $.turn.start({ text: '', turnId: 'sub', agentId: 'a1' } as any)
+  expect(helper).toEqual([])
+  await $.turn.start({ text: 'x', turnId: 't1' } as any)
+  expect(helper.length).toBe(1)
+  expect(helper[0]).toContain('AVANCE listo')
+})
+
 test('SIELAY_LINK_FULL=1: the whole card is injected, as before compact mode', { options: { link_token: 'test-token' } }, async ($, on) => {
   const clock = mock.clock(on, { now: 1_000_000 })
   mock.store(on)
