@@ -109,3 +109,21 @@ export function resultLine(r) {
     : describeHubError({ kind: 'http', code: r?.code, field: r?.field, scope: r?.scope, message: `hub answered ${r?.status ?? '?'}` })
   return `No enviado a ${to}: ${why}`
 }
+
+/** A field a session sets cannot forge another row. @param {unknown} v */
+const oneLine = v => String(v).replace(/\s+/g, ' ').trim()
+
+/**
+ * One short row per session, not JSON: this answer stays in the context and is read again every turn.
+ * @param {string | undefined} self this session's address
+ * @param {Array<Record<string, unknown>>} peers already cleaned
+ * @param {string} [machine] keep only that machine's sessions (the address's second part)
+ * @returns {string}
+ */
+export function peersText(self, peers, machine) {
+  const wanted = machine?.trim()
+  const rows = peers
+    .filter(p => !wanted || String(p.address).split('/')[1] === wanted)
+    .map(p => [p.address, p.state, p.mode, p.project, p.online === false ? `desconectada, visto ${p.last_seen_at}` : null].filter(Boolean).map(oneLine).join(' · '))
+  return [`tu_direccion: ${self ?? 'sin asignar'}`, 'dirección · estado · modo · proyecto', ...rows].join('\n')
+}

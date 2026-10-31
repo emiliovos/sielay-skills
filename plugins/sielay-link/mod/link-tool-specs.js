@@ -8,7 +8,7 @@ import { READ_TOOL_SPEC } from './link-read-tool.js'
 /** The hub's cap for `to` as a list (one conversation per address). */
 export const MAX_RECIPIENTS = 10
 
-/** @type {ReadonlyArray<{ name: string, description: string, inputSchema: Record<string, unknown>, isDeferred: false }>} */
+/** @type {ReadonlyArray<{ name: string, description: string, inputSchema: Record<string, unknown>, isDeferred: boolean }>} */
 export const LINK_TOOL_SPECS = Object.freeze([
   {
     name: 'link_send',
@@ -72,6 +72,7 @@ export const LINK_TOOL_SPECS = Object.freeze([
       additionalProperties: false,
       properties: {
         online_only: { type: 'boolean', description: 'Solo las sesiones en línea, de la más activa a la menos (por defecto). false trae también las desconectadas' },
+        machine: { type: 'string', description: 'Solo las de esa máquina, el segundo tramo de la dirección' },
       },
     },
     isDeferred: false,

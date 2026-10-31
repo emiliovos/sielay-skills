@@ -12,7 +12,7 @@ import { runReadTool } from './link-read-tool.js'
 import { LINK_TOOL_SPECS, MAX_RECIPIENTS } from './link-tool-specs.js'
 import { ownAddress, selfPrefixOf } from './link-discovery-context.js'
 import { ADDRESS } from './link-tool-address.js'
-import { CODE_MESSAGES, describeHubError, closedConversationNote, sendAnswer, resultLine } from './link-tool-messages.js'
+import { CODE_MESSAGES, describeHubError, closedConversationNote, peersText, sendAnswer, resultLine } from './link-tool-messages.js'
 import { parseSendHeaders, checkSendHeader } from './link-send-headers.js'
 
 export { describeHubError, closedConversationNote, LINK_TOOL_SPECS }
@@ -115,6 +115,7 @@ export async function runLinkTool(name, input, deps) {
     }
     if (name === 'link_peers') {
       if (input.online_only !== undefined && typeof input.online_only !== 'boolean') return { deny: 'online_only debe ser true o false.' }
+      if (input.machine !== undefined && typeof input.machine !== 'string') return { deny: 'machine debe ser texto.' }
       const answer = await deps.client.peers({ onlineOnly: input.online_only !== false })
       const peers = Array.isArray(answer?.peers) ? answer.peers : []
       const prefix = selfPrefixOf(answer)
@@ -126,7 +127,7 @@ export async function runLinkTool(name, input, deps) {
       })
       /** @param {Record<string, unknown>} p */
       const clean = p => Object.fromEntries(Object.entries(p).map(([k, v]) => [k, typeof v === 'string' ? neutralizeBody(v).slice(0, 200) : v]))
-      return { result: asText({ tu_direccion, peers: peers.map(clean) }) }
+      return { result: peersText(tu_direccion, peers.map(clean), input.machine) }
     }
 
     const textError = checkText(input.text)
