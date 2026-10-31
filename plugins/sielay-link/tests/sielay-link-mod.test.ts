@@ -843,7 +843,7 @@ test('link_peers gives the address the last poll assigned, even from an old hub 
   await clock.advance(10)
   await clock.settle()
   const r: any = await $.tool.call({ tool: 'mcp__sielay-link__link_peers' } as any)
-  expect(JSON.parse(r.result)).toEqual({ tu_direccion: 'eva/box/p', peers })
+  expect(r.result.split('\n')[0]).toBe('tu_direccion: eva/box/p')
 })
 
 test('link_watch answers: it posts the branch to the hub watch route and returns the hub answer', { options: { link_token: 'test-token' } }, async ($, on) => {

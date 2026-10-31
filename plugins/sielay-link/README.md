@@ -102,6 +102,12 @@ Para que el modelo las use sin preguntarte cada vez, agrégalas a `permissions.a
 { "permissions": { "allow": ["mcp__sielay-link__link_send", "mcp__sielay-link__link_reply", "mcp__sielay-link__link_peers", "mcp__sielay-link__link_read", "mcp__sielay-link__link_build_stage", "mcp__sielay-link__link_watch"] } }
 ```
 
+## Novedades de la 1.16.0
+
+- **`link_build_stage` ya no carga en cada sesión:** queda detrás de ToolSearch, así que solo su nombre pesa en el arranque (eran ~6 KB de esquema por petición). La sesión que lleva un build carga el esquema una vez con ToolSearch. El nombre, los campos y el permiso `mcp__sielay-link__link_build_stage` no cambian.
+- **`link_peers` más corto:** contesta una fila de texto por sesión (`dirección · estado · modo · proyecto`), no JSON. `last_seen_at` solo sale en las desconectadas. El campo nuevo `machine` filtra por el segundo tramo de la dirección.
+- **Para tomarla:** `claude plugin update sielay-link@sielay` y `/reload-plugins` (o reiniciar la sesión).
+
 ## Novedades de la 1.15.0
 
 - **Un aviso de avance ya no despierta a quien está ocioso, opt-in:** con `SIELAY_LINK_QUIET_HEADERS` (encabezados separados por `|`, como en `SIELAY_LINK_SEND_HEADERS`), un mensaje cuya primera línea empieza con uno de ellos, si la sesión de destino está ociosa, no abre turno: entra con su siguiente turno, con el siguiente mensaje que sí despierta, o a los `SIELAY_LINK_QUIET_MAX_MIN` minutos (10 por omisión). Si la sesión está en un turno, entra de inmediato, porque ahí no cuesta un turno aparte.

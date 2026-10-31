@@ -77,7 +77,8 @@ export const BUILD_TOOL_SPEC = Object.freeze({
       ...DETAIL_SCHEMA,
     },
   },
-  isDeferred: /** @type {const} */ (false),
+  // Only a build reports, and its schema is most of what the tools weigh: the rest of the sessions carry just its name.
+  isDeferred: /** @type {const} */ (true),
 })
 
 /** Every `reason` link_build_stage can answer with (the frozen table of the contract). */
