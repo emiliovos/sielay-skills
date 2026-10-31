@@ -40,6 +40,19 @@ test('without a token every tool denies with a pairing hint', async () => {
   }
 })
 
+test('link_send: a forecast to the strip replaces «corre solo» with the reason; without one it still runs alone', async () => {
+  const answer = async forecast => {
+    const { d } = deps({ client: { send: async () => ({ conversation_id: 'c1', turn: 1, turns_left: 9, gate: 'auto', status: 'queued', ...(forecast && { forecast }) }) } })
+    return (await runLinkTool('link_send', { to: 'ana/laptop/api', text: 'hola' }, d)).result.split('\n')[0]
+  }
+  assert.equal(await answer(), 'Enviado a ana/laptop/api · turno 1 de 10 · corre solo')
+  assert.equal(await answer({ gate: 'strip', reason: 'mode_stale', mode_age_s: 10800 }), 'Va a la franja de ana/laptop/api · turno 1 de 10 · sin lectura de modo hace 3 h · espera que una persona lo acepte')
+  assert.equal(await answer({ gate: 'strip', reason: 'mode_stale', mode_age_s: 300 }), 'Va a la franja de ana/laptop/api · turno 1 de 10 · sin lectura de modo hace 5 min · espera que una persona lo acepte')
+  assert.equal(await answer({ gate: 'strip', reason: 'mode_stale', mode_age_s: null }), 'Va a la franja de ana/laptop/api · turno 1 de 10 · sin lectura de modo · espera que una persona lo acepte')
+  assert.equal(await answer({ gate: 'strip', reason: 'mode_not_auto', mode_age_s: 3 }), 'Va a la franja de ana/laptop/api · turno 1 de 10 · no está en un modo que corra solo · espera que una persona lo acepte')
+  assert.equal(await answer({ gate: 'strip', reason: 'otra' }), 'Va a la franja de ana/laptop/api · turno 1 de 10 · espera que una persona lo acepte')
+})
+
 test('link_send: validated body with a client_msg_id; the conversation is remembered', async () => {
   const sent = []
   const { d, remembered } = deps({ client: { send: async b => (sent.push(b), { id: 'm1', conversation_id: 'c1', turn: 1, turns_left: 9, gate: 'auto', status: 'queued' }) } })
@@ -112,6 +125,22 @@ test('link_peers against an old hub without self: peers as before, own address o
   assert.deepEqual(prefixes, [])
   const polled = deps({ address: 'eva/box/api', client: { peers: async () => ({ peers }) } })
   assert.equal((await runLinkTool('link_peers', {}, polled.d)).result.split('\n')[0], 'tu_direccion: eva/box/api')
+})
+
+test('link_peers: a connected session without a fresh mode reading says how old it is', async () => {
+  const peers = [
+    { address: 'eva/box/web', state: 'idle', mode: 'auto', project: 'web', online: true, mode_fresh: true, mode_age_s: 5 },
+    { address: 'eva/box/api', state: 'idle', mode: 'auto', project: 'api', online: true, mode_fresh: false, mode_age_s: 7200 },
+    { address: 'eva/box/ops', state: 'idle', mode: 'auto', project: 'ops', online: true, mode_fresh: false, mode_age_s: null },
+    { address: 'eva/lap/old', state: 'idle', mode: 'auto', project: 'old', online: false, last_seen_at: 'ayer', mode_fresh: false, mode_age_s: 90 },
+  ]
+  const { d } = deps({ address: 'eva/box/p', client: { peers: async () => ({ peers }) } })
+  assert.deepEqual((await runLinkTool('link_peers', {}, d)).result.split('\n').slice(2), [
+    'eva/box/web · idle · auto · web',
+    'eva/box/api · idle · auto · api · modo sin lectura hace 2 h',
+    'eva/box/ops · idle · auto · ops · modo sin lectura',
+    'eva/lap/old · idle · auto · old · desconectada, visto ayer',
+  ])
 })
 
 test('link_peers: a machine filter, and an offline session says since when', async () => {

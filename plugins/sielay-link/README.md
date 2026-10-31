@@ -102,6 +102,12 @@ Para que el modelo las use sin preguntarte cada vez, agrégalas a `permissions.a
 { "permissions": { "allow": ["mcp__sielay-link__link_send", "mcp__sielay-link__link_reply", "mcp__sielay-link__link_peers", "mcp__sielay-link__link_read", "mcp__sielay-link__link_build_stage", "mcp__sielay-link__link_watch"] } }
 ```
 
+## Novedades de la 1.17.0
+
+- **El envío avisa si va a la franja:** cuando el receptor no está fresco, `link_send` contesta `Va a la franja de X · sin lectura de modo hace N h · espera que una persona lo acepte`, no «corre solo». Lo que cae en la franja no cambia: solo se avisa. Requiere el hub con `forecast`; con uno anterior, la respuesta es la de siempre.
+- **`link_peers` muestra la frescura:** una sesión en línea sin lectura fresca agrega `modo sin lectura hace N h` a su fila.
+- **Para tomarla:** `claude plugin update sielay-link@sielay` y `/reload-plugins` (o reiniciar la sesión).
+
 ## Novedades de la 1.16.0
 
 - **`link_build_stage` ya no carga en cada sesión:** queda detrás de ToolSearch, así que solo su nombre pesa en el arranque (eran ~6 KB de esquema por petición). La sesión que lleva un build carga el esquema una vez con ToolSearch. El nombre, los campos y el permiso `mcp__sielay-link__link_build_stage` no cambian.
