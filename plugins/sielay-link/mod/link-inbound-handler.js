@@ -11,6 +11,11 @@
 // - An accepted message whose delivery failed is kept in the store (key
 //   `accepted.<instance_id>`) and retried on every poll until it lands, so a
 //   reload of the mod (or --resume, same session id) cannot lose it.
+// - A quiet message (link-quiet-hold.js) reaching an idle session is acked and
+//   kept in the store; it goes in at the session's next turn, ahead of a message
+//   that wakes it, or once the oldest waited long enough. It goes through the
+//   adapter like any other, never as hook context: that channel would present a
+//   peer's words with more authority than the harness's own frame gives them.
 // - The strip keeps arrival order: a newer message never takes the place of
 //   the one on screen.
 
@@ -19,6 +24,7 @@ import { frameInbound, isDelivery } from './link-inbound-framing.js'
 import { shouldInject, onStripAccept, onStripReject } from './link-run-gate.js'
 import { createInboundStore } from './link-inbound-store.js'
 import { compactLine } from './link-inbox.js'
+import { createHeldQueue, isQuiet } from './link-quiet-hold.js'
 import { seqOf } from './link-threads.js'
 
 /**
@@ -39,9 +45,12 @@ import { seqOf } from './link-threads.js'
  *   compact?: () => Promise<boolean>,
  *   log?: (msg: string) => void,
  *   show?: (line: string) => unknown,
+ *   quietRule?: () => Promise<import('./link-quiet-hold.js').QuietRule | null>,
+ *   isBusy?: () => boolean,
+ *   now?: () => number | Promise<number>,
  * }} deps
  */
-export function createInboundHandler({ store, adapter, readMode, onStrip, onConversation, onInbound, inbox, compact = async () => false, log = () => {}, show }) {
+export function createInboundHandler({ store, adapter, readMode, onStrip, onConversation, onInbound, inbox, compact = async () => false, log = () => {}, show, quietRule = async () => null, isBusy = () => false, now = () => Date.now() }) {
   /** Strip items this client showed and the hub may not list yet, by id. */
   /** @type {Map<string, Delivery>} */
   const shownLocally = new Map()
@@ -54,8 +63,11 @@ export function createInboundHandler({ store, adapter, readMode, onStrip, onConv
   const arrival = new Map()
   let arrivals = 0
 
-  const { readSeen, remember, readPending, updatePending } = createInboundStore(store)
+  const { readSeen, remember, readPending, updatePending, readHeld, writeHeld } = createInboundStore(store)
 
+  /** The instance of the last poll: a turn starting has no other way to know it. */
+  /** @type {string|undefined} */
+  let lastInstance
   function currentStrip() {
     /** @type {Map<string, Delivery>} */
     const all = new Map()
@@ -96,8 +108,15 @@ export function createInboundHandler({ store, adapter, readMode, onStrip, onConv
     await adapter.inject(frameInbound(d, { self: selfAddress }))
   }
 
+  const held = createHeldQueue({ readHeld, writeHeld, quietRule, isBusy, now, log, inject, mayRun: async delivery => shouldInject({ delivery, mode: await readMode() }) })
+
   return {
     currentStrip,
+
+    /** The session's main turn started: what was held goes in with it. */
+    async onTurnStart() {
+      if (lastInstance !== undefined) await held.flush(lastInstance)
+    },
 
     /**
      * Handles one poll answer; returns the acks to send with the next poll.
@@ -109,6 +128,8 @@ export function createInboundHandler({ store, adapter, readMode, onStrip, onConv
       /** @type {Ack[]} */
       const acks = []
       if (typeof data.session?.address === 'string') selfAddress = data.session.address
+      lastInstance = instanceId
+      await held.flushIfDue(instanceId)
       for (const [id, d] of Object.entries(await readPending(instanceId))) {
         try {
           await inject(d, instanceId)
@@ -136,6 +157,14 @@ export function createInboundHandler({ store, adapter, readMode, onStrip, onConv
         let outcome = 'shown'
         if (shouldInject({ delivery: d, mode: await readMode() })) {
           try {
+            if (!isBusy() && isQuiet(d.body, await quietRule())) {
+              await held.add(instanceId, d)
+              seen.set(d.id, 'injected')
+              await remember(instanceId, d.id, 'injected')
+              acks.push({ id: d.id, outcome: 'injected' })
+              continue
+            }
+            await held.flush(instanceId) // what waited goes first: a message never overtakes an older one
             await inject(d, instanceId, { last: (seqOf(d) ?? 0) >= (top.get(d.conversation_id) ?? 0) })
             outcome = 'injected'
           } catch (err) {

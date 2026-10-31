@@ -8,6 +8,7 @@ import { createInboundHandler } from './link-inbound-handler.js'
 import { createInbox } from './link-inbox.js'
 import { createThreads, recordInbound } from './link-threads.js'
 import { createPollLoop } from './link-poll-loop.js'
+import { parseQuietRule } from './link-quiet-hold.js'
 import { createPairingFlow } from './link-pairing.js'
 import { buildSessionPayload, readMode } from './link-session-payload.js'
 import { PANE_ID } from './link-state-refs.js'
@@ -65,6 +66,8 @@ export function createRuntime(options) {
     sentTouchedAt: /** @type {number|undefined} */ (undefined),
     /** The discovery line went into this conversation (link-discovery-context.js); memory only, reset on session.end. */
     discoveryAnnounced: false,
+    /** A main-loop turn is running; memory only, a reload starts as idle and holds at most until the limit. */
+    turnRunning: false,
     /** `self.address_prefix` from the last peers answer that carried it; memory only. */
     addressPrefix: /** @type {string|null} */ (null),
   }
@@ -209,6 +212,9 @@ export async function startLink($, rt) {
     },
     log: msg => $.ui.log(`sielay-link: ${msg}`),
     show: line => $.ui.log(line),
+    quietRule: async () => parseQuietRule(await $.env.get('SIELAY_LINK_QUIET_HEADERS'), await $.env.get('SIELAY_LINK_QUIET_MAX_MIN')),
+    isBusy: () => rt.turnRunning,
+    now: () => $.clock.now(),
   })
   rt.loop = createPollLoop({
     schedule: (ms, fn) => void $.clock.after(ms, fn),

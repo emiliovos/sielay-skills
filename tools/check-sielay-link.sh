@@ -36,7 +36,7 @@ bin/sielay-link-socket-write.mjs bin/sielay-mcp-headers.mjs bin/sielay-mcp-heade
 mod mod/sielay-link-mod.js mod/link-band.jsx mod/link-pane.jsx mod/link-commands.js mod/link-delivery-adapter.js
 mod/link-hub-client.js mod/link-inbound-framing.js mod/link-inbound-handler.js mod/link-launch-mode.js mod/link-mode-carry.js mod/link-mode-freshness.js
 mod/link-pairing.js mod/link-poll-loop.js mod/link-run-gate.js mod/link-runtime.js mod/link-session-name-resolution.js
-mod/link-session-payload.js mod/link-state-refs.js mod/link-tools.js mod/link-inbound-store.js mod/link-strip-selection.js mod/link-instance-identity.js
+mod/link-session-payload.js mod/link-state-refs.js mod/link-tools.js mod/link-inbound-store.js mod/link-quiet-hold.js mod/link-strip-selection.js mod/link-instance-identity.js
 mod/link-build-tool.js mod/link-build-state.js mod/link-build-hooks.js mod/link-build-validate.js mod/link-build-fields.js mod/link-build-estimate.js mod/link-build-waiting-retro.js mod/link-build-detail.js mod/link-tool-messages.js mod/link-send-headers.js mod/link-tool-address.js mod/link-session-repo.js mod/link-hub-notice-framing.js mod/link-watch-tool.js mod/link-tool-specs.js mod/link-secret-scrub.js
 mod/link-discovery-context.js mod/link-session-end.js mod/link-build-open.js mod/link-build-pending.js mod/link-render-text.js mod/link-render-compact.js mod/link-render-rows.jsx mod/link-inbox.js mod/link-read-tool.js mod/link-threads.js mod/link-thread-text.js mod/link-thread-rows.js"
 while IFS= read -r -d '' p; do

@@ -135,10 +135,19 @@ export function register(on, options) {
     await recordModeSample($, e, 'Stop')
     return next(e)
   }).catch(passThrough)
+  // What a quiet message waits for. Only the main loop: a subagent's turn cannot read it.
+  on('turn.start', async ($, e, next) => {
+    if (!e.agentId) {
+      rt.turnRunning = true
+      await rt.handler?.onTurnStart()
+    }
+    return next(e)
+  }).catch(passThrough)
   // Every turn end, including Esc and API errors (which raise no classic Stop):
   // without it an interrupted turn would look like it is still running. It
   // also feeds the build: the turn's usage, and a subagent's run ending.
   on('turn.complete', async ($, e, next) => {
+    if (!e.agentId) rt.turnRunning = false
     await recordTurnEnd($, e)
     await noteTurnComplete($, rt, e)
     return next(e)

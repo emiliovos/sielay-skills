@@ -82,6 +82,8 @@ Si otra carpeta ya usa ese nombre y está en línea, el hub te asigna `nombre-2`
 | `/link off` / `on` | Apaga o enciende la recepción en esta sesión. `SIELAY_LINK_OFF=1 claude` lo apaga del todo, sin herramientas |
 | `SIELAY_LINK_MINIMAL=1` | Modo mínimo: solo `link_send`, `link_reply`, `link_peers` y `link_read`, sin la línea de descubrimiento (ver «Novedades de la 1.9.0») |
 | `SIELAY_LINK_SEND_HEADERS=…` | Exige un encabezado en la primera línea de cada `link_send` (ver «Novedades de la 1.14.0») |
+| `SIELAY_LINK_QUIET_HEADERS=…` | Los mensajes con esos encabezados no despiertan a una sesión ociosa: esperan su siguiente turno o el máximo (ver «Novedades de la 1.15.0») |
+| `SIELAY_LINK_QUIET_MAX_MIN=…` | Minutos máximos de esa espera; 10 por omisión |
 | `SIELAY_LINK_FULL=1` | Un mensaje entra como la tarjeta completa, como antes de la 1.10.0, en vez de la línea «📨 mensaje de …» (ver «Cómo entra un mensaje») |
 | `/link peers` | Tu dirección y las sesiones con las que puedes hablar (solo pares) |
 | `/link pair <slot>` | Empareja la máquina |
@@ -100,6 +102,12 @@ Para que el modelo las use sin preguntarte cada vez, agrégalas a `permissions.a
 { "permissions": { "allow": ["mcp__sielay-link__link_send", "mcp__sielay-link__link_reply", "mcp__sielay-link__link_peers", "mcp__sielay-link__link_read", "mcp__sielay-link__link_build_stage", "mcp__sielay-link__link_watch"] } }
 ```
 
+## Novedades de la 1.15.0
+
+- **Un aviso de avance ya no despierta a quien está ocioso, opt-in:** con `SIELAY_LINK_QUIET_HEADERS` (encabezados separados por `|`, como en `SIELAY_LINK_SEND_HEADERS`), un mensaje cuya primera línea empieza con uno de ellos, si la sesión de destino está ociosa, no abre turno: entra con su siguiente turno, con el siguiente mensaje que sí despierta, o a los `SIELAY_LINK_QUIET_MAX_MIN` minutos (10 por omisión). Si la sesión está en un turno, entra de inmediato, porque ahí no cuesta un turno aparte.
+- **`<encabezado> FINAL` siempre despierta**, por ejemplo `AVANCE FINAL`: es el que se usa cuando alguien espera ese aviso para seguir. Los demás encabezados y un mensaje sin encabezado despiertan como siempre.
+- **Lo que hay que saber:** el hub ve el mensaje como entregado desde que el plugin lo guarda, y lo guardado vive en el `$.store` de la máquina, bajo la misma identidad que sobrevive a `/clear` y `--resume`. Si esa sesión no vuelve a arrancar, el mensaje no se entrega. La compuerta de ejecución se vuelve a leer al entregarlo: si el modo cambió, sigue esperando.
+- **Para tomarla:** `claude plugin update sielay-link@sielay`, poner la variable en el `env` de `settings.json` y reiniciar la sesión.
 ## Novedades de la 1.14.2
 
 - **La tarjeta lleva el mismo encuadre que `link_read`:** con `SIELAY_LINK_FULL=1`, cada línea del cuerpo y del adjunto entra detrás de «│ », así que un cuerpo tampoco puede pasar por encabezado, turno o cierre ahí. Cuesta 2 caracteres por línea del cuerpo. En la conversación se sigue viendo una sola barra.
