@@ -45,6 +45,7 @@ export function estadoGit(repo, run = ejecutar) {
   return {
     repo,
     rama: rama.ok ? rama.salida.trim() : null,
+    estado_ok: estado.ok,
     sucio: sucio.slice(0, MAX_SUCIO),
     sucio_total: sucio.length,
     adelante,

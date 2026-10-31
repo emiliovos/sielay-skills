@@ -42,8 +42,8 @@ test('mejora-continua no nombra herramientas ni rutas propias de un repo', () =>
   assert.deepEqual(hallazgos, []);
 });
 
-test('mejora-continua declara la versión 1.0.2 y usa la ruta del script con CLAUDE_SKILL_DIR', () => {
+test('mejora-continua declara la versión 1.0.3 y usa la ruta del script con CLAUDE_SKILL_DIR', () => {
   const md = fs.readFileSync(path.join(RAIZ_MC, 'SKILL.md'), 'utf8');
-  assert.match(md, /version: "1\.0\.2"/);
+  assert.match(md, /version: "1\.0\.3"/);
   assert.match(md, /\$\{CLAUDE_SKILL_DIR\}\/scripts\/bitacora\.mjs/);
 });
