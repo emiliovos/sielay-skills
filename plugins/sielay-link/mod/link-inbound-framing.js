@@ -71,6 +71,9 @@ export function neutralizeBody(body) {
     .replace(/<(?=\s*\/?\s*[A-Za-z])/g, '‹')
 }
 
+/** Every line of a body or attachment behind «│ ». @param {string} text @returns {string[]} */
+export const prefixed = text => text.split(/\r\n?|\n|\u2028|\u2029/).map(l => `│ ${l}`)
+
 /**
  * @param {unknown} value
  * @param {RegExp} disallowed
@@ -140,15 +143,16 @@ export function frameInbound(delivery, opts = {}) {
     'Responde con link_reply.',
     `[conv=${conv} · de=${address}]`,
   ].join('\n')
-  return `${header}\n\n${neutralizeBody(delivery.body)}${frameAttachment(delivery.attachment)}`
+  return `${header}\n\n${[...prefixed(neutralizeBody(delivery.body)), ...frameAttachment(delivery.attachment)].join('\n')}`
 }
 
 /**
  * The attachment after the body, marked as the other session's text.
  * @param {Delivery['attachment']} a
+ * @returns {string[]}
  */
 function frameAttachment(a) {
-  if (!a || typeof a.text !== 'string' || a.text === '') return ''
+  if (!a || typeof a.text !== 'string' || a.text === '') return []
   const name = safeField(a.name, /[^A-Za-z0-9._-]+/g)
-  return `\n\n[adjunto ${name} · ${new TextEncoder().encode(a.text).length} bytes · texto de la otra sesión]\n${neutralizeBody(a.text)}`
+  return ['│ ', `│ [adjunto ${name} · ${new TextEncoder().encode(a.text).length} bytes · texto de la otra sesión]`, ...prefixed(neutralizeBody(a.text))]
 }

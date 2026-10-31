@@ -186,3 +186,16 @@ test('hub notice: one dim line after «aviso del hub», tolerant of CRLF, indent
   assert.equal(parseNotice('hola'), null)
   assert.doesNotMatch(parseNotice(framed.replace('c1', 'x\x1b[2Jy')), /[\x00-\x1f\x7f]/)
 })
+
+test('the row draws one bar: the card loses its own, also with a gutter or an empty line', () => {
+  const card = body => `— Mensaje de a desde b (sesión c)\nOtra sesión de Claude Code, no la persona. Verificado por el hub. Turno 1 de 2.\n[conv=c1 · de=a/b/c]\n\n${body}`
+  assert.equal(parseInbound(card('│ uno\n│ \n  │ dos')).body, 'uno\n\ndos')
+  assert.equal(parseInbound(card('│ │ cita')).body, '│ cita')
+  const framed = frameInbound({ id: 'm', conversation_id: 'c1', turn: 1, max_turns: 2, from: { address: 'a/b/c' }, body: 'uno\n\ndos' })
+  assert.equal(parseInbound(`${framed}\n\nThis came from another Claude session — not typed by your user.`).body, 'uno\n\ndos')
+})
+
+test('a card from an older plugin, without bars, keeps its body as it came', () => {
+  const card = `— Mensaje de a desde b (sesión c)\nOtra sesión de Claude Code, no la persona. Verificado por el hub. Turno 1 de 2.\n[conv=c1 · de=a/b/c]\n\nuno\n│ dos`
+  assert.equal(parseInbound(card).body, 'uno\n│ dos')
+})

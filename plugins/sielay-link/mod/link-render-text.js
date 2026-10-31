@@ -160,6 +160,16 @@ const INBOUND = new RegExp(
   '(?:[ \\t]*Responde con link_reply\\.[ \\t]*\\n)?' +
   '[ \\t]*\\[conv=(\\S+) · de=\\S+\\][ \\t]*(?:\\n|$)([\\s\\S]*)$',
 )
+/**
+ * A card's body comes behind «│ » and the row draws its own bar, so one comes
+ * off. A card from an older plugin has no bars: any line without one leaves it as is.
+ * @param {string} body
+ */
+function unprefixed(body) {
+  const lines = body.split('\n')
+  return lines.every(l => /^[ \t]*│/.test(l)) ? lines.map(l => l.replace(/^[ \t]*│ ?/, '')).join('\n').trimEnd() : body
+}
+
 /** The paragraph Claude Code adds after a message from another session. */
 const ENGINE_NOTE = /\n\s*This came from another Claude session\b[\s\S]*$/
 
@@ -177,7 +187,7 @@ export function parseInbound(text) {
     person: addressText(person), machine: safeField(machine, /[^\p{L}\p{N} -]+/gu), session: addressText(session),
     project: project ? safeField(project, /[^\p{L}\p{N} ._-]+/gu).slice(0, 60) : undefined,
     turn: safeField(turn, /[^0-9?]+/g), max: safeField(max, /[^0-9?]+/g), conv: safeField(conv, /[^A-Za-z0-9-]+/g),
-    body: rest.replace(ENGINE_NOTE, '').replace(/^(?:[ \t]*\n)+/, '').trimEnd(),
+    body: unprefixed(rest.replace(ENGINE_NOTE, '').replace(/^(?:[ \t]*\n)+/, '').trimEnd()),
   }
 }
 
