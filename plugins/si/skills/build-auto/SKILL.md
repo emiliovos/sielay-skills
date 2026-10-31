@@ -11,7 +11,7 @@ metadata:
   deps: "git en el repo destino. Recomendado: AgentKit (skills /ak:*); sin él, cada etapa se hace con subagentes nativos. Opcional: /si:checkpoint para el cierre (--checkpoint) y red a context7.com (o su MCP) para consultar la doc de dependencias en las etapas 2 y 3."
   installs: []
   risk: none
-  version: "2.10.4"
+  version: "2.10.5"
 ---
 
 # Build-auto: backbone de proyecto autónomo
@@ -113,7 +113,7 @@ Los criterios de aceptación se escriben como JSON, `[{"id": "c1", "criterio": "
   Sin `builds_calibration` (un hub anterior), la razón sale de `builds_weekly` (sección «Real / estimated hours»: la mediana del mismo `kind` con 3 builds o más, si no la de todos); sin herramienta ni datos, ×0,4, y las fases medidas se estiman a ojo. El calibrado es el que va en `estimate.total_h` (el «a más tardar» y la espera, en `assumption`) y el que se le promete a la persona. En el Frame va grueso; en el Plan va por carril y es el **programado** que se aprueba. Si después se mueve, se reestima con un motivo (ver `references/reporte-sielay.md`); reestimar no es una enmienda.
 
 ## Reporte a sielay
-Si la sesión tiene la herramienta `link_build_stage` (plugin `sielay-link`), lee `references/reporte-sielay.md` antes del Frame (pide sielay-link 1.7.0 o posterior; `flow`, `stage_detail`, `live` y `delivery.merge_queue`/`deploy` piden 1.8.2) y reporta en sus momentos: el `flow` en el arranque, entrada a cada etapa, la evidencia de cada etapa al cerrarla (`stage_detail`), el estado en vivo de las esperas largas (`live`), aprobaciones, cierre de cada carril, entrega, cada espera (`waiting`) y el fin con `outcome` y `retro`. Al cerrar cada etapa va un `summary` de 1 a 3 frases, y el Estimado va como `estimate` en los gates del Frame y del Plan y en cada reestimación. El `build_id` es `<repo>-<carpeta-del-plan>` (con `-r2`, `-r3`… en una corrida nueva sobre la misma carpeta). Si la herramienta no existe o no reporta, la skill sigue igual, sin error ni pregunta.
+Si la sesión tiene la herramienta `link_build_stage` (plugin `sielay-link`; desde la 1.16.0 es diferida: si solo ves su nombre, carga el esquema con ToolSearch, y eso cuenta como tenerla), lee `references/reporte-sielay.md` antes del Frame (pide sielay-link 1.7.0 o posterior; `flow`, `stage_detail`, `live` y `delivery.merge_queue`/`deploy` piden 1.8.2) y reporta en sus momentos: el `flow` en el arranque, entrada a cada etapa, la evidencia de cada etapa al cerrarla (`stage_detail`), el estado en vivo de las esperas largas (`live`), aprobaciones, cierre de cada carril, entrega, cada espera (`waiting`) y el fin con `outcome` y `retro`. Al cerrar cada etapa va un `summary` de 1 a 3 frases, y el Estimado va como `estimate` en los gates del Frame y del Plan y en cada reestimación. El `build_id` es `<repo>-<carpeta-del-plan>` (con `-r2`, `-r3`… en una corrida nueva sobre la misma carpeta). Si la herramienta no existe o no reporta, la skill sigue igual, sin error ni pregunta.
 
 ## Presupuesto de contexto
 El costo de un build crece con el tamaño del contexto por el número de turnos. Reglas por defecto:

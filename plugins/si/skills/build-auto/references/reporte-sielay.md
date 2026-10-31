@@ -8,7 +8,7 @@ Sielay-link 1.7.0. Con esa versión el estimado (en el Frame y el Plan) y la ret
 Los campos `flow`, `stage_detail`, `live` y `delivery.merge_queue`/`delivery.deploy` piden sielay-link 1.8.2. Con una versión anterior el plugin puede rechazarlos: repite la llamada sin el campo y no lo vuelvas a mandar en ese build (el build se reporta igual, sin esos detalles).
 
 ## Cuándo no aplica
-- **Sin la herramienta** (no está `sielay-link` o la sesión no la expone): no la llames ni la menciones. El flujo sigue igual, sin error y sin preguntar.
+- **Sin la herramienta** (no está `sielay-link` o la sesión no la expone): no la llames ni la menciones. Desde sielay-link 1.16.0 es diferida: si en la lista de herramientas diferidas está su nombre, sí la tienes; carga el esquema una vez con ToolSearch antes de la primera llamada. El flujo sigue igual, sin error y sin preguntar.
 - **`reported: false`**: sigue igual; no reintentes ni avises. Desde sielay-link 1.4.0 trae `reason`: `pending` (todavía no hay poll), `too_many_sessions`, `paused`, `unauthorized`, `unpaired`, `off` o `unreachable`. Con `too_many_sessions` (el dispositivo llegó al tope de sesiones), anótalo una vez en la ficha y sigue.
 - **`reported: true`** significa que el hub acepta los polls de esta sesión, no que registró el build: puede ignorarlo (por ejemplo, por su tope de builds, un build ya cerrado o el visor apagado).
 - **Rechazo por un campo** (`el campo <x> no es válido`): corrige u omite ese campo una vez y sigue. Un reporte nunca detiene ni cambia el build.
