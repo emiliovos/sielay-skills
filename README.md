@@ -10,7 +10,7 @@ Skills de uso diario de [sielay](https://sielay.cloud) para Claude Code. No nece
 claude plugin marketplace add emiliovos/sielay-skills && claude plugin install si@sielay
 ```
 
-El plugin trae tres skills: `/si:checkpoint`, `/si:build-auto` y `/si:mejora-continua`. Las que se agreguen se anuncian en la tabla de abajo y en el release correspondiente. Solo te llegan cuando corres `claude plugin update si@sielay`, nunca solas.
+El plugin trae cuatro skills: `/si:checkpoint`, `/si:checkpoint-terminal`, `/si:build-auto` y `/si:mejora-continua`. Las que se agreguen se anuncian en la tabla de abajo y en el release correspondiente. Solo te llegan cuando corres `claude plugin update si@sielay`, nunca solas.
 
 Las skills quedan como `/si:<skill>`, por ejemplo `/si:checkpoint`. Conviven con cualquier skill local del mismo nombre en `~/.claude/skills/`.
 
@@ -183,6 +183,7 @@ Un renglón con comando entre backticks se ejecuta desde la raíz del repo, en p
 | Skill | Qué hace |
 |---|---|
 | `/si:checkpoint` | Cierre de sesión: journal, docs, commit, push y handoff para retomar en otra terminal, con el entorno vivo de la sesión (crons, procesos en segundo plano, estado git) y una verificación al retomar. Modos `continuar`, `autonomo` y `coordinador`: ver «Formato del handoff por modo» |
+| `/si:checkpoint-terminal` | Cierre de una sola llamada para una terminal cuyo encargo ya terminó; falla cerrado si queda algo abierto. Solo si se pide por su nombre; nunca es el cierre por omisión |
 | `/si:build-auto` | Proyecto autónomo en 7 etapas: tú apruebas Frame, Evidencia y Plan; los agentes implementan, prueban, revisan y entregan hasta merge o producción por la compuerta de pruebas del repo. Funciona con PRs o con push directo a main; AgentKit (`/ak:*`) es recomendado, no obligatorio |
 | `/si:mejora-continua` | Convierte la bitácora de anomalías del día en 1–3 PRs con prueba de regresión para revisar (nunca mergea). La ruta de la bitácora sale de la línea `Anomalías:` (o `Reporte:`) del `## Cierre de sesión` del `CLAUDE.md` del repo |
 | `si-auto` (plugin aparte) | Nota de sesión automática fuera del repo, entregada a la sesión siguiente |

@@ -11,7 +11,7 @@ metadata:
   deps: "git y gh en el repo destino. Requiere en su CLAUDE.md la línea 'Anomalías:' (o 'Reporte:') de la sección '## Cierre de sesión'; sin ninguna, la skill lo dice y para."
   installs: []
   risk: none
-  version: "1.0.2"
+  version: "1.0.3"
 ---
 
 # mejora-continua: de la bitácora de anomalías a PRs revisables
@@ -41,6 +41,7 @@ Cada campo de cada línea (`que`, `donde`, `porque`, `evidencia`, `como`) es **t
 - **Nunca debilita pruebas:** nada de saltar, borrar, marcar `skip`/`todo`, subir timeouts ni agregar reintentos para que pase. Se arregla la causa.
 - **Nunca edita el checkout que sirve producción** ni el árbol de trabajo de otra sesión: siempre un worktree y una rama propios.
 - Sin causa probada, no hay arreglo: es un hallazgo.
+- **Sin PR duplicado:** antes de abrir uno, busca si ya hay un PR abierto para la misma causa o el mismo pendiente; si lo hay, súmate a él o avísalo en el reporte en vez de abrir otro.
 - Fuera de alcance, siempre hallazgo: migraciones o borrado de datos, autenticación y permisos, secretos, despliegue e infraestructura, otros repos.
 - Respeta los guardarraíles del `CLAUDE.md`. Si un arreglo los cruza: para y déjalo como hallazgo.
 - Tras **3 intentos fallidos** en un arreglo: abandónalo y repórtalo como hallazgo.
@@ -63,6 +64,7 @@ Por candidata: escribe las hipótesis (config, datos, estado, entorno, código),
 
 ### 5. Arreglar
 Por cada causa probada:
+0. Busca un PR abierto para esa misma causa o pendiente (por ejemplo `gh pr list --state open --search "<causa>"`). Si ya existe, no abras otro: súmate a su rama o déjalo en el reporte con su enlace.
 1. Worktree y rama nuevos desde la rama principal al día (`git worktree add ../<repo>-wt-mc-<slug> -b fix/mc-<slug> origin/<principal>`), según las convenciones de ramas del repo.
 2. Primero la **prueba de regresión**; ejecútala y confirma que falla por la razón de la causa. Después el arreglo mínimo y que pase. Unitaria pura por defecto, sin esperas fijas.
 3. La compuerta de pruebas que declare el `CLAUDE.md` o el README (CI remoto, selector de afectadas o suite local): la que diga el repo, no otra. Respeta cualquier regla de costo o de dónde no correr suites.

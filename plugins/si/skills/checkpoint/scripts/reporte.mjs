@@ -126,7 +126,7 @@ export function reportar({ cuerpo, terminal, build, descriptor, ahoraMs, host, h
 
 // La carpeta, ya resuelta (symlinks incluidos), debe seguir dentro del home; el
 // archivo se abre sin seguir un symlink final.
-function agregarAlArchivo(ruta, bloque, home) {
+export function agregarAlArchivo(ruta, bloque, home) {
   const raiz = fs.realpathSync(home);
   const dentro = (d) => d === raiz || d.startsWith(raiz + path.sep);
   let existente = path.dirname(ruta);
