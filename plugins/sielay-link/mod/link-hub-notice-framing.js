@@ -66,6 +66,9 @@ function buildLine(kind, p) {
       ? `Tu build ${id} sale en /builds como «Sin proyecto». En tu próximo link_build_stage di de qué proyecto es con [Proyecto] al inicio del title (sielay, Tablero360, fdash, Infra) o con repo.`
       : 'Estás trabajando sin build y en /builds sales como «Sin proyecto». Abre un build con link_build_stage o pide tu encargo con [Proyecto] al inicio.'
   }
+  if (kind === 'build_encargo_stale') {
+    return `Tu encargo ${id} lleva más de 24 h en Esperando con el mismo motivo. Ciérralo si ya no va o renueva el motivo con waiting en link_build_stage; nada se cierra solo.`
+  }
   return undefined
 }
 

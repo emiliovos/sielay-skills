@@ -73,6 +73,11 @@ test('build_no_project says how to correct it, for a build and for a session out
   assert.match(session, /Estás trabajando sin build y en \/builds sales como «Sin proyecto»/)
 })
 
+test('build_encargo_stale says to close it or renew its reason', () => {
+  const out = frameHubNotice({ id: 'b12', kind: 'build_encargo_stale', payload: { build_id: 'enc-x', since: '2026-10-30T00:00:00.000Z' } })
+  assert.match(out, /Tu encargo enc-x lleva más de 24 h en Esperando con el mismo motivo\. Ciérralo si ya no va o renueva el motivo/)
+})
+
 test('build_closed names the outcome and, only when present, who absorbed it', () => {
   const plain = frameHubNotice({ id: 'b7', kind: 'build_closed', payload: { build_id: 'sielay-x', outcome: 'stopped', absorbed_by: null } })
   assert.match(plain, /Un admin cerró tu build sielay-x \(stopped\)\. El hub ignora los reportes nuevos de ese build: deja de trabajar en él y, si sigue habiendo trabajo, repórtalo con otro build_id\.$/)
