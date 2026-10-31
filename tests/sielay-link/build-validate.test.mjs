@@ -163,3 +163,9 @@ test('integers must be safe; ids that carry a credential are refused; a DEL in a
   assert.equal(validateBuild({ ...validMin(), subagents: [{ id: 'slk_' + 'b'.repeat(20) }] }, NOW).error, 'subagents.id')
   assert.deepEqual(validateBuild({ ...validMin(), links: [{ href: 'plans/a\x7fb.md' }, { href: 'plans/ok.md' }] }, NOW).build.links, [{ href: 'plans/ok.md' }])
 })
+
+test('flow encargo: stage 1..4 pass, a later stage refuses the report; other flows keep 1..7', () => {
+  for (const stage of [1, 2, 3, 4]) assert.equal(validateBuild({ ...validMin(), stage, flow: 'encargo' }, NOW).build.stage, stage)
+  assert.equal(validateBuild({ ...validMin(), stage: 5, flow: 'encargo' }, NOW).error, 'stage')
+  for (const flow of ['full', 'chico', 'fix']) assert.equal(validateBuild({ ...validMin(), stage: 7, flow }, NOW).build.stage, 7)
+})

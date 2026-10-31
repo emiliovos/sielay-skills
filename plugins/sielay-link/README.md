@@ -102,6 +102,10 @@ Para que el modelo las use sin preguntarte cada vez, agrégalas a `permissions.a
 { "permissions": { "allow": ["mcp__sielay-link__link_send", "mcp__sielay-link__link_reply", "mcp__sielay-link__link_peers", "mcp__sielay-link__link_read", "mcp__sielay-link__link_build_stage", "mcp__sielay-link__link_watch"] } }
 ```
 
+## Novedades de la 1.18.0
+
+- **Flow `encargo` en `link_build_stage`:** cuatro pasos para seguir en `/builds` el encargo de una terminal, sin las etapas de un build: `stage` 1 Encargado, 2 En curso, 3 Esperando y 4 Entregado. No lleva aprobaciones. Con `flow: encargo` una etapa mayor a 4 se rechaza con el campo `stage`.
+
 ## Novedades de la 1.17.0
 
 - **El envío avisa si va a la franja:** cuando el receptor no está fresco, `link_send` contesta `Va a la franja de X · sin lectura de modo hace N h · espera que una persona lo acepte`, no «corre solo». Lo que cae en la franja no cambia: solo se avisa. Requiere el hub con `forecast`; con uno anterior, la respuesta es la de siempre.
@@ -191,7 +195,7 @@ Para que el modelo las use sin preguntarte cada vez, agrégalas a `permissions.a
 
 ## Novedades de la 1.8.2
 
-- **`flow` en `link_build_stage`:** `full` (por omisión), `chico` o `fix`, solo el coordinador; dice qué etapas tiene el build. Un valor desconocido rechaza la llamada con el campo `flow`.
+- **`flow` en `link_build_stage`:** `full` (por omisión), `chico`, `fix` o `encargo`, solo el coordinador; dice qué etapas tiene el build. Un valor desconocido rechaza la llamada con el campo `flow`.
 - **`stage_detail`:** el detalle de una etapa (`stage` 1..7, hasta 8 `items` con `label`, `value` y `href`, y `live` con lo que pasa ahora). El último enviado reemplaza al anterior; `live: null` lo borra en el hub.
 - **`delivery.merge_queue` y `delivery.deploy`:** la fila de merge (`position`, `total`, `reason`, `since`) y el estado del deploy (`approval`, `publishing`, `verified` o `failed`, con `at`). Un subcampo inválido descarta ese objeto, no el build.
 - **Sin los campos nuevos todo sigue igual.**
@@ -372,7 +376,7 @@ Desde la 1.1.0, `/si:build-auto` llama a `link_build_stage` en cada cambio de et
   }
   ```
 
-  - `flow`: `full`, `chico` o `fix`; sin él, `full`. `stage` sigue siendo 1..7.
+  - `flow`: `full`, `chico`, `fix` o `encargo`; sin él, `full`. `stage` sigue siendo 1..7, salvo en `encargo`, que va de 1 a 4.
   - `stage_detail`: `stage` obligatorio (1..7); `items` hasta 8 (los de más se recortan) con `label` (80, obligatorio), `value` (160) y `href` (`https:` o ruta relativa, 300; si no es válido se descarta el `href`); `live` con `label` (120, obligatorio), `done`, `total` (enteros desde 0) y `at` (ISO, sin pasar 5 min al futuro), o `null` para borrarlo. Los textos pasan por el mismo quitado de secretos que `summary`. Un campo inválido rechaza la llamada, con su nombre (`stage_detail.items.label`, `stage_detail.live.at`…).
   - `delivery.merge_queue`: `position` y `total` enteros desde 1 o `null`, `reason` (120) y `since` (ISO). `delivery.deploy`: `state` obligatorio y `at` (ISO). Si alguno es inválido, se descarta ese objeto y el reporte sigue.
   - Todo cabe en los 16 KB: un `stage_detail` lleno junto a un `retro` lleno pasa.

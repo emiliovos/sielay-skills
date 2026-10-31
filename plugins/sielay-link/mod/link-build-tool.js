@@ -3,7 +3,7 @@
 // and starts nothing. Pure (no `$`): the mod passes in how to store the build
 // and whether the hub is taking this session's polls right now (reportState).
 
-import { BUILD_STAGES, BUILD_STATUSES, BUILD_ROLES, BUILD_TEXT_MAX } from './link-build-validate.js'
+import { BUILD_STAGES, BUILD_ENCARGO_STAGES, BUILD_STATUSES, BUILD_ROLES, BUILD_TEXT_MAX } from './link-build-validate.js'
 import { BUILD_ESTIMATE_PHASES_MAX, BUILD_ESTIMATE_H_MAX } from './link-build-fields.js'
 import { WAITING_RETRO_SCHEMA } from './link-build-waiting-retro.js'
 import { DETAIL_SCHEMA, DELIVERY_EXTRA_SCHEMA } from './link-build-detail.js'
@@ -23,7 +23,7 @@ export const BUILD_TOOL_SPEC = Object.freeze({
     properties: {
       build_id: { type: 'string', pattern: '^[a-z0-9][a-z0-9._-]{2,79}$', description: '<repo>-<carpeta-del-plan>; -r2… en otra corrida' },
       role: { type: 'string', enum: [...BUILD_ROLES], description: 'coordinator: etapa y estado; worker: solo su fase' },
-      stage: { type: 'integer', minimum: 1, maximum: BUILD_STAGES.length, description: `Etapa 1..7: ${BUILD_STAGES.join(', ')}` },
+      stage: { type: 'integer', minimum: 1, maximum: BUILD_STAGES.length, description: `Etapa 1..7: ${BUILD_STAGES.join(', ')}; con flow encargo, 1..4: ${BUILD_ENCARGO_STAGES.join(', ')}` },
       status: { type: 'string', enum: [...BUILD_STATUSES] },
       outcome: { type: 'string', enum: ['delivered', 'stopped', 'failed'], description: 'Solo con done' },
       title: str('Máx. 120'),

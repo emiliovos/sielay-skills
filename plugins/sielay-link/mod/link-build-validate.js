@@ -8,14 +8,14 @@
 // link-build-estimate.js.
 
 import {
-  BUILD_STAGES, BUILD_STATUSES, BUILD_ROLES, BUILD_OUTCOMES, BUILD_MAX_BYTES, BUILD_TEXT_MAX, BUILD_SUBAGENTS_MAX, SHORT_TEXT_MAX,
+  BUILD_STAGES, BUILD_ENCARGO_STAGES, BUILD_STATUSES, BUILD_ROLES, BUILD_OUTCOMES, BUILD_MAX_BYTES, BUILD_TEXT_MAX, BUILD_SUBAGENTS_MAX, SHORT_TEXT_MAX,
   Invalid, isObj, isCount, absent, hasSecret, text, date, stage, gate, delivery, links,
 } from './link-build-fields.js'
 import { estimate } from './link-build-estimate.js'
 import { waiting, retro } from './link-build-waiting-retro.js'
 import { flow, stageDetail, deliveryExtras } from './link-build-detail.js'
 
-export { BUILD_STAGES, BUILD_STATUSES, BUILD_ROLES, BUILD_MAX_BYTES, BUILD_TEXT_MAX, BUILD_SUBAGENTS_MAX }
+export { BUILD_STAGES, BUILD_ENCARGO_STAGES, BUILD_STATUSES, BUILD_ROLES, BUILD_MAX_BYTES, BUILD_TEXT_MAX, BUILD_SUBAGENTS_MAX }
 export { BUILD_LINKS_MAX, BUILD_FUTURE_SKEW_MS } from './link-build-fields.js'
 
 const FLAGS_MAX = 20
@@ -89,6 +89,7 @@ export function validateBuild(input, now) {
     if (typeof input.build_id !== 'string' || !BUILD_ID.test(input.build_id) || hasSecret(input.build_id)) throw new Invalid('build_id')
     if (!BUILD_ROLES.includes(input.role)) throw new Invalid('role')
     const st = stage(input.stage, 'stage')
+    if (input.flow === 'encargo' && st > BUILD_ENCARGO_STAGES.length) throw new Invalid('stage')
     if (!BUILD_STATUSES.includes(input.status)) throw new Invalid('status')
     if (!absent(input.pr) && !(Number.isSafeInteger(input.pr) && input.pr > 0)) throw new Invalid('pr')
     const pp = input.plan_progress

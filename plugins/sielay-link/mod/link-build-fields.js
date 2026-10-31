@@ -6,6 +6,8 @@
 import { scrubSecrets } from './link-secret-scrub.js'
 
 export const BUILD_STAGES = Object.freeze(['frame', 'evidencia', 'plan', 'implementar', 'verificar', 'revisar', 'entregar'])
+/** The steps of an `encargo`: it reports stage 1..4. */
+export const BUILD_ENCARGO_STAGES = Object.freeze(['encargado', 'en_curso', 'esperando', 'entregado'])
 export const BUILD_STATUSES = Object.freeze(['running', 'waiting_approval', 'blocked', 'done'])
 export const BUILD_ROLES = Object.freeze(['coordinator', 'worker'])
 export const BUILD_OUTCOMES = Object.freeze(['delivered', 'stopped', 'failed'])
