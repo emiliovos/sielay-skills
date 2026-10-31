@@ -13,8 +13,8 @@ test('without the new fields the report is exactly what it was', () => {
   assert.deepEqual(build, { ...base, delivery: { merge_pr: 'pending' } })
 })
 
-test('flow: the three values pass, an unknown one refuses the report', () => {
-  for (const f of ['full', 'chico', 'fix']) assert.equal(ok({ flow: f }).build.flow, f)
+test('flow: the four values pass, an unknown one refuses the report', () => {
+  for (const f of ['full', 'chico', 'fix', 'encargo']) assert.equal(ok({ flow: f }).build.flow, f)
   assert.equal(ok({ flow: 'rapido' }).error, 'flow')
   assert.equal(ok({ flow: 3 }).error, 'flow')
   assert.equal('flow' in ok({ flow: null }).build, false)
