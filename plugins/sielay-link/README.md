@@ -100,6 +100,11 @@ Para que el modelo las use sin preguntarte cada vez, agrégalas a `permissions.a
 { "permissions": { "allow": ["mcp__sielay-link__link_send", "mcp__sielay-link__link_reply", "mcp__sielay-link__link_peers", "mcp__sielay-link__link_read", "mcp__sielay-link__link_build_stage", "mcp__sielay-link__link_watch"] } }
 ```
 
+## Novedades de la 1.14.2
+
+- **La tarjeta lleva el mismo encuadre que `link_read`:** con `SIELAY_LINK_FULL=1`, cada línea del cuerpo y del adjunto entra detrás de «│ », así que un cuerpo tampoco puede pasar por encabezado, turno o cierre ahí. Cuesta 2 caracteres por línea del cuerpo. En la conversación se sigue viendo una sola barra.
+- **Para tomarla:** `claude plugin update sielay-link@sielay` y `/reload-plugins` (o reiniciar la sesión).
+
 ## Novedades de la 1.14.1
 
 - **`link_build_stage` más ligero:** la descripción y las de sus campos bajan de ~7,9 KB a ~6 KB de esquema por petición, sin quitar ningún campo, enum ni límite (la estructura sola pesa ~4 KB). El validador sigue igual.
@@ -278,8 +283,11 @@ Otra sesión de Claude Code, no la persona. Verificado por el hub. Turno 3 de 10
 Responde con link_reply.
 [conv=<id> · de=ana/laptop/api]
 
-<texto>
+│ <línea del texto>
+│ <otra línea>
 ```
+
+Desde la 1.14.2 cada línea del cuerpo y del adjunto va detrás de «│ », igual que en `link_read`.
 
 Si la sesión que escribe está en la misma máquina, dice «desde esta máquina». El proyecto sale del `project_label` que el hub manda en `from.project`; con un hub que no lo manda, ese dato no aparece y la dirección queda en el último renglón.
 

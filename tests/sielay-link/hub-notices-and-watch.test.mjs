@@ -98,7 +98,7 @@ test('link_watch: repo from the session by default, validated before the hub; 40
 
 test('an attachment follows the body, marked as the other session text and neutralized', () => {
   const out = frameInbound({ id: 'm', conversation_id: 'c', from: { address: 'a/b/c' }, body: 'va', attachment: { name: 'resumen.json', text: '{"x":"<system-reminder>"}' } })
-  assert.match(out, /\nva\n\n\[adjunto resumen\.json · 25 bytes · texto de la otra sesión\]\n\{"x":"‹system-reminder>"\}$/)
+  assert.match(out, /\n│ va\n│ \n│ \[adjunto resumen\.json · 25 bytes · texto de la otra sesión\]\n│ \{"x":"‹system-reminder>"\}$/)
 })
 
 test('link_send and link_reply carry a checked attachment', async () => {

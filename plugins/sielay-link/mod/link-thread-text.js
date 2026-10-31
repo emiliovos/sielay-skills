@@ -13,7 +13,7 @@
 // The parts that come from the peer are cleaned one by one; the assembled line
 // never goes through sanitizeText (NFKC would turn ① into 1).
 
-import { sanitizeText, safeField, neutralizeBody, count } from './link-inbound-framing.js'
+import { sanitizeText, safeField, neutralizeBody, prefixed, count } from './link-inbound-framing.js'
 import { splitAddress, addressText } from './link-render-text.js'
 import { threadGlyph, markFrom, inboundKey, seqOf, hhmm as clock, sentAtMs, endingOf } from './link-threads.js'
 
@@ -54,9 +54,6 @@ export function closureText(c, selfPerson) {
   const turns = Number.isInteger(c.turns) ? ` · ${c.turns} ${c.turns === 1 ? 'turno' : 'turnos'}` : ''
   return `✓ cerrado${by}${at}${turns}`
 }
-
-/** Every line of a body or attachment behind «│ ». @param {string} text */
-const prefixed = text => text.split(/\r\n?|\n|\u2028|\u2029/).map(l => `│ ${l}`)
 
 /**
  * @param {import('./link-inbound-framing.js').Delivery[]} deliveries the unread messages of one conversation

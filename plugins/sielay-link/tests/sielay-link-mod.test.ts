@@ -102,7 +102,7 @@ test('SIELAY_LINK_FULL=1: the whole card is injected, as before compact mode', {
   await clock.advance(1_000)
   await clock.settle()
   expect(helper.length).toBe(1)
-  expect(helper[0]).toMatch(/^— Mensaje de ana desde laptop \(sesión api\)\n[\s\S]*\[conv=c1 · de=ana\/laptop\/api\]\n\nhola m2$/)
+  expect(helper[0]).toMatch(/^— Mensaje de ana desde laptop \(sesión api\)\n[\s\S]*\[conv=c1 · de=ana\/laptop\/api\]\n\n│ hola m2$/)
 })
 
 test('without a token the tools deny and nothing reaches the network', async ($, on) => {
