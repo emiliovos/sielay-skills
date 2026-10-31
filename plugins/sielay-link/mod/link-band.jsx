@@ -13,7 +13,7 @@ import { sanitizeText, neutralizeBody } from './link-inbound-framing.js'
 import { decisionContext } from './link-runtime.js'
 import { shortId } from './link-strip-selection.js'
 import { PANE_ID } from './link-state-refs.js'
-import { BUILD_STAGES } from './link-build-validate.js'
+import { BUILD_ENCARGO_STAGES, BUILD_STAGES } from './link-build-validate.js'
 
 // $.state references: literal plugin/key, declared in each file that uses them.
 const STRIP = /** @type {const} */ ({ plugin: 'sielay-link', key: 'strip' })
@@ -79,7 +79,8 @@ export function buildLine(build) {
   if (typeof stage !== 'number' || !Number.isInteger(stage) || stage < 1 || stage > BUILD_STAGES.length) return null
   const status = build?.declared.status
   const extra = typeof status === 'string' && status !== 'running' ? ` · ${status}` : ''
-  return `build: etapa ${stage}/${BUILD_STAGES.length} · ${BUILD_STAGES[stage - 1]}${extra}`
+  const names = build?.declared.flow === 'encargo' ? BUILD_ENCARGO_STAGES : BUILD_STAGES
+  return `build: etapa ${stage}/${names.length} · ${names[stage - 1] ?? BUILD_STAGES[stage - 1]}${extra}`
 }
 
 /**

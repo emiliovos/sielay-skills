@@ -4,7 +4,7 @@
 
 import { Invalid, isObj, isCount, absent, text, date, stage, safeHref, BUILD_TEXT_MAX } from './link-build-fields.js'
 
-export const BUILD_FLOWS = Object.freeze(['full', 'chico', 'fix'])
+export const BUILD_FLOWS = Object.freeze(['full', 'chico', 'fix', 'encargo'])
 export const DEPLOY_STATES = Object.freeze(['approval', 'publishing', 'verified', 'failed'])
 export const DETAIL_ITEMS_MAX = 8
 export const DETAIL_TEXT_MAX = Object.freeze({ label: 80, value: 160, live: 120, reason: 120 })
