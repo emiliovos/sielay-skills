@@ -13,7 +13,7 @@ Una prueba demuestra que la app no se rompe, no que el código hace lo que se ac
 Una suite puede crecer mucho más rápido que el código. El tiempo se va sobre todo en las pruebas que levantan la app y en las esperas.
 - **Una sola prueba de servidor real por flujo de punta a punta.** Los casos límite, las ramas de error y las validaciones van como pruebas unitarias puras: funciones o módulos, sin levantar la app ni lanzar subprocesos.
 - **Nada de esperas fijas** (`sleep` o `setTimeout` de segundos). Inyecta el reloj o agrega un ajuste solo para pruebas, por ejemplo una variable de entorno que acorta un intervalo de sondeo y que la app solo respeta con `NODE_ENV=test`.
-- **Un tope de milisegundos se calibra con margen según la carga del runner** donde corre la compuerta (los runners compartidos o cargados son más lentos). Nunca se quita ni se debilita para ponerlo en verde: se ensancha el margen con una medición.
+- **Un tope de milisegundos se calibra con margen según la carga del runner** donde corre la compuerta (los runners compartidos o cargados son más lentos). Nunca se quita ni se debilita para ponerlo en verde: se ensancha el margen con una medición. Si el tope es la clave de un criterio aprobado, no se ensancha: se reporta y se espera.
 - **Una prueba nueva que tarde más de 5 s se justifica en el PR** (o en el commit, en `main directo`).
 - **Sin meta de cobertura fija si el repo tiene selector o carriles.** Verifica con las pruebas afectadas y deja la suite completa a la compuerta de entrega y a la corrida nocturna (`compuerta-de-pruebas.md`). Si las pruebas pesadas ya van en un carril aparte, la prueba nueva de servidor real va en ese carril.
 - Lo que un revisor marca como opcional no se convierte en una prueba nueva por defecto (`ejecucion-autonoma.md`, "Durante").
@@ -23,6 +23,7 @@ Una suite puede crecer mucho más rápido que el código. El tiempo se va sobre 
 - Reescribir una prueba que falla para que sea trivialmente cierta.
 - Saltar una prueba (`skip`, `todo`, "falta la herramienta en este host", "no relacionado con mi cambio"). **Una prueba saltada cuenta como roja.** La herramienta se instala en el host que sella (momento humano o fase aprobada) o el chequeo pasa al build.
 - Debilitar una aserción o un criterio de aceptación para que pase.
+- Cambiar la `clave` de un criterio ya aprobado (un umbral, una cifra, una respuesta esperada): se reporta y se espera.
 
 ## Cuando una prueba falla
 Investiga la causa y repórtala. Nunca debilites una garantía existente, nunca la comentes sin explicar por qué falló y nunca la saltes salvo que el usuario lo autorice explícitamente.
@@ -52,7 +53,7 @@ Sin AgentKit, haz lo mismo con el agente del carril y entrega la misma evidencia
 
 ## Reporte final (etapa 8)
 - **Qué se entregó y dónde:** PRs o commits, URLs, issues, y qué quedó desplegado.
-- **Evidencia de cada criterio de aceptación:** pruebas, mutaciones que muerden, capturas con datos sembrados (una captura vacía no es evidencia), logs, prueba de humo.
+- **Evidencia de cada criterio de aceptación:** pruebas, mutaciones que muerden, capturas con datos sembrados (una captura vacía no es evidencia), logs, prueba de humo. Los que quedaron en `sin-clave` se listan aparte.
 - **Cifras medidas** (tiempos, costos) contra los objetivos del plan.
 - **Dónde se fue el tiempo:** una tabla por tramo (espera humana, evidencia y plan, implementación, revisión, CI, integración, merge, deploy) con su duración real, el programado contra el real y la ruta crítica que de verdad resultó. Sale de las horas anotadas en `plan.md`. Es lo que permite calibrar el estimado del siguiente build.
 - **Riesgos aceptados y pendientes**, cada uno con su issue (*si hay tracker*); momentos humanos que le quedan al usuario.

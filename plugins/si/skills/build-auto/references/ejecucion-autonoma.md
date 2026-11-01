@@ -24,6 +24,7 @@ En `main directo` el aislamiento por worktree y el orden de integración se mant
   - dónde dejar borradores, prototipos y logs: un directorio desechable propio, fuera del repo, que reporta al terminar;
   - "no mergees, no empujes a main";
   - "si el trabajo sale de tus archivos o de los criterios, no lo hagas: descríbelo y termina con `BLOCKED` o `DONE_WITH_CONCERNS`";
+  - "no cambies la `clave` de un criterio aprobado: repórtala y termina con `BLOCKED`";
   - "después de cada rebase, reinstala las dependencias antes de empujar";
   - que termine con `Status: DONE | DONE_WITH_CONCERNS | BLOCKED`.
 
@@ -38,7 +39,7 @@ En `main directo` el aislamiento por worktree y el orden de integración se mant
 - **Un solo coordinador integra y entrega**, en orden y siempre por la compuerta. Con la CI del carril en verde y su revisión pasada, lo mezcla en `build/<slug>` (`git merge --no-ff`) y empuja. Si un carril resulta malo después, revierte su merge en `build/<slug>` y los demás siguen. Nadie más integra ni entrega.
 - **Revisión adversarial por carril, según su riesgo** (`/ak:code-review` o un `code-reviewer`): alto, a fondo con confirmación; normal, a fondo; bajo, ligera. El esfuerzo del revisor es `medium` salvo en auth, seguridad, migraciones o datos de producción, que van con `high` (regla de la tabla «Modelo fijo por rol» de `SKILL.md`). Antes de la entrega, una **revisión de integración** del PR final: cómo encajan los carriles, no repetir cada uno. Los detalles técnicos los decides tú y reportas qué decidiste; las decisiones de producto se preguntan.
 - **Evaluador (revisión del carril y del PR final).** Un revisor con contexto fresco, por riesgo: alto, a fondo con confirmación; normal, a fondo; bajo, ligero. Antes de la entrega, una revisión de integración del PR final: cómo encajan los carriles, no repetir cada uno. Reglas:
-  - usa como rúbrica los criterios de aceptación en JSON del contrato, y marca cada `estado` con su evidencia;
+  - usa como rúbrica los criterios de aceptación en JSON del contrato, compara contra la copia aprobada de su `clave` (su ruta va en el encargo) y marca cada `estado` con su evidencia; en peldaño 5 marca `sin-clave`, no `pasa`, salvo un fallo observable, que es `falla`; una clave cambiada sin un sí nuevo es Critical;
   - reporta solo lo que afecta la corrección, la seguridad o los requisitos; el resto va como opcional y no bloquea. Pon esto en su encargo;
   - marca la **clase completa** del bug (todas las apariciones, con un grep), no una línea;
   - no repite hallazgos ya reportados;

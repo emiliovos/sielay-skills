@@ -109,10 +109,11 @@ function conLock(ruta, home, fn) {
   if (fd === undefined) throw new Error(`no pude tomar el lock de la bitácora: ${lock}`);
   try { return fn(); } finally { fs.closeSync(fd); try { fs.unlinkSync(lock); } catch { /* ya no está */ } }
 }
+// Solo cuenta la línea de esta skill: la de otra fuente no cierra un bug_escapado, que aún espera su check.
 function yaEsta(ruta, clave) {
   let txt = '';
   try { txt = fs.readFileSync(ruta, 'utf8'); } catch (e) { if (e.code !== 'ENOENT') throw e; }
-  return txt.split('\n').some((l) => { try { return JSON.parse(l).clave === clave; } catch { return false; } });
+  return txt.split('\n').some((l) => { try { const o = JSON.parse(l); return o.clave === clave && o.fuente === TERMINAL; } catch { return false; } });
 }
 // Una sola línea sin caracteres de control ni secuencias ANSI, recortada.
 const limpiar = (s, max) => String(s ?? '').replace(/\u001b\[[0-9;]*[A-Za-z]/g, '').replace(/[\p{Cc}\p{Cf}]+/gu, ' ').trim().slice(0, max);
