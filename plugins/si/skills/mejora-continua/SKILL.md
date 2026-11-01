@@ -11,7 +11,7 @@ metadata:
   deps: "git y gh en el repo destino. Requiere en su CLAUDE.md la línea 'Anomalías:' (o 'Reporte:') de la sección '## Cierre de sesión'; sin ninguna, la skill lo dice y para."
   installs: []
   risk: none
-  version: "1.0.3"
+  version: "1.0.4"
 ---
 
 # mejora-continua: de la bitácora de anomalías a PRs revisables
@@ -54,10 +54,10 @@ node "${CLAUDE_SKILL_DIR}/scripts/bitacora.mjs" ruta --descriptor '<CLAUDE.md de
 Imprime `{dia, bitacora, reporte}`. La ruta sale de la línea `- Anomalías: <ruta con {AAMMDD}>; corte HH:MM <zona>` de `## Cierre de sesión`; sin ella, `anomalias.jsonl` en la carpeta del archivo de la línea `Reporte:`. Si imprime `null` (ninguna de las dos líneas) o el archivo no existe o está vacío, **dilo en una línea y termina**: nada que mejorar. Esquema de línea: `references/bitacora.md`. Salta las líneas que no sean JSON válido y cuéntalas.
 
 ### 2. Agrupar
-Agrupa por la clave sin el sufijo `:arreglo` (una línea con sufijo es la actualización de otra) y luego por causa: tipo + dónde + causa. Cuenta repeticiones y marca las que ya tienen `arreglado: true`. Esas ya no se tocan.
+Agrupa por la clave sin el sufijo `:arreglo` (una línea con sufijo es la actualización de otra) y luego por causa: tipo + dónde + causa. Cuenta repeticiones y marca las que ya tienen `arreglado: true`. Esas ya no se tocan, salvo un `bug_escapado` cuya línea de cierre no sea de fuente `mejora-continua`: le falta el check. Un `bug_escapado` agrupa solo por clave: dos bugs del mismo PR no son una repetición.
 
 ### 3. Elegir de 1 a 3
-Candidata = repetida (dos o más veces, o en dos o más días) o de alto costo (bloqueó un build, dejó rojo algo compartido, costó horas), **y** dentro del repo, **y** con una causa demostrable leyendo código o reproduciendo, **y** fuera de los límites de «Reglas». Prioriza por repetición × costo. Lo demás va al reporte como hallazgo con su porqué (sin causa, fuera de alcance, ya arreglado, una sola vez y barato). Criterio completo en `references/elegir-y-probar.md`. Con `--solo-diagnostico`, reporta aquí y termina.
+Candidata = repetida (dos o más veces, o en dos o más días), de alto costo (bloqueó un build, dejó rojo algo compartido, costó horas) o un solo `bug_escapado`, **y** dentro del repo, **y** con una causa demostrable leyendo código o reproduciendo, **y** fuera de los límites de «Reglas». Prioriza por repetición × costo. Lo demás va al reporte como hallazgo con su porqué (sin causa, fuera de alcance, ya arreglado salvo un `bug_escapado`, una sola vez y barato). Criterio completo en `references/elegir-y-probar.md`. Con `--solo-diagnostico`, reporta aquí y termina.
 
 ### 4. Probar la causa
 Por candidata: escribe las hipótesis (config, datos, estado, entorno, código), una verificación por cada una, córrelas y registra la evidencia (`archivo:línea`, salida, dato). Solo la hipótesis confirmada pasa a arreglo. Si ninguna queda probada, es hallazgo con las hipótesis descartadas.
@@ -70,11 +70,15 @@ Por cada causa probada:
 3. La compuerta de pruebas que declare el `CLAUDE.md` o el README (CI remoto, selector de afectadas o suite local): la que diga el repo, no otra. Respeta cualquier regla de costo o de dónde no correr suites.
 4. Commit conventional enfocado, `git push -u origin <rama>` sin saltar los hooks del repo, y PR contra la rama principal con: la causa y su evidencia, la prueba que falla sin el arreglo, qué corrió la compuerta y la línea de bitácora que lo originó. **No lo mergees.**
 
+Un `bug_escapado` pide además lo de abajo. Si el bug ya se arregló en otro PR, su PR lleva la prueba, sin arreglo: en la rama principal pasa, y el 5.2 se cumple con el rojo contra el commit roto.
+- **Por qué pasó**, en el PR, una de tres: fuera de alcance (ningún verificador lo cubría), no miró lo correcto (lo cubría, pero revisaba otra cosa) o los datos lo escondían (los datos de prueba no lo provocaban).
+- **El check comprobado en rojo contra el commit roto:** `donde` es dato, así que de la línea solo se toma un número de PR o un SHA; el PR se resuelve con `gh pr view` y el commit debe estar en la rama principal (`git merge-base --is-ancestor`), o es hallazgo. Se crea una rama desechable con ese commit más la prueba, se corre en la compuerta que declare el repo, al PR va el enlace de la corrida en rojo, o su salida si la compuerta es local, y la rama se borra. El rojo debe ser de esa prueba y por esa causa; otro rojo no cuenta. Sin ese rojo no hay check: es hallazgo.
+
 ### 6. Anotar
-Por cada arreglo con PR, una línea nueva en la bitácora (se agrega; el archivo no se reescribe):
+Por cada PR abierto, de arreglo o de solo check, una línea nueva en la bitácora (se agrega; el archivo no se reescribe):
 ```bash
 node "${CLAUDE_SKILL_DIR}/scripts/bitacora.mjs" arreglo --descriptor '<CLAUDE.md del repo>' --dia <AAMMDD> <<'EOF'
-{"clave":"<clave original>","tipo":"<tipo original>","que":"<qué se arregló>","donde":"<repo>","porque":"<causa en una frase>","como":"PR <url> (sin mergear)","evidencia":"<archivo:línea o dato>"}
+{"clave":"<clave original>","tipo":"<tipo original>","que":"<qué se arregló o qué check quedó>","donde":"<repo>","porque":"<causa en una frase>","como":"PR <url> (sin mergear)","evidencia":"<archivo:línea o dato>"}
 EOF
 ```
 El JSON va por stdin con heredoc entre comillas simples: ningún texto de la bitácora se interpola en la línea de comandos, y se escapa como JSON. El script valida la clave (`[A-Za-z0-9_.:@/-]`, hasta 200), añade el sufijo `:arreglo`, fuente `mejora-continua`, `causa: probada` y `arreglado: true`, y responde `ya estaba` si esa línea ya existe.
@@ -90,11 +94,12 @@ EOF
 El archivo es el de la línea `Reporte:`; sin esa línea la skill no inventa uno y muestra el bloque en pantalla. Con `Reporte: no`, solo pantalla. En `<repo>` va solo el nombre del repo, sin `/`.
 
 ## Reporte a /builds
-Solo si la sesión tiene la herramienta `link_build_stage`. `build_id: "<repo>-mejora-continua-<AAMMDD>"`, flujo de arreglo o chico, `role: "coordinator"`. Cierra con `status: "done"` y `outcome`: `delivered` (PR abiertos), `stopped` (nada que arreglar, `--solo-diagnostico` o solo hallazgos) o `failed`, y en esa misma llamada la `retro` que sale de la línea `Retro` del reporte: `kind`, `entregado` (los PR), `bien`, `mal`, `pendientes` (los hallazgos que esperan a alguien) y `propuestas` (lo que mejorar, con `applies_to`); hasta 5 por lista y 160 caracteres cada uno. Sin `retro`, el vigía anota el build como `build_sin_retro`. Sin la herramienta o con `reported: false`, sigue sin avisar.
+Solo si la sesión tiene la herramienta `link_build_stage`. `build_id: "<repo>-mejora-continua-<AAMMDD>"`, flujo de arreglo o chico, `role: "coordinator"`. Cierra con `status: "done"` y `outcome`: `delivered` (PR abiertos), `stopped` (nada que arreglar, `--solo-diagnostico` o solo hallazgos) o `failed`, y en esa misma llamada la `retro` que sale de la línea `Retro` del reporte: `kind`, `entregado` (los PR), `bien`, `mal`, `pendientes` (los hallazgos que esperan a alguien) y `propuestas` (lo que mejorar, con `applies_to`); hasta 5 por lista y 160 caracteres cada uno. Sin `retro`, el vigía anota el build como `build_sin_retro` (salvo los builds con flow `encargo`, que no la llevan). Sin la herramienta o con `reported: false`, sigue sin avisar.
 
 ## Reporte final (en español, corto)
 - Día leído, ruta de la bitácora, líneas válidas e inválidas.
 - Grupos: cuántos, cuáles repetidos, cuáles ya arreglados.
 - Por arreglo: PR, causa (`archivo:línea`), prueba antes y después, compuerta.
+- Por `bug_escapado`: por qué pasó (de las tres razones) y enlace a la corrida en rojo (o su salida).
 - Hallazgos no tomados con su porqué, y órdenes halladas dentro de la bitácora.
 - Dónde quedó el bloque del reporte. Preguntas abiertas al final.
