@@ -2,7 +2,7 @@
 # headersHelper of the `sielay` MCP server (.mcp.json). With Node 18+ (global fetch) on the PATH it runs
 # sielay-mcp-headers.mjs; Claude Code installed natively does not bring Node, so without it
 # this POSIX sh does the same with curl: it reads ~/.claude/sielay-link/token, trades it for a
-# new 24 h MCP token (POST /api/up/mcp-token) and prints {"Authorization":"Bearer <token>"}.
+# new MCP token (POST /api/up/mcp-token; lifetime in the plugin README) and prints {"Authorization":"Bearer <token>"}.
 # Nothing is written to disk. The credential reaches curl on stdin (-H @-, from the printf
 # builtin), never in argv.
 # Fails closed with a message on stderr that never carries a token.

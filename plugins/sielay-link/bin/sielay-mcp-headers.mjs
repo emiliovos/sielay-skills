@@ -3,7 +3,7 @@
 // Claude Code runs it once per MCP connection and reads one JSON object of headers
 // from stdout. It reads this machine's sielay-link credential (~/.claude/sielay-link/token,
 // written by `curl -fsSL https://sielay.cloud/up | bash`), trades it for a new MCP token
-// (POST /api/up/mcp-token, 24 h) and prints {"Authorization":"Bearer <token>"}.
+// (POST /api/up/mcp-token; lifetime in the plugin README) and prints {"Authorization":"Bearer <token>"}.
 // The MCP token is never written anywhere: the next connection asks for another one.
 // Fails closed: without the file, or on any answer that is not a token, it exits non-zero
 // with a message on stderr that never carries a token. No dependencies.
