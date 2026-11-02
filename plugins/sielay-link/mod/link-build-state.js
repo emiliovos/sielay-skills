@@ -7,13 +7,15 @@
 // the caller can skip the write.
 
 import { validateBuild } from './link-build-validate.js'
-import { displace, pruneOpen } from './link-build-open.js'
+import { displace, keepUsage, pruneOpen } from './link-build-open.js'
 import { enqueuePending, prunePending, takePending } from './link-build-pending.js'
 
 export { openBuildIds } from './link-build-open.js'
 
 /** A subagent with no signal for this long is dropped from the live list. */
 export const SUBAGENT_EXPIRY_MS = 30 * 60_000
+/** A `done` waits for the end of its turn so that turn counts (a closed build is immutable on the hub), at most this long. */
+export const DONE_HOLD_MS = 5 * 60_000
 /** A tool call refreshes a subagent's signal at most this often (fewer writes). */
 export const SEEN_REFRESH_MS = 60_000
 /** What link_build_stage may set: the contract minus what the mod itself fills. */
@@ -39,9 +41,16 @@ function liveCount(subs, now) {
   return Object.values(subs).filter(s => now - s.seen <= SUBAGENT_EXPIRY_MS).length
 }
 
+/** @param {BuildState|null} state @param {boolean} same @param {string} id @param {Record<string, number>} open */
+function keptUsageField(state, same, id, open) {
+  const kept = keepUsage(state, same, id, open)
+  return Object.keys(kept).length > 0 ? { kept_usage: kept } : {}
+}
+
 /**
- * Merges a link_build_stage call. A new build_id starts a new build (usage and
- * peak from zero, the subagents still running carried over); the same one
+ * Merges a link_build_stage call. A new build_id starts a new build (peak from
+ * zero, usage from zero unless the session already counted for that build and
+ * it is coming back, the subagents still running carried over); the same one
  * merges field by field, `delivery` one level deep. A new `estimate` replaces
  * the old one whole; `estimate: null` leaves it as it was. A stage change with
  * no `stage_since` stamps it now.
@@ -72,7 +81,9 @@ export function declareBuild(state, input, now) {
     started_at: same ? state.started_at : queued?.started_at ?? iso(now),
     subagents,
     peak: same ? state.peak : liveCount(subagents, now),
-    usage: same ? state.usage : null,
+    usage: same ? state.usage : queued?.usage ?? state?.kept_usage?.[String(declared.build_id)] ?? null,
+    ...keptUsageField(state, same, String(declared.build_id), open),
+    ...(declared.status === 'done' ? { done_held_at: (same && state.done_held_at) || now } : {}),
   }
 }
 
@@ -167,6 +178,26 @@ export function addActiveTime(state, durationMs) {
   const prev = state.usage ?? { ...ZERO_USAGE }
   const active = Math.min(Number.MAX_SAFE_INTEGER, (prev.active_ms ?? 0) + Math.floor(durationMs))
   return { ...state, usage: { ...prev, active_ms: active } }
+}
+
+/**
+ * The main loop's turn ended, so the turn that declared `done` is counted and
+ * the report can go out.
+ * @param {BuildState|null} state
+ * @returns {BuildState|null}
+ */
+export function releaseDone(state) {
+  if (!state?.done_held_at) return state
+  const { done_held_at: _held, ...released } = state
+  return released
+}
+
+/**
+ * Whether this build's `done` still waits for the end of its turn.
+ * @param {BuildState} state @param {number} now
+ */
+export function holdsDone(state, now) {
+  return state.done_held_at !== undefined && now - state.done_held_at < DONE_HOLD_MS
 }
 
 /**
