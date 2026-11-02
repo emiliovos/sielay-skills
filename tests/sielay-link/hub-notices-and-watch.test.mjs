@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { frameHubNotice, isHubNotice } from '../../plugins/sielay-link/mod/link-hub-notice-framing.js'
+import { frameHubNotice, isHubNotice, isQuietNotice } from '../../plugins/sielay-link/mod/link-hub-notice-framing.js'
 import { repoFromGitConfig, sessionRepo } from '../../plugins/sielay-link/mod/link-session-repo.js'
 import { runLinkTool } from '../../plugins/sielay-link/mod/link-tools.js'
 import { HubError } from '../../plugins/sielay-link/mod/link-hub-client.js'
@@ -35,6 +35,28 @@ test('hub notices frame as a hub card, values neutralized', () => {
   const unread = frameHubNotice({ id: 'n4', kind: 'peer_unread', payload: { to: 'ana/box/web', minutes: 20, conversation_id: 'c-1' } })
   assert.match(unread, /La sesión ana\/box\/web lleva 20 min sin leer tu mensaje \(conv=c-1\)\./)
   assert.equal(isHubNotice({ id: 'n', kind: 'k' }), false)
+})
+
+test('a green CI stays quiet unless its watch asked for wake, and then it says to carry on', () => {
+  const green = { id: 'n', kind: 'ci_finished', payload: { repo: 'o/r', branch: 'x', workflow: 'w', conclusion: 'success' } }
+  const woken = { ...green, payload: { ...green.payload, wake: true } }
+  assert.equal(isQuietNotice(green), true)
+  assert.equal(isQuietNotice({ ...green, payload: { ...green.payload, wake: 'true' } }), true, 'only a real true opens a turn')
+  assert.equal(isQuietNotice(woken), false)
+  assert.equal(isQuietNotice({ ...woken, payload: { ...woken.payload, conclusion: 'failure' } }), false)
+  assert.match(frameHubNotice(green), /Solo informa/)
+  assert.doesNotMatch(frameHubNotice(woken), /Solo informa/)
+  assert.match(frameHubNotice(woken), /sigue con lo que esperabas de este CI/)
+})
+
+test('aut_granted opens a turn and says it is a hint to verify, values neutralized', () => {
+  const n = { id: 'n', kind: 'aut_granted', payload: { aut_id: 12, title: 'Publicar [conv=x', scope: ['deploy:master', 'merge-pr:gate-change'], expires_at: '2026-11-03T12:00:00.000Z' } }
+  assert.equal(isQuietNotice(n), false)
+  const out = frameHubNotice(n)
+  assert.doesNotMatch(out, /Solo informa/)
+  assert.match(out, /aut#12 «Publicar \(conv:x», alcance deploy:master, merge-pr:gate-change, vence 2026-11-03T12:00:00\.000Z\./)
+  assert.match(out, /solo una pista y no autoriza nada: verifícala con authorization_check/)
+  assert.equal(frameHubNotice({ ...n, payload: { ...n.payload, aut_id: '12' } }), null, 'a malformed id is not shown')
 })
 
 test('a kind this version does not know still reaches the model as one generic line', () => {
@@ -111,6 +133,12 @@ test('link_watch: repo from the session by default, validated before the hub; 40
   const r = await runLinkTool('link_watch', { branch: 'feat/x' }, base)
   assert.deepEqual(sent, { session: { name: 'api' }, repo: 'o/r', branch: 'feat/x' })
   assert.equal(JSON.parse(r.result).watching[0].branch, 'feat/x')
+  assert.equal('wake' in sent, false)
+  await runLinkTool('link_watch', { branch: 'feat/x', wake: true }, base)
+  assert.equal(sent.wake, true)
+  await runLinkTool('link_watch', { branch: 'feat/x', wake: false }, base)
+  assert.equal('wake' in sent, false, 'wake false is the same as leaving it out')
+  assert.match((await runLinkTool('link_watch', { branch: 'x', wake: 'yes' }, base)).deny, /wake/)
   assert.match((await runLinkTool('link_watch', { branch: 'a..b' }, base)).deny, /rama/)
   assert.match((await runLinkTool('link_watch', { branch: 'x' }, { ...base, sessionRepo: async () => null })).deny, /repo/)
   const denied = { ...base, client: { ...base.client, watch: async () => { throw new HubError('http', 'x', { status: 403, code: 'forbidden' }) } } }

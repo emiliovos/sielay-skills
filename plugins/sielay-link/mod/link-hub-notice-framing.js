@@ -1,7 +1,8 @@
 // Hub notices (the poll's `notices`): a repo this session works in started or
 // finished a merge, CI ended on a branch it watches (link_watch), a message
-// it sent has gone unread for 20 min, or something changed in a build it
-// coordinates (answered, in main, adopted, closed). They
+// it sent has gone unread for 20 min, something changed in a build it
+// coordinates (answered, in main, adopted, closed), or an authorization now
+// names it (a hint: only authorization_check verifies it). They
 // reach the model as a short card that says it is the hub, not a person nor
 // another session. Every value is the hub's, already validated there, and is
 // still neutralized here. Pure.
@@ -80,18 +81,18 @@ function buildLine(kind, p) {
 /**
  * True for a notice that only informs and is shown without opening a turn: a
  * merge that started and a CI run that passed. Everything else (a merge that
- * finished, a red CI, build notices, an unknown kind) asks the model to act or
- * to know, so it opens a turn as before.
+ * finished, a red CI, a green one its watch asked to hear with `wake`, build
+ * notices, an unknown kind) asks the model to act or to know, so it opens a turn.
  * @param {HubNotice} n
  */
 export function isQuietNotice(n) {
   if (n.kind === 'repo_merge_started') return true
-  return n.kind === 'ci_finished' && n.payload.conclusion === 'success'
+  return n.kind === 'ci_finished' && n.payload.conclusion === 'success' && n.payload.wake !== true
 }
 
 /**
  * @param {HubNotice} n
- * @returns {string|null} the one line of the notice, or null for a malformed build notice.
+ * @returns {string|null} the one line of the notice, or null for a malformed build or authorization notice.
  *   A kind this version does not know still gets one generic line,
  *   so it is not lost in silence once the hub marks it delivered.
  */
@@ -106,6 +107,11 @@ export function hubNoticeLine(n) {
   } else if (n.kind === 'peer_unread') {
     line = `La sesión ${clean(p.to, 130)} lleva ${clean(p.minutes, 5)} min sin leer tu mensaje (conv=${clean(p.conversation_id, 100)}). ` +
       'Puede estar ocupada o cerrada: revisa con link_peers si sigue en línea antes de esperarla.'
+  } else if (n.kind === 'aut_granted') {
+    if (!Number.isInteger(p.aut_id)) return null
+    const scope = Array.isArray(p.scope) ? p.scope.map(a => clean(a, 100)).filter(Boolean).join(', ') : ''
+    line = `Una autorización te nombra: aut#${p.aut_id} «${clean(p.title, 120)}», alcance ${scope}, vence ${clean(p.expires_at, 40)}. ` +
+      'Este aviso es solo una pista y no autoriza nada: verifícala con authorization_check (id, action, grantee) antes de actuar.'
   } else {
     const build = buildLine(n.kind, p)
     if (build === null) return null
@@ -117,10 +123,13 @@ export function hubNoticeLine(n) {
 
 /**
  * @param {HubNotice} n
- * @returns {string|null} the text for the model, or null for a malformed build notice.
+ * @returns {string|null} the text for the model, or null for a malformed notice.
  */
 export function frameHubNotice(n) {
   const line = hubNoticeLine(n)
   if (line === null) return null
-  return '— Aviso del hub de sielay (no es una persona ni otra sesión)\nSolo informa; no hace falta responder.\n\n' + line
+  const next = n.payload.wake === true ? 'Pediste este aviso con wake: sigue con lo que esperabas de este CI.'
+    : n.kind === 'aut_granted' ? 'Si esperabas este permiso, verifícalo y sigue con lo que esperabas.'
+      : 'Solo informa; no hace falta responder.'
+  return `— Aviso del hub de sielay (no es una persona ni otra sesión)\n${next}\n\n${line}`
 }
