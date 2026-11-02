@@ -10,7 +10,7 @@ Una línea JSON por anomalía, UTF-8, terminada en salto de línea, menos de 4 K
 |---|---|---|
 | `ts` | ISO UTC | cuándo se detectó |
 | `fuente` | string | quién escribe (un monitor, una persona, `mejora-continua`…) |
-| `tipo` | string | categoría de la anomalía, `bug_escapado` (un bug que llegó a quien usa el sistema) u `otro` |
+| `tipo` | string | categoría de la anomalía, `bug_escapado` (un bug que llegó a quien usa el sistema), `doc_drift` (un mismo número dicho distinto entre docs, memorias y scripts) u `otro` |
 | `clave` | string | identifica la anomalía; no se repite en el día |
 | `que` | string ≤ 160 | qué pasó |
 | `donde` | string ≤ 160 | repo, build, corrida, host, PR o commit |
