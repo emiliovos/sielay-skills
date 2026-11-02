@@ -1,6 +1,6 @@
 {
   "name": "sielay-link",
-  "version": "1.19.0",
+  "version": "1.19.1",
   "description": "Conecta sesiones de Claude Code emparejadas por un hub de sielay: mensajes entre sesiones, franja para aceptar o rechazar y auto-ejecución solo entre pares en bypass o en modo auto.",
   "author": { "name": "emiliovos" },
   "license": "MIT",
