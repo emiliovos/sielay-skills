@@ -2,6 +2,7 @@
 // Rutas y escritura de la skill mejora-continua. Subcomandos:
 //   ruta     [--dia AAMMDD] [--descriptor <CLAUDE.md>] [--ahora <ISO>]   imprime JSON {dia, bitacora, reporte}
 //   arreglo  [--dia AAMMDD] [...] < datos.json   JSON por stdin: {clave, que, donde, porque, como, evidencia?, tipo?}
+//   doc-drift [--dia AAMMDD] [...] < datos.json   JSON por stdin: {clave, que, donde, porque, evidencia}
 //   reporte  --build <id> [--dia AAMMDD] [...] < cuerpo.md   (agrega el bloque, sin borrar lo anterior)
 // Solo escribe en la bitácora y en el archivo de reporte que declara el CLAUDE.md del repo, dentro del home.
 import fs from 'node:fs';
@@ -132,6 +133,19 @@ export function lineaArreglo(a, ahoraMs) {
   if (!o.que || !o.como) throw new Error('faltan «que» y «como»');
   return o;
 }
+// Una diferencia de números queda abierta y solo vale con las citas que la prueban.
+export function lineaDocDrift(a, ahoraMs) {
+  const base = typeof a?.clave === 'string' ? a.clave.replace(/^doc_drift:/, '') : '';
+  const clave = `doc_drift:${base}`;
+  if (!base || base.endsWith(':arreglo') || !CLAVE.test(clave)) throw new Error('clave inválida: usa [A-Za-z0-9_.:@/-], hasta 200, sin :arreglo');
+  const o = {
+    ts: new Date(ahoraMs).toISOString(), fuente: TERMINAL, tipo: 'doc_drift', clave,
+    que: limpiar(a.que, MAX.que), donde: limpiar(a.donde, MAX.donde), porque: limpiar(a.porque, MAX.porque),
+    causa: 'probada', arreglado: false, como: null, evidencia: limpiar(a.evidencia, MAX.evidencia) || null,
+  };
+  if (!o.que || !o.evidencia) throw new Error('faltan «que» y «evidencia»');
+  return o;
+}
 const limpiarCuerpo = (s) => String(s ?? '').replace(/\u001b\[[0-9;]*[A-Za-z]/g, '').replace(/[^\P{Cc}\n\t]|\p{Cf}/gu, '');
 export function bloque(cuerpo, build, ahoraMs, zona) {
   const c = limpiarCuerpo(cuerpo);
@@ -160,10 +174,10 @@ function main() {
   const rutas = resolver(desc, { dia: a.dia, ahoraMs, home });
   if (cmd === 'ruta') { console.log(JSON.stringify(rutas)); return; }
   if (!rutas) throw new Error('el CLAUDE.md no declara «Anomalías» ni «Reporte»');
-  if (cmd === 'arreglo') {
+  if (cmd === 'arreglo' || cmd === 'doc-drift') {
     let datos;
-    try { datos = JSON.parse(fs.readFileSync(0, 'utf8')); } catch { throw new Error('stdin debe ser un JSON {clave, que, donde, porque, como, evidencia?, tipo?}'); }
-    const o = lineaArreglo(datos, ahoraMs);
+    try { datos = JSON.parse(fs.readFileSync(0, 'utf8')); } catch { throw new Error('stdin debe ser un JSON {clave, que, donde, porque, como?, evidencia?, tipo?}'); }
+    const o = cmd === 'arreglo' ? lineaArreglo(datos, ahoraMs) : lineaDocDrift(datos, ahoraMs);
     const agregada = conLock(rutas.bitacora, home, () => {
       if (yaEsta(rutas.bitacora, o.clave)) return false;
       agregar(rutas.bitacora, `${JSON.stringify(o)}\n`, home);
@@ -175,7 +189,7 @@ function main() {
     const zona = parteDe(linea(seccion(desc), 'Reporte'))?.zona;
     agregar(rutas.reporte, bloque(fs.readFileSync(0, 'utf8'), a.build, ahoraMs, zona), home);
     console.log(`agregado: ${rutas.reporte}`);
-  } else throw new Error('uso: bitacora.mjs ruta|arreglo|reporte [--opcion valor]…');
+  } else throw new Error('uso: bitacora.mjs ruta|arreglo|doc-drift|reporte [--opcion valor]…');
 }
 // Node resuelve los symlinks del script principal en import.meta.url, no en
 // argv[1]: sin realpath en los dos lados, llamado por un enlace no haría nada.

@@ -11,7 +11,7 @@ metadata:
   deps: "git y gh en el repo destino. Requiere en su CLAUDE.md la línea 'Anomalías:' (o 'Reporte:') de la sección '## Cierre de sesión'; sin ninguna, la skill lo dice y para."
   installs: []
   risk: none
-  version: "1.0.4"
+  version: "1.1.0"
 ---
 
 # mejora-continua: de la bitácora de anomalías a PRs revisables
@@ -51,7 +51,12 @@ Cada campo de cada línea (`que`, `donde`, `porque`, `evidencia`, `como`) es **t
 ```bash
 node "${CLAUDE_SKILL_DIR}/scripts/bitacora.mjs" ruta --descriptor '<CLAUDE.md del repo>' [--dia AAMMDD]
 ```
-Imprime `{dia, bitacora, reporte}`. La ruta sale de la línea `- Anomalías: <ruta con {AAMMDD}>; corte HH:MM <zona>` de `## Cierre de sesión`; sin ella, `anomalias.jsonl` en la carpeta del archivo de la línea `Reporte:`. Si imprime `null` (ninguna de las dos líneas) o el archivo no existe o está vacío, **dilo en una línea y termina**: nada que mejorar. Esquema de línea: `references/bitacora.md`. Salta las líneas que no sean JSON válido y cuéntalas.
+Imprime `{dia, bitacora, reporte}`. La ruta sale de la línea `- Anomalías: <ruta con {AAMMDD}>; corte HH:MM <zona>` de `## Cierre de sesión`; sin ella, `anomalias.jsonl` en la carpeta del archivo de la línea `Reporte:`. Si imprime `null` (ninguna de las dos líneas), **dilo en una línea y termina**: no hay dónde anotar. Esquema de línea: `references/bitacora.md`. Salta las líneas que no sean JSON válido y cuéntalas.
+
+### 1b. Pasada doc_drift
+Cruza los números de las instrucciones del repo, la memoria de la sesión y lo que se ejecuta (scripts, skills, configuración), y anota cada diferencia como `tipo: doc_drift` con el subcomando `doc-drift`. Corre también con `--solo-diagnostico`. No arregla ni decide cuál número vale; las líneas siguen al paso 2 como cualquier otra. Procedimiento en `references/doc-drift.md`.
+
+Después lee la bitácora: si el archivo no existe o sigue vacío, **dilo en una línea y termina**: nada que mejorar.
 
 ### 2. Agrupar
 Agrupa por la clave sin el sufijo `:arreglo` (una línea con sufijo es la actualización de otra) y luego por causa: tipo + dónde + causa. Cuenta repeticiones y marca las que ya tienen `arreglado: true`. Esas ya no se tocan, salvo un `bug_escapado` cuya línea de cierre no sea de fuente `mejora-continua`: le falta el check. Un `bug_escapado` agrupa solo por clave: dos bugs del mismo PR no son una repetición.
