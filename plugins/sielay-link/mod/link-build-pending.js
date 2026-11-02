@@ -22,7 +22,7 @@ export const PENDING_MAX = OPEN_BUILDS_MAX
 export function enqueuePending(state, same, id, now) {
   const pending = prunePending(state?.pending, now).filter(p => p.declared.build_id !== id)
   if (state && !state.closed && !same && state.unsent) {
-    pending.push({ declared: state.declared, started_at: state.started_at, at: now, touched_at: state.touched_at ?? now })
+    pending.push({ declared: state.declared, started_at: state.started_at, usage: state.usage, at: now, touched_at: state.touched_at ?? now })
   }
   // past the cap the oldest goes, a done last: dropping it would leave its build open on the hub
   while (pending.length > PENDING_MAX) {
@@ -52,14 +52,14 @@ export function takePending(state, id) {
 
 /**
  * The first queued build as a `session.build`, validated with the hub's rules.
- * It carries no subagents or usage: those belong to the current build.
+ * It carries the usage it had when displaced; the subagents belong to the current build.
  * @param {BuildState} state @param {number} now
  * @returns {ReturnType<typeof validateBuild>|undefined}
  */
 export function pendingReport(state, now) {
   const head = state.pending?.[0]
   if (!head) return undefined
-  return validateBuild({ ...head.declared, subagents: [], started_at: head.started_at }, now)
+  return validateBuild({ ...head.declared, subagents: [], usage: head.usage, started_at: head.started_at }, now)
 }
 
 /**

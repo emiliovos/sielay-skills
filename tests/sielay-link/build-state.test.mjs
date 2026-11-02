@@ -5,6 +5,7 @@ import assert from 'node:assert/strict'
 import {
   declareBuild, subagentUp, subagentSeen, subagentDown, addUsage, addActiveTime, forgetIfDone, buildReport, pruneExpired, SUBAGENT_EXPIRY_MS,
 } from '../../plugins/sielay-link/mod/link-build-state.js'
+import { pendingReport } from '../../plugins/sielay-link/mod/link-build-pending.js'
 
 const T0 = Date.parse('2026-10-20T23:00:00.000Z')
 const min = { build_id: 'sielay-261020-builds-viewer', role: 'coordinator', stage: 4, status: 'running' }
@@ -17,6 +18,33 @@ test('declare: the mod stamps started_at and stage_since; usage starts unknown (
   assert.equal(s.usage, null)
   assert.deepEqual(s.subagents, {})
   assert.equal(buildReport(s, T0).build.usage, null)
+})
+
+test('coming back to an open build continues its usage, so the hub sees no drop', () => {
+  const other = { ...min, build_id: 'sielay-261020-otro' }
+  let s = addUsage(declareBuild(null, min, T0), usage(10), true)
+  s = addUsage(declareBuild(s, other, T0 + 1), usage(3), true)
+  assert.equal(s.usage.input_tokens, 3)
+  s = addUsage(declareBuild(s, min, T0 + 2), usage(5), true)
+  assert.equal(s.usage.input_tokens, 15)
+  assert.equal(s.usage.turns, 2)
+  assert.equal(s.kept_usage[other.build_id].input_tokens, 3)
+  assert.equal(min.build_id in s.kept_usage, false)
+  s = declareBuild(s, other, T0 + 3)
+  assert.equal(s.usage.input_tokens, 3)
+})
+
+test('a build that ended does not hand its usage to a later one with the same id', () => {
+  let s = addUsage(declareBuild(null, { ...min, status: 'done' }, T0), usage(10), true)
+  s = declareBuild(s, { ...min, build_id: 'sielay-261020-otro' }, T0 + 1)
+  assert.equal(s.kept_usage, undefined)
+})
+
+test('a displaced build goes out with the usage it had; the new current one starts from zero', () => {
+  let s = addUsage(declareBuild(null, min, T0), usage(10), true)
+  s = declareBuild(s, { ...min, build_id: 'sielay-261020-otro' }, T0 + 1)
+  assert.equal(pendingReport(s, T0 + 1).build.usage.input_tokens, 10)
+  assert.equal(s.usage, null)
 })
 
 test('declare: same build_id merges (delivery one level deep); stage_since moves only with the stage', () => {
