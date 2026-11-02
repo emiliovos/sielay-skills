@@ -18,7 +18,7 @@ import { measure, findTranscript } from './medir-contexto.mjs';
 import { leer, escribir, bitacora, clave, archivoActivo, archivoEstado, idPane, buildActivo, scriptDelGancho, conControl } from './corte-estado.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const UMBRAL = Number(process.env.SI_BUILD_CORTE_UMBRAL) || 150000;
+const UMBRAL = Number(process.env.SI_BUILD_CORTE_UMBRAL) || 110000;
 const RE_AVISO = 20000; // vuelve a pedir el corte solo si el contexto creció esto desde el último aviso
 const LIMPIANDO_MS = 120000; // un limpiador ya lanzado no se repite antes de esto
 

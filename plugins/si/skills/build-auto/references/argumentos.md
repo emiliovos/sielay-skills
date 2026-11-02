@@ -1,0 +1,15 @@
+# Argumentos (detalle)
+
+El resumen está en `SKILL.md`; aquí va el efecto completo de cada argumento.
+
+| Argumento | Efecto |
+|---|---|
+| `"<objetivo>"` | Qué quiere el usuario y cómo se ve terminado. Si falta, es la primera pregunta del Frame. |
+| `--alcance merge\|produccion` | Hasta dónde llega la autonomía. `merge` = el cambio queda en la rama principal por la compuerta (merge del PR, o en `main directo` el push a main) y **no se publica**. `produccion` = además se publica. Sin el flag, se pregunta en el Frame; `produccion` nunca se asume. |
+| `--chico` | Fuerza el nivel **chico** (ver «Niveles de tamaño» en `SKILL.md` y `nivel-chico.md`): **una sola aprobación**, plan rápido (`/ak:plan --fast`; en modo nativo, un `planner` con plan de una o dos fases), sin Evidencia, sin red team ni paralelo, y `/ak:cook --auto` (o un `fullstack-developer`). Se reporta con `flow: "chico"`. |
+| `--una` | Se acepta y **no tiene efecto**: chico ya lleva una sola aprobación, en una tarjeta sobre la captura de antes y después del cambio (qué hay hoy y qué quedará) que nombra el alcance, el destino, si habrá deploy, las claves propuestas y lo que quede en peldaño 5. El Frame dice que `--una` no cambia nada. La tarjeta cubre el merge; cubre además el deploy solo si el alcance es `--alcance produccion` y el repo declara un comando de deploy ligero en sus referencias (ver `references/receta-de-deploy.md`); si el repo no declara uno, cubre solo el merge y el deploy sigue con la receta de siempre, con su propia aprobación. No cambia las reglas de `--alcance` ni la de «Nunca publicar sin `--alcance produccion`»: sin `produccion` no hay deploy. |
+| `--fix` | Flujo de **arreglo** para un bug, una alerta, una prueba en rojo o una regresión, aunque sea corto. Seis etapas reales: 1 Síntoma, 2 Causa, 4 Arreglo, 5 Verificar, 6 Revisar y 7 Entregar; no hay Plan (etapa 3). **Una sola aprobación**: el diagnóstico (síntoma + causa + arreglo propuesto + clave de la regresión o peldaño 5) al cerrar la etapa 2. Detalle en `references/fix.md`. Incompatible con `--terminales`: ese flag se ignora, y se dice en el Frame. |
+| `--pausas` | Vuelve a **tres aprobaciones** (Frame, Evidencia y Plan por separado). Sin el flag, la Evidencia y el Plan se presentan juntos en una sola aprobación. En chico separa el Frame del plan (dos aprobaciones). |
+| `--terminales [N]` | Apagado por defecto. Además de subagentes, reparte carriles a **otras sesiones de Claude Code** en la misma máquina: reusa sesiones `idle` y abre nuevas, hasta N (3 si no se da). Necesita mensajes entre sesiones y tmux; si faltan, se dice en la ficha y todo va a subagentes. Con `--chico` o `--fix` se ignora, y se dice en el Frame. Detalle en `references/terminales.md`. |
+| `--checkpoint` | Al cerrar, invoca `/si:checkpoint`. Sin el flag, solo se sugiere. |
+| `--semana` | No corre un build: hace la **revisión semanal de retros** (lo que se repite en varios builds se propone como regla o como issue, con el sí de la persona, y no se aplica nada solo). Salta el Paso 0 y las etapas, no reporta etapas a sielay y solo lee `references/revision-semanal.md`. Ignora los demás flags. |

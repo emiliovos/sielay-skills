@@ -30,19 +30,25 @@ fases:          # una por etapa o carril que corrió, en orden
     modelo: ""                # el que corrió de verdad, según medir-contexto.mjs
     contexto_max: 0           # tokens, el máximo de esa fase
     subagentes: []            # [{tipo, modelo, contexto_max}] de los que corrieron en la fase
-    cortes: 0                 # checkpoints por llegar a 150 K (líneas «limpio» del build en ~/.cache/si-build-auto/corte/bitacora.log, más los cortes sin tmux que avisaron «listo para clear»; un «limpiar-fallo» va en `mal`)
+    cortes: 0                 # checkpoints por llegar al corte (líneas «limpio» del build en ~/.cache/si-build-auto/corte/bitacora.log, más los cortes sin tmux que avisaron «listo para clear»; un «limpiar-fallo» va en `mal`)
 ```
 
-- **`fases` sale medido, no de memoria.** Con las horas de inicio y fin de cada tramo anotadas en `plan.md`, corre `node <carpeta de la skill>/scripts/medir-contexto.mjs --desde <inicio> --hasta <fin>` por fase (la carpeta es la de «Presupuesto de contexto» en `SKILL.md`; en cada sesión que coordinó, con `--sesion <id>` si hubo cortes; una terminal de carril reporta sus propias cifras al cerrar). Si un subagente corrió en otro modelo que el de la tabla «Modelo fijo por rol», o una fase pasó de 150 K sin cortar, va también en `mal` con su porqué.
+- **`fases` sale medido, no de memoria.** Con las horas de inicio y fin de cada tramo anotadas en `plan.md`, corre `node <carpeta de la skill>/scripts/medir-contexto.mjs --desde <inicio> --hasta <fin>` por fase (la carpeta es la que muestra la skill al cargarse, como dice `presupuesto-de-contexto.md`; en cada sesión que coordinó, con `--sesion <id>` si hubo cortes; una terminal de carril reporta sus propias cifras al cerrar). Si un subagente corrió en otro modelo que el de la tabla «Modelo fijo por rol», o una fase pasó de 150 K sin cortar, va también en `mal` con su porqué.
 
 - **Redacción de cada lista:** un hecho por ítem, una línea (~100 caracteres, máximo 160), que empiece por lo que pasó o lo que se hizo, con PR o SHA cuando aplique. Sin adjetivos ni jerga ("robusto", "sinergia", "end-to-end"). Lo que no aplica va vacío; no se rellena.
 - Una propuesta es una regla concreta y accionable ("fijar el tope de tokens por carril desde el Frame"), no una queja.
 - Las fallas que la revisión no vio son el dato más útil: di qué clase de bug era y qué lo habría atrapado.
 - **`propuestas_previas` se cuenta de la tabla del Frame**, fila por fila: `leidas` = aplicadas + no aplicadas. Un «sí» que no llegó a aplicarse cuenta como no aplicado y va en `mal` con su porqué. Sin retros previas, los tres en 0.
 
+## Retro antes de encolar
+El hub cierra solo un build entregado cuando el coordinador lleva 20 minutos sin reportar en la etapa 7, y ese cierre no lleva retro; después de un cierre ignora todo reporte con ese `build_id` (`ignored: closed`) y no se puede reabrir. Por eso la retro no espera al merge:
+1. **Antes de encolar el merge**, escribe en la carpeta del plan la retro mínima: `retro.yaml` con `kind`, `entregado` (con el PR), `pendientes`, `bien`, `mal`, `batallo`, `propuestas` y el `marcador` con lo que ya se sabe. Commitéala con el PR. Lo que solo se sabe tras el merge (el SHA, el reloj final) va en el reporte final.
+2. **Al confirmar el merge**, manda `done` con `outcome` y esa `retro` (paso 2 de abajo), sin esperar nada más.
+3. **Si el hub cerró primero**, tu reporte se ignora. No lo reintentes ni busques otra vía: la retro queda en `retro.yaml` y en el reporte final, y el reporte dice que ese build no cuenta como cerrado con retro en el hub.
+
 ## Qué hacer
-1. Escribe `retro.yaml`.
-2. Manda `retro` a sielay (`reporte-sielay.md`) junto con `status: "done"`, `stage: 7` y `outcome`. Si el campo `retro` del plugin no tiene lugar para `fases`, resúmelas en una línea del `summary` final («coordinador opus máx 140 K, 1 corte; carriles sonnet máx 90 K; revisión opus 60 K»). Además, siempre, una línea con `propuestas_previas` (`- Retros previas: 5 leídas, 3 aplicadas, 2 no`), porque el campo `retro` no la lleva.
+1. Escribe `retro.yaml` (antes de encolar el merge, como dice arriba) y complétalo con lo que se sepa al cerrar.
+2. Al confirmar el merge, manda `retro` a sielay (`reporte-sielay.md`) junto con `status: "done"`, `stage: 7` y `outcome`. Si el campo `retro` del plugin no tiene lugar para `fases`, resúmelas en una línea del `summary` final («coordinador opus máx 140 K, 1 corte; carriles sonnet máx 90 K; revisión opus 60 K»). Además, siempre, una línea con `propuestas_previas` (`- Retros previas: 5 leídas, 3 aplicadas, 2 no`), porque el campo `retro` no la lleva.
 3. Si el entorno publica artifacts, publica el marcador como una página de cifras con su fuente (de dónde sale cada número). Sin eso, el marcador va en el reporte final.
 4. Escribe el reporte final estilo brief: primero lo que necesita a la persona (decisiones, momentos humanos, pendientes), luego lo que pasó.
 5. Commitea `retro.yaml` con los demás reportes del plan, según el modo de entrega.
