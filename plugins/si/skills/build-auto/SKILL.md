@@ -11,7 +11,7 @@ metadata:
   deps: "git en el repo destino. Recomendado: AgentKit (skills /ak:*); sin él, cada etapa se hace con subagentes nativos. Opcional: /si:checkpoint para el cierre (--checkpoint) y red a context7.com (o su MCP) para consultar la doc de dependencias en las etapas 2 y 3."
   installs: []
   risk: none
-  version: "2.10.7"
+  version: "2.10.8"
 ---
 
 # Build-auto: backbone de proyecto autónomo
@@ -113,7 +113,7 @@ Al pedir el sí, cada clave que propone el agente se dice en lenguaje claro y si
   1. **Crudo** solo de lo que se estima a ojo: la implementación de cada carril y la integración.
   2. **Fases medidas**: verificar, revisar y entregar (CI, revisión, cola, merge y deploy) no se estiman a ojo: se toma la mediana real de sus etapas en el repo (`stages` de `builds_calibration`).
   3. **Factor del repo**: `builds_calibration` con `repo` (`<dueño>/<repo>`) da `factor` (mediana de trabajo ÷ estimado de los últimos 30 builds entregados del repo) y `p80`. El factor solo multiplica lo estimado a ojo; las fases medidas se suman tal cual. Promesa: **«≈ crudo × factor + fases medidas, a más tardar crudo × p80 + fases medidas»**, redondeado a 0,25 h, con la línea de dónde sale: "≈0,75 h, a más tardar 1 h: crudo 1,5 h × 0,35 (p80 0,58, 30 builds de sielay) + verificar, revisar y entregar 0,25 h medidos". Con `source: "all"` dilo ("factor de todos los repos: el repo tiene pocos builds").
-  4. **Espera aparte**: la espera de una persona (gates, el sí de alguien, una FILA) no entra en `total_h`; se muestra en su línea con la mediana del repo (`wait_h_median`), sobre todo donde manda la espera (Tablero360): "espera de personas aparte: mediana 2 h por build".
+  4. **Espera aparte**: la espera de una persona (gates, el sí de alguien, el turno en una cola de merge) no entra en `total_h`; se muestra en su línea con la mediana del repo (`wait_h_median`), sobre todo en `<repo donde manda la espera>`: "espera de personas aparte: mediana 2 h por build".
   Sin `builds_calibration` (un hub anterior), la razón sale de `builds_weekly` (sección «Real / estimated hours»: la mediana del mismo `kind` con 3 builds o más, si no la de todos); sin herramienta ni datos, ×0,4, y las fases medidas se estiman a ojo. El calibrado es el que va en `estimate.total_h` (el «a más tardar» y la espera, en `assumption`) y el que se le promete a la persona. En el Frame va grueso; en el Plan va por carril y es el **programado** que se aprueba. Si después se mueve, se reestima con un motivo (ver `references/reporte-sielay.md`); reestimar no es una enmienda.
 
 ## Reporte a sielay
