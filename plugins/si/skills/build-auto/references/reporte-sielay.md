@@ -104,7 +104,7 @@ Dentro de `stage_detail`, mientras el build espera la CI, la cola de merge, el e
 - Se actualiza **cuando cambia de fase** y nunca más de una vez por minuto; no es un latido. Al terminar la espera, o al cerrar la etapa, manda `live: null`.
 
 ## `delivery.merge_queue` y `delivery.deploy`
-- `delivery.merge_queue`: `{ "position": 2, "total": 3, "since": "<iso>", "reason": "…" }`. Se lee de `--status` del comando de cola de merge del repo, si lo tiene; sin él, no se manda. `since` es la entrada a la fila; `reason` (máximo 120) solo si el PR salió de la cola; `position` y `total` pueden ir `null` si solo hay `reason`. Se actualiza cuando cambia la posición, con el tope de una vez por minuto, y cuando el PR sale de la fila se manda con el `merge_pr` final.
+- `delivery.merge_queue`: `{ "position": 2, "total": 3, "since": "<iso>", "reason": "…" }`. Se lee de `--status` del comando de cola de merge del repo, si lo tiene; sin él, no se manda. `since` es la entrada a la cola; `reason` (máximo 120) solo si el PR salió de la cola; `position` y `total` pueden ir `null` si solo hay `reason`. Se actualiza cuando cambia la posición, con el tope de una vez por minuto, y cuando el PR sale de la fila se manda con el `merge_pr` final.
 - `delivery.deploy`: solo si el build llega a producción. `{ "state": "approval|publishing|verified|failed", "at": "<iso>" }`: `approval` mientras espera la aprobación de la persona, `publishing` al correr el comando de publicación, `verified` cuando la verificación posterior pasa y `failed` si algo falla. Convive con `deploy_pending`.
 
 ## `retro`
@@ -140,7 +140,7 @@ Solo con `status: "done"`; sale de `retro.yaml` (`cierre-y-retro.md`):
 ## Deploy ligero de sielay (`--chico --una`)
 Es la declaración que pide `receta-de-deploy.md` para este repo:
 - El comando ligero es la cola de merge con `SIELAY_AUTO_DEPLOY` encendido: al vaciarse la cola publica por sí sola, a cualquier hora salvo que `SIELAY_AUTO_DEPLOY_WINDOW` la acote, y sin tocar migraciones, dependencias ni `.env`.
-- El sí por PR es la etiqueta `deploy-ok`. La sesión la pone solo con un `aut#N` de Emilio verificado con `authorization_check`, y con un tope de 3 PRs que cambian la imagen en el rango a publicar (los de docs, planes, scripts o pruebas no cuentan, pero también llevan la etiqueta).
+- El sí por PR es la etiqueta `deploy-ok`. La sesión la pone solo con un `aut#N` de `<admin del repo>` verificado con `authorization_check`, y con un tope de 3 PRs que cambian la imagen en el rango a publicar (los de docs, planes, scripts o pruebas no cuentan, pero también llevan la etiqueta).
 - Si la cola sale con código 10 (no es ligero), o el cambio cae fuera de la ventana acotada, el deploy va por `deploy-auto` con su ritual y su aprobación.
 - No existe un camino `--approved`.
 - `flow` sigue siendo `full`, `chico` o `fix`. Con `--una` el flujo es `chico` y hay un solo `gate`, el de la etapa 1.
