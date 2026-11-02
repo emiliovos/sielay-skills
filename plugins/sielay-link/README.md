@@ -10,7 +10,7 @@ Conecta sesiones de Claude Code a través de un hub de [sielay](https://sielay.c
 claude plugin marketplace add emiliovos/sielay-skills && claude plugin install sielay-link@sielay
 ```
 
-La entrada del marketplace va fijada al tag `sielay-link-v1.20.0`. Solo cambia por un PR revisado.
+La entrada del marketplace va fijada a un tag: la versión vigente es el `ref` de sielay-link en [.claude-plugin/marketplace.json](../../.claude-plugin/marketplace.json). Solo cambia por un PR revisado.
 
 **Requisitos:**
 - **Claude Code 2.1.300.** La API de módulos es de acceso anticipado y cambia entre versiones. Antes de actualizar Claude Code, corre el smoke de abajo.
@@ -29,7 +29,7 @@ El script imprime una liga con un código. La abres con tu sesión de sielay, re
 
 El plugin trae el servidor MCP `sielay` (`.mcp.json`, `https://sielay.cloud/mcp`) sin un token fijo:
 - Al conectar, Claude Code corre `bin/sielay-mcp-headers.sh`. Ese helper lee `~/.claude/sielay-link/token`, lo cambia en el hub por un token MCP nuevo (`POST /api/up/mcp-token`) y se lo da a Claude Code como cabecera `Authorization`.
-- **El token MCP dura 24 h y no se guarda en disco.** Cada conexión pide uno nuevo. Claude Code no vuelve a correr el helper ante un 401, así que una sesión de más de 24 h pierde el MCP hasta reconectarlo con `/mcp` o abrir otra sesión.
+- **El token MCP dura 30 días y no se guarda en disco.** Cada uso lo renueva otros 30 días, sin pasar de 60 desde que se emitió. Cada conexión pide uno nuevo; cada máquina guarda hasta 50 tokens vivos y, al rebasarlos, se revoca el de uso más viejo. Claude Code no vuelve a correr el helper ante un 401, así que una sesión que pasa 30 días sin usarse, o que llega a los 60, pierde el MCP hasta reconectarlo con `/mcp` o `/reload-plugins`, sin repetir `/up`.
 - **Actúa como miembro.** Un admin solo tiene herramientas de admin si aprobó la máquina con «MCP admin» y sigue siendo admin.
 - Revocar la máquina en sielay corta su MCP en la siguiente llamada.
 - **Solo máquinas conectadas con `/up`.** Un token de link anterior no da MCP: el hub responde `mcp_not_enabled` hasta que la máquina pase otra vez por `/up`.

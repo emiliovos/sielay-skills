@@ -174,7 +174,7 @@ only_in 'fetch\(' 'mod/link-hub-client.js,bin/sielay-mcp-headers.mjs' 'network c
 # them) and the shell one outside every JS text rule. So they are pinned: any change to either has to
 # update its sha256 here, in the same reviewed PR. The JS helper may also import only node:fs,
 # node:os and node:path, and never reach a module loader, vm, workers or native code.
-for pin in "bin/sielay-mcp-headers.sh=0fa5239a364e89f4363f334ea10679b050b938372d18965f8fe48d462edd4073" "bin/sielay-mcp-headers.mjs=d16d9bb1c548ef7a8f5bea67e105b0282c378e7ebd50781466cf852439726944"; do
+for pin in "bin/sielay-mcp-headers.sh=5425e00f02f56c6e412778bf2cfe16a8c20887cbd141b59b10fbb3cf4523b3fe" "bin/sielay-mcp-headers.mjs=1aa30de932602ecc95d7d7122b68a3cf64994af5a643d5b517b1c3c75b881851"; do
   f="${pin%%=*}"; want="${pin#*=}"
   got=$(python3 -c 'import hashlib, sys; print(hashlib.sha256(open(sys.argv[1], "rb").read()).hexdigest())' "$root/$f" 2>/dev/null || true)
   [ "$got" = "$want" ] || err "$f changed (sha256 $got): review it and update its pin in tools/check-sielay-link.sh"

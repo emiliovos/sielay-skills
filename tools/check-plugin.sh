@@ -180,6 +180,13 @@ if hits=$(grep -rInE "$patterns" "$root" "$repo/.claude-plugin/marketplace.json"
   err "possible secret, private address, internal hostname or personal path"
 fi
 
+# --- The sielay-link version lives only in the manifest's source.ref: a tag in
+# prose goes stale on the next release.
+if hits=$(grep -HnE 'sielay-link-v[0-9]' "$repo/.claude-plugin/marketplace.json" "$repo/README.md" "$repo/plugins/sielay-link/README.md" 2>/dev/null | grep -v '"ref":'); then
+  echo "$hits" >&2
+  err "sielay-link version in prose; point to the ref in .claude-plugin/marketplace.json"
+fi
+
 # --- Visible warning for reviewers: skills that ship scripts.
 for d in "$root"/skills/*/scripts; do
   if [ -d "$d" ]; then warn "${d#"$root"/} ships scripts — review them"; fi

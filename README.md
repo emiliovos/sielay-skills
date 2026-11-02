@@ -130,7 +130,7 @@ Deja que sesiones de Claude Code emparejadas por el hub de sielay se escriban en
 claude plugin install sielay-link@sielay
 ```
 
-Luego, en la sesión: `/link pair <slot>`. Requiere Claude Code 2.1.300 y Node 20 o más reciente. La entrada va fijada al tag `sielay-link-v1.11.0`. Instalación, nombres, reglas de auto-ejecución y seguridad: [plugins/sielay-link/README.md](plugins/sielay-link/README.md).
+Luego, en la sesión: `/link pair <slot>`. Requiere Claude Code 2.1.300 y Node 20 o más reciente. La entrada va fijada a un tag: la versión vigente es el `ref` de sielay-link en [.claude-plugin/marketplace.json](.claude-plugin/marketplace.json). Instalación, nombres, reglas de auto-ejecución y seguridad: [plugins/sielay-link/README.md](plugins/sielay-link/README.md).
 
 ## Claude Desktop (chat)
 
