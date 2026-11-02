@@ -11,7 +11,7 @@ export const WATCH_TOOL_SPEC = Object.freeze({
   description:
     'Pide al hub de sielay que te avise cuando termine el CI (sielay-ci en pve2) de una rama. El aviso llega solo, más tarde, ' +
     'como «Aviso del hub de sielay»; no hace falta esperar ni consultar. Úsala después de empujar una rama. Dura 24 h (ttl_h hasta 72); ' +
-    'off: true lo quita. repo por omisión: el de esta sesión (su remoto origin de GitHub). Solo para admins.',
+    'off: true lo quita. Un CI verde no abre turno; con wake: true sí, un turno por corrida, y repetir link_watch sin wake lo apaga. repo por omisión: el de esta sesión (su remoto origin de GitHub). Solo para admins.',
   inputSchema: {
     type: 'object',
     additionalProperties: false,
@@ -21,6 +21,7 @@ export const WATCH_TOOL_SPEC = Object.freeze({
       repo: { type: 'string', description: 'owner/repo; por omisión el de esta sesión' },
       ttl_h: { type: 'integer', minimum: 1, maximum: 72, description: 'Horas que dura el aviso (24 por omisión)' },
       off: { type: 'boolean', description: 'true deja de vigilar esa rama' },
+      wake: { type: 'boolean', description: 'true: el CI verde también abre turno en esta sesión' },
     },
   },
   isDeferred: /** @type {const} */ (false),
@@ -46,11 +47,13 @@ export async function watchBody(input, deps) {
   if (input.ttl_h !== undefined && !(Number.isInteger(input.ttl_h) && /** @type {number} */ (input.ttl_h) >= 1 && /** @type {number} */ (input.ttl_h) <= 72)) {
     return { error: 'ttl_h va de 1 a 72.' }
   }
+  if (input.wake !== undefined && typeof input.wake !== 'boolean') return { error: 'wake va true o false.' }
   return {
     body: {
       session: await deps.session(), repo, branch: input.branch,
       ...(input.ttl_h !== undefined ? { ttl_h: input.ttl_h } : {}),
       ...(input.off === true ? { off: true } : {}),
+      ...(input.wake === true ? { wake: true } : {}),
     },
   }
 }

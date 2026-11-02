@@ -102,6 +102,11 @@ Para que el modelo las use sin preguntarte cada vez, agrégalas a `permissions.a
 { "permissions": { "allow": ["mcp__sielay-link__link_send", "mcp__sielay-link__link_reply", "mcp__sielay-link__link_peers", "mcp__sielay-link__link_read", "mcp__sielay-link__link_build_stage", "mcp__sielay-link__link_watch"] } }
 ```
 
+## Novedades de la 1.20.0
+
+- **`link_watch` con `wake`:** `{ branch, wake: true }` hace que el CI verde de esa rama abra turno en la sesión que lo pidió, un turno por corrida en verde. Sin `wake`, el verde sigue en el log, sin gastar turno; repetir `link_watch` sin `wake` lo apaga. Necesita un hub que ya guarde `wake`; con uno anterior, el verde sigue en silencio.
+- **Aviso `aut_granted`:** cuando una autorización nombra a esta sesión y está en línea, el hub lo avisa y abre turno. Es solo una pista: no autoriza nada, y hay que verificarla con `authorization_check` antes de actuar.
+
 ## Novedades de la 1.18.0
 
 - **Flow `encargo` en `link_build_stage`:** cuatro pasos para seguir en `/builds` el encargo de una terminal, sin las etapas de un build: `stage` 1 Encargado, 2 En curso, 3 Esperando y 4 Entregado. No lleva aprobaciones. Con `flow: encargo` una etapa mayor a 4 se rechaza con el campo `stage`.
