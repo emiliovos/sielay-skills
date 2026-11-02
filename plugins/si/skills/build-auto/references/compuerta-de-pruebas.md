@@ -32,9 +32,9 @@ Cuando la ficha dice que las pruebas corren en CI remoto (un workflow en runners
 - Un rojo del workflow sobre el mismo árbol bloquea la entrega igual que un rojo local.
 
 ## Si el repo no tiene compuerta
-Propón en el plan la versión mínima que el proyecto justifique: al menos las pruebas afectadas (o un carril) en el push y la suite completa en la entrega. Mide antes y después (`/ak:test optimize` o tiempos a mano). **No la construyas sin la aprobación del plan.**
+No la crees ni la propongas como fase del plan: menciónalo en el Frame y entrega con la verificación que define el plan. Una compuerta nueva, o un cambio a la existente, es una decisión aparte que solo aprueba la persona; las aprobaciones del Frame y del plan no la cubren.
 
-Al construirla o cambiarla:
+Si la persona la aprueba, al construirla o cambiarla mide antes y después (`/ak:test optimize` o tiempos a mano) y:
 - **Prueba los scripts con un push real contra un remoto temporal** (`git init --bare` en un directorio desechable), no leyendo el texto del gancho. Cubre los casos de push de solo docs, push de código, push de un archivo global y push de algo que ya está en el remoto.
 - Los ganchos exportan variables `GIT_*`. Las pruebas que lancen git dentro del gancho corren con un entorno mínimo (solo `PATH` y un `HOME` temporal, o `GIT_CONFIG_GLOBAL=/dev/null` y `GIT_CONFIG_NOSYSTEM=1`) o limpian esas variables del proceso hijo; si no, tocarán el repo real o la config global de git.
 - Una herramienta que falta en el host no se convierte en una prueba saltada: se instala en el host que sella o el chequeo pasa al build de la imagen. Instalar en un host es un momento humano o una fase aprobada del plan, nunca una decisión del agente a medio camino.

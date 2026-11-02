@@ -1,7 +1,7 @@
 # Ejecución autónoma (etapas 4–7)
 
 ## Antes de lanzar agentes en paralelo
-1. Confirma que la compuerta de pruebas del repo existe y funciona (`compuerta-de-pruebas.md`). Si no existe, el plan la incluye como fase.
+1. Confirma que la compuerta de pruebas del repo existe y funciona (`compuerta-de-pruebas.md`). Si no existe, no se agrega: cada carril usa la verificación que define el plan.
 2. Corre `/ak:test audit` (o un agente de pruebas) acotado a las pruebas que tocará el plan. Arregla las inestables conocidas o acótalas con timeout: una prueba colgada con el lock de la suite frena a todos los carriles. Una inestable compartida la arregla el coordinador una vez, no cada carril.
 3. Red team del contrato y su enmienda (etapa 3).
 4. Crea la rama de integración `build/<slug>` desde la rama principal actualizada. Todos los carriles arrancan a la vez (hasta la concurrencia de la ficha) sobre `contracts.md` congelado; ninguno espera el merge de otro salvo una dependencia declarada en el contrato.
