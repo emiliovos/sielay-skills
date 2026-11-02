@@ -10,7 +10,7 @@ Conecta sesiones de Claude Code a través de un hub de [sielay](https://sielay.c
 claude plugin marketplace add emiliovos/sielay-skills && claude plugin install sielay-link@sielay
 ```
 
-La entrada del marketplace va fijada al tag `sielay-link-v1.19.1`. Solo cambia por un PR revisado.
+La entrada del marketplace va fijada al tag `sielay-link-v1.19.2`. Solo cambia por un PR revisado.
 
 **Requisitos:**
 - **Claude Code 2.1.300.** La API de módulos es de acceso anticipado y cambia entre versiones. Antes de actualizar Claude Code, corre el smoke de abajo.
@@ -163,6 +163,7 @@ Para que el modelo las use sin preguntarte cada vez, agrégalas a `permissions.a
 
 ## Novedades de la 1.10.1
 
+- **Uso por build (1.19.2):** al cambiar de build y volver, sus contadores siguen donde iban, y un build desplazado sale con el uso que tenía. El `done` espera al final de su turno, hasta 5 minutos, para que ese turno cuente. Si la sesión muere en esa espera, el `done` no sale y el build queda sin señal.
 - **Retro tras el cierre del hub (1.19.1):** cuando el hub cierra un build por su cuenta (`build_closed` con `closed_by: 'hub'`), el aviso pide mandar la retro y detener el trabajo; el del cierre de un admin no cambia.
 - **Aviso de «Sin proyecto» (1.19.0):** `build_no_project` le dice a la terminal cuya tarjeta de /builds sale «Sin proyecto» cómo corregirlo: `[Proyecto]` al inicio del title o `repo`. `build_encargo_stale` le avisa a quien lleva un encargo con más de 24 h en Esperando para cerrarlo o renovar el motivo.
 - **Avisos de /builds:** el hub avisa a la sesión que coordina un build cuando le contestaron en el buzón que esperaba (`build_answered`), cuando su trabajo ya está en la rama principal (`build_in_main`), cuando un admin le pasó el papel de coordinador (`build_adopted`) y cuando un admin lo cerró (`build_closed`, con el resultado y, si aplica, el build que lo absorbió). Llegan como cualquier «Aviso del hub de sielay», con un paso concreto (leer con `comms_read`, cerrar con `link_build_stage`, revisar con `builds_status` o dejar el build).

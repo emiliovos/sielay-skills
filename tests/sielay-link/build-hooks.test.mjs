@@ -6,6 +6,7 @@ import assert from 'node:assert/strict'
 import {
   declareFromTool, noteSubagentStart, noteSubagentSpawn, noteSubagentStop, noteToolUse, noteTurnComplete, carryOnClear, pollBuild, pollBuildFields, afterPoll,
 } from '../../plugins/sielay-link/mod/link-build-hooks.js'
+import { DONE_HOLD_MS } from '../../plugins/sielay-link/mod/link-build-state.js'
 
 const T0 = Date.parse('2026-10-20T23:00:00.000Z')
 const min = { build_id: 'sielay-261020-builds-viewer', role: 'coordinator', stage: 4, status: 'running' }
@@ -168,11 +169,35 @@ test('after a poll carried done the build is forgotten; a running report is kept
   await afterPoll(h.$, h.rt, { build: await pollBuild(h.$, h.rt) })
   assert.ok(await pollBuild(h.$, h.rt))
   await declareFromTool(h.$, h.rt, { ...min, status: 'done', outcome: 'delivered' })
+  await noteTurnComplete(h.$, h.rt, {})
   const sent = await pollBuild(h.$, h.rt)
   assert.equal(sent.outcome, 'delivered')
   await afterPoll(h.$, h.rt, { build: sent })
   assert.equal(h.raw(), null)
   assert.equal(await pollBuild(h.$, h.rt), undefined)
+})
+
+test('done waits for the end of its turn, and that turn counts in the report', async () => {
+  const h = engine()
+  await declareFromTool(h.$, h.rt, min)
+  await afterPoll(h.$, h.rt, { build: await pollBuild(h.$, h.rt) })
+  await declareFromTool(h.$, h.rt, { ...min, status: 'done', outcome: 'delivered' })
+  assert.equal(await pollBuild(h.$, h.rt), undefined, 'the turn that declared it is still running')
+  await noteTurnComplete(h.$, h.rt, { agentId: 'a1', usage: { input_tokens: 1 } })
+  assert.equal(await pollBuild(h.$, h.rt), undefined, 'a subagent ending is not the end of the turn')
+  await noteTurnComplete(h.$, h.rt, { usage: { input_tokens: 10 } })
+  const sent = await pollBuild(h.$, h.rt)
+  assert.equal(sent.status, 'done')
+  assert.equal(sent.usage.input_tokens, 11)
+  assert.equal(sent.usage.turns, 2)
+})
+
+test('a held done goes out anyway when its turn never ends, so the build does not stay open', async () => {
+  const h = engine()
+  await declareFromTool(h.$, h.rt, { ...min, status: 'done', outcome: 'delivered' })
+  assert.equal(await pollBuild(h.$, h.rt), undefined)
+  h.advance(DONE_HOLD_MS)
+  assert.equal((await pollBuild(h.$, h.rt)).status, 'done')
 })
 
 test('a subagent with no signal for 30 min drops out; a tool call inside it keeps it', async () => {
@@ -202,6 +227,7 @@ test('the poll carries the other open builds; with the current one gone it sends
   assert.equal(fields.build.build_id, 'sielay-261025-otro')
   assert.deepEqual(fields.open_builds, [min.build_id])
   await declareFromTool(h.$, h.rt, { ...min, build_id: 'sielay-261025-otro', status: 'done', outcome: 'delivered' })
+  await noteTurnComplete(h.$, h.rt, {})
   await afterPoll(h.$, h.rt, { build: (await pollBuildFields(h.$, h.rt)).build })
   assert.deepEqual(await pollBuildFields(h.$, h.rt), { build: null, open_builds: [min.build_id] })
 })

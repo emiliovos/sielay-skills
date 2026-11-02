@@ -35,6 +35,18 @@ export function displace(state, same, id, now) {
 }
 
 /**
+ * The usage of the open builds, so coming back to one continues its counters
+ * instead of restarting them. It lives as long as the build is in `open`.
+ * @param {BuildState|null} state @param {boolean} same @param {string} id @param {Record<string, number>} open the map after displace
+ * @returns {NonNullable<BuildState['kept_usage']>}
+ */
+export function keepUsage(state, same, id, open) {
+  const kept = { ...state?.kept_usage }
+  if (state && !state.closed && !same && state.usage) kept[String(state.declared.build_id)] = state.usage
+  return Object.fromEntries(Object.entries(kept).filter(([k]) => k !== id && k in open))
+}
+
+/**
  * The ids of the other open builds for the poll: newest report first, at most
  * 12, never the current one.
  * @param {BuildState|null} state @param {number} now

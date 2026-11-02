@@ -105,7 +105,11 @@ export type LinkBuildState = {
   /** The current build has declarations no poll has carried yet. */
   unsent?: true
   /** Builds displaced before a poll carried their last declaration, oldest first; one goes out per poll. */
-  pending?: Array<{ declared: Record<string, unknown>, started_at: string, at: number, touched_at: number }>
+  pending?: Array<{ declared: Record<string, unknown>, started_at: string, usage?: LinkBuildUsage | null, at: number, touched_at: number }>
+  /** Usage of the builds in `open`, build_id -> counters, so coming back continues them. */
+  kept_usage?: Record<string, LinkBuildUsage>
+  /** ms when the current build was declared done; its report waits for the end of the turn, up to DONE_HOLD_MS. */
+  done_held_at?: number
 }
 
 declare module 'claude-code' {
