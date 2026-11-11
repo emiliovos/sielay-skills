@@ -102,6 +102,11 @@ Para que el modelo las use sin preguntarte cada vez, agrégalas a `permissions.a
 { "permissions": { "allow": ["mcp__sielay-link__link_send", "mcp__sielay-link__link_reply", "mcp__sielay-link__link_peers", "mcp__sielay-link__link_read", "mcp__sielay-link__link_build_stage", "mcp__sielay-link__link_watch"] } }
 ```
 
+## Novedades de la 1.21.0
+
+- **`link_watch` también avisa del merge:** cuando se mergea el PR de la rama vigilada, el hub manda `repo_merged`. Sin `wake` va al log, sin gastar turno; con `wake: true` abre turno y dice que sigas con lo que esperabas de ese merge. Necesita un hub que ya revise los PRs de las ramas vigiladas; con uno anterior, el merge no llega.
+- **Para tomarla:** `claude plugin update sielay-link@sielay` y `/reload-plugins` en cada sesión abierta (o reiniciarla).
+
 ## Novedades de la 1.20.0
 
 - **`link_watch` con `wake`:** `{ branch, wake: true }` hace que el CI verde de esa rama abra turno en la sesión que lo pidió, un turno por corrida en verde. Sin `wake`, el verde sigue en el log, sin gastar turno; repetir `link_watch` sin `wake` lo apaga. Necesita un hub que ya guarde `wake`; con uno anterior, el verde sigue en silencio.

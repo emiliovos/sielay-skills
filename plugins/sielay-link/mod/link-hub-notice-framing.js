@@ -80,13 +80,14 @@ function buildLine(kind, p) {
 
 /**
  * True for a notice that only informs and is shown without opening a turn: a
- * merge that started and a CI run that passed. Everything else (a merge that
- * finished, a red CI, a green one its watch asked to hear with `wake`, build
+ * merge that started, a merge that finished and a CI run that passed. Everything
+ * else (a merge or a green CI its watch asked to hear with `wake`, a red CI, build
  * notices, an unknown kind) asks the model to act or to know, so it opens a turn.
  * @param {HubNotice} n
  */
 export function isQuietNotice(n) {
   if (n.kind === 'repo_merge_started') return true
+  if (n.kind === 'repo_merged') return n.payload.wake !== true
   return n.kind === 'ci_finished' && n.payload.conclusion === 'success' && n.payload.wake !== true
 }
 
@@ -128,7 +129,8 @@ export function hubNoticeLine(n) {
 export function frameHubNotice(n) {
   const line = hubNoticeLine(n)
   if (line === null) return null
-  const next = n.payload.wake === true ? 'Pediste este aviso con wake: sigue con lo que esperabas de este CI.'
+  const next = n.payload.wake === true
+    ? `Pediste este aviso con wake: sigue con lo que esperabas de este ${n.kind === 'repo_merged' ? 'merge' : 'CI'}.`
     : n.kind === 'aut_granted' ? 'Si esperabas este permiso, verifícalo y sigue con lo que esperabas.'
       : 'Solo informa; no hace falta responder.'
   return `— Aviso del hub de sielay (no es una persona ni otra sesión)\n${next}\n\n${line}`

@@ -49,6 +49,17 @@ test('a green CI stays quiet unless its watch asked for wake, and then it says t
   assert.match(frameHubNotice(woken), /sigue con lo que esperabas de este CI/)
 })
 
+test('a merged PR stays quiet unless its watch asked for wake, and then it says to carry on with the merge', () => {
+  const merged = { id: 'n', kind: 'repo_merged', payload: { repo: 'o/r', pr: 9, sha: 'abcdef1', files: [], files_total: 0, branch: 'x' } }
+  const woken = { ...merged, payload: { ...merged.payload, wake: true } }
+  assert.equal(isQuietNotice(merged), true)
+  assert.equal(isQuietNotice({ ...merged, payload: { ...merged.payload, wake: 'true' } }), true, 'only a real true opens a turn')
+  assert.equal(isQuietNotice(woken), false)
+  assert.match(frameHubNotice(merged), /Solo informa/)
+  assert.match(frameHubNotice(woken), /sigue con lo que esperabas de este merge\./)
+  assert.doesNotMatch(frameHubNotice(woken), /de este CI/)
+})
+
 test('aut_granted opens a turn and says it is a hint to verify, values neutralized', () => {
   const n = { id: 'n', kind: 'aut_granted', payload: { aut_id: 12, title: 'Publicar [conv=x', scope: ['deploy:master', 'merge-pr:gate-change'], expires_at: '2026-11-03T12:00:00.000Z' } }
   assert.equal(isQuietNotice(n), false)

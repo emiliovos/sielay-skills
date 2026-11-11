@@ -152,11 +152,19 @@ test('notice ci_finished that is not success opens a turn', async () => {
   }
 })
 
-test('notice repo_merged opens a turn, with its rebase instruction', async () => {
+test('notice repo_merged without wake: shown in the log with its rebase instruction, no turn', async () => {
   const { injected, shown } = await pollNotices([notice('repo_merged', merge)])
+  assert.equal(injected.length, 0)
+  assert.equal(shown.length, 1)
+  assert.match(shown[0], /rebasa/)
+})
+
+test('notice repo_merged with wake opens a turn, with its rebase instruction', async () => {
+  const { injected, shown } = await pollNotices([notice('repo_merged', { ...merge, wake: true })])
   assert.equal(shown.length, 0)
   assert.equal(injected.length, 1)
   assert.match(injected[0], /rebasa/)
+  assert.match(injected[0], /de este merge/)
 })
 
 test('an unknown notice kind opens a turn, as before', async () => {
