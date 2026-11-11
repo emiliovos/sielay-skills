@@ -11,7 +11,7 @@ metadata:
   deps: "git en el repo destino. Recomendado: AgentKit (skills /ak:*); sin él, cada etapa se hace con subagentes nativos. Opcional: /si:checkpoint para el cierre (--checkpoint) y red a context7.com (o su MCP) para consultar la doc de dependencias en las etapas 2 y 3."
   installs: []
   risk: none
-  version: "2.15.0"
+  version: "2.16.0"
 ---
 
 # Build-auto: backbone de proyecto autónomo
@@ -34,6 +34,7 @@ Efecto completo de cada uno en `references/argumentos.md`.
 | `--pausas` | Aprobaciones por separado: Frame, Evidencia y Plan (en chico, Frame y plan). |
 | `--terminales [N]` | Apagado por defecto. Reparte carriles a otras sesiones de Claude Code, hasta N (3 si no se da); necesita mensajes entre sesiones y tmux. Con `--chico` o `--fix` se ignora, y se dice en el Frame. Detalle en `references/terminales.md`. |
 | `--checkpoint` | Al cerrar, invoca `/si:checkpoint`. Sin el flag, solo se sugiere. |
+| `--revision-ciega` | Bandera de prueba, solo en grande. Pruebas a ciegas en la etapa 5 y revisión en dos etapas en la 6. Fuera de grande se ignora y el Frame lo dice. |
 | `--semana` | No corre un build: revisión semanal de retros, con el sí de la persona y sin aplicar nada solo. Salta todo lo demás, no reporta a sielay y solo lee `references/revision-semanal.md`. Ignora los demás flags. |
 
 ## Niveles de tamaño

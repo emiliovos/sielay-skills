@@ -31,6 +31,7 @@ Una fila con:
 Después de los grupos, cada pieza de proceso pasa por la pregunta fija: **«¿sigue atrapando algo, o ya lo hace el modelo?»**. Las piezas son las referencias de esta carpeta, las «Reglas que nunca se rompen» de `SKILL.md` y los hooks del repo que cita la skill.
 - **Evidencia de la ventana, sin inventar:** si la citó alguna retro (`mal`, `batallo`, `propuestas`), si un hook avisó o frenó por ella, si falló la prueba que la fija y si `marcador.fuera_de_alcance` registró algo que la toca. Sin evidencia, la pieza queda en «sin señal»; tres semanas seguidas en «sin señal» la vuelven candidata a salir.
 - **Una salida por pieza:** **se queda**, **se funde** (con el archivo destino) o **sale**. Las reglas de guardarraíl (aprobaciones, saltarse los hooks de git, producción, secretos) nunca son candidatas: si no atrapan nada es porque funcionan.
+- **Piezas a prueba (`--revision-ciega`):** su salida es **se queda**, **se vuelve regla** o **sale**, decidida con los conteos de `revision_ciega` de la ventana (`solo_cumplimiento`, `solo_calidad`, `solo_pruebas_ciegas`, `pruebas_mal_hechas`). Esos conteos salen de los `retro.yaml` locales de la ventana, porque el `retro` del hub no los lleva; sin datos, la pieza queda en «sin señal». La concordancia de `calibracion` (`x/3`, primera pasada) se reporta en la misma tabla.
 - **Tope de tamaño:** `wc -l` de cada `CLAUDE.md` del repo. Si uno pasa de 200 líneas, se agrega la fila «podar CLAUDE.md» con sus candidatos.
 - Las filas de poda van en la misma tabla y piden el sí igual que los grupos.
 
