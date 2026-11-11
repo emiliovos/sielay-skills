@@ -18,7 +18,9 @@ En `main directo` el aislamiento por worktree y el orden de integración se mant
 - **Todo encargo es autocontenido:**
   - la tarea;
   - las rutas absolutas del contrato y del plan;
+  - el `base_sha` del plan y el comando de deriva sobre sus rutas (sección «SHA base y deriva»);
   - qué archivos leer y cuáles puede tocar;
+  - las condiciones de paro del plan, copiadas tal cual;
   - los criterios de aceptación y los guardarraíles;
   - qué cifras reportar;
   - dónde dejar borradores, prototipos y logs: un directorio desechable propio, fuera del repo, que reporta al terminar;
@@ -30,12 +32,28 @@ En `main directo` el aislamiento por worktree y el orden de integración se mant
 
   Quien verifica entrega un artefacto (log, captura, salida de comandos); "revisé el código" no cuenta como verificación.
   Un encargo termina en `DONE` solo con un artefacto citado: la ruta del log o de la captura, o el id de la corrida leído con `gh run view`. Sin artefacto, el estado es `BLOCKED`.
+  Un carril que cierra sin la línea `Status:` cuenta como `BLOCKED`: no se integra, se anota así en `plan.md` y se trata como cualquier bloqueo.
 - **Un agente por carril, de punta a punta:** el que implementa escribe sus pruebas; no hay cadena implementador → tester → revisor. Solo el revisor es otro agente, con contexto fresco.
 - **Tope por agente:** tras 3 vueltas sobre el mismo error, reemplázalo por un agente nuevo desde el último commit de su rama, con el error y lo ya intentado en el encargo. No repitas el mismo encargo.
+
+## SHA base y deriva
+Un plan se escribe contra un estado del código; si la rama principal lo movió después, el ejecutor improvisa sobre un plan viejo. Vale en los tres niveles:
+- **Cada plan anota de dónde parte.** El frontmatter de `plan.md` lleva `base_sha:`, el SHA de la rama principal del remoto al escribirlo (`git fetch` y `git rev-parse origin/<principal>`), y el plan nombra las rutas que toca. Un encargo sin plan propio lleva el mismo dato en su texto.
+- **Cada plan lleva sus condiciones de paro.** Una sección «Condiciones de paro» con lo que, en este plan concreto, deja de cuadrar: una función o una ruta que ya no existe, una prueba que ya no falla como se esperaba, una cifra que salió fuera del rango del criterio. Se suman a las salidas genéricas del encargo, no las reemplazan.
+- **Chequeo de deriva, dos veces:** antes de implementar (cada carril, al recibir el encargo) y antes de encolar el merge (el coordinador), con `git fetch` y `git diff --stat <base_sha>..origin/<principal> -- <rutas del plan>`. Salida vacía: sin deriva.
+- **Si hay deriva, para y lo dice.** El carril termina con `BLOCKED` y la salida del comando; el coordinador lo anota en `plan.md` y en el reporte (`status: "blocked"`). Solo el coordinador reanuda: lee el diff de la deriva y, si el plan sigue valiendo, anota en `plan.md` el `base_sha` nuevo con una línea de por qué sigue valiendo; si no, el cambio sale de lo aprobado y se pregunta.
+- Una condición de paro que se cumple funciona igual: `BLOCKED`, con la evidencia, y nadie la salta para terminar.
 
 ## Durante
 - **Verificar por carril:** las pruebas afectadas o, si la compuerta corre en CI remoto, la corrida del workflow sobre el push del carril; con CI remoto no corras pruebas locales, tampoco en subagentes. Si el workflow del repo no corre en push, dispara la corrida del carril a mano (`gh workflow run <workflow> --ref <rama>`; solo sirve si la rama ya trae esa versión del workflow) o no esperes CI hasta el PR de integración. La CI que cuenta para la entrega es la de `build/<slug>`; la de un carril solo sirve para ver la rama, nunca se reusa para el sello (su head no es el del PR final), y solo vale como verificación si ese carril no comparte archivos con los demás.
 - **Esperar la CI:** con `link_watch` (sielay-link 1.7.0 o posterior), pide al hub que avise y sigue con otra cosa; si falla, usa el respaldo. Respaldo: `gh pr checks <N> --watch --fail-fast` para un PR, o `gh run watch <id> --exit-status` para una corrida disparada a mano, siempre con `run_in_background`. Nunca Monitor ni bucles de `gh … --json | jq`. Verde es la corrida de `pull_request` (o la que el repo declare para el sello), no la de `push`. Si el workflow no corre en push, no esperes una corrida de push: no va a llegar.
+- **Tope de 2 rondas rojas de CI**, por carril y por PR. Una ronda es una corrida del workflow que cuenta (la de la CI del carril o la del PR), sobre un head nuevo o relanzada sobre el mismo. Más rondas rinden cada vez menos: tras la segunda roja no hay tercera, el carril para y pasa a la persona con las dos clasificaciones, los ids de las corridas y las opciones. Este tope es aparte del «tope por agente», que cuenta vueltas locales sobre un error.
+- **Clasifica cada rojo antes de reintentar**, con la evidencia del log (`gh run view <id> --log-failed`) y una fila en `plan.md` (ronda, id de la corrida, clase, evidencia):
+  - `código`: el cambio rompe un comportamiento. Se arregla en el carril;
+  - `prueba`: la prueba está mal o es inestable. Se arregla la prueba sin debilitarla; «inestable» se demuestra con la corrida, no se supone;
+  - `entorno`: runner, red, dependencias, lock o cuota. No se toca el código: se arregla el entorno o se relanza la corrida, que cuenta como ronda.
+
+  Sin clasificar no se reintenta. Si no sabes a qué clase va, cuenta como `código`.
 - **Un solo coordinador integra y entrega**, en orden y siempre por la compuerta. Con la CI del carril en verde y su revisión pasada, lo mezcla en `build/<slug>` (`git merge --no-ff`) y empuja. Si un carril resulta malo después, revierte su merge en `build/<slug>` y los demás siguen. Nadie más integra ni entrega.
 - **Revisión adversarial por carril, según su riesgo** (`/ak:code-review` o un `code-reviewer`): alto, a fondo con confirmación; normal, a fondo; bajo, ligera. El esfuerzo del revisor es `medium` salvo en auth, seguridad, migraciones o datos de producción, que van con `high` (regla de la tabla «Modelo fijo por rol» de `SKILL.md`). Antes de la entrega, una **revisión de integración** del PR final: cómo encajan los carriles, no repetir cada uno. **Re-revisión: solo el delta.** La primera revisión de un carril o del PR mira todo el cambio y se anota el SHA revisado; las siguientes miran `git diff <sha revisado>..HEAD`, y tras un rebase `git range-diff <base vieja>..<sha revisado> <base nueva>..HEAD`, para no releer lo que ya se revisó. Nada en los ganchos del repo exige revisar la punta completa cada vez; si algún repo lo exige, manda su regla y se dice en el Frame. Los detalles técnicos los decides tú y reportas qué decidiste; las decisiones de producto se preguntan.
 - **Evaluador (revisión del carril y del PR final).** Un revisor con contexto fresco, por riesgo: alto, a fondo con confirmación; normal, a fondo; bajo, ligero. Antes de la entrega, una revisión de integración del PR final: cómo encajan los carriles, no repetir cada uno. Reglas:
@@ -44,6 +62,7 @@ En `main directo` el aislamiento por worktree y el orden de integración se mant
   - marca la **clase completa** del bug (todas las apariciones, con un grep), no una línea;
   - no repite hallazgos ya reportados;
   - máximo **3 vueltas** (1 en riesgo bajo). Cada vuelta corrige en lote todo lo Critical y High; desde la segunda, re-revisa **solo el diff nuevo**;
+  - reporta el conteo de Critical y High abiertos en cada vuelta. **Desde la segunda vuelta, si ese conteo no baja respecto a la anterior, para y escala** a la persona con los hallazgos, sin gastar la vuelta que queda;
   - antes de declarar que pasa, el verificador corre la **compuerta completa** del repo, no una o dos pruebas.
 
   Lo que queda (pulido, Medium y Low) va al reporte o a un issue, no a otra vuelta. **Si tras la última vuelta sigue abierto algún Critical o High, no entregues**: para y reporta al usuario el hallazgo con las opciones. Los detalles técnicos los decides tú y reportas qué decidiste; las decisiones de producto se preguntan.
@@ -62,6 +81,7 @@ En `main directo` el aislamiento por worktree y el orden de integración se mant
 
 ## Al cerrar cada carril
 - Actualiza el estado en `plan.md` y en el tracker (*si aplica*).
+- Corre la tabla de cableado de la fase (`contrato-y-estimado.md`, «Cableado comprobable con grep») y anota cada fila en `plan.md`; una `falla` deja el carril abierto o en `BLOCKED`.
 - Si reportas a sielay (`reporte-sielay.md`): `link_build_stage` con `plan_progress` (`done` + 1) y la `phase` que sigue en curso. Al entrar a la etapa 4, `total` es el número de carriles.
 - Si el carril pasó su tope de tokens, ya paró en un punto seguro y reportó: decide si sigue, se parte o se reasigna.
 - Compara las horas reales del carril contra su estimado. Si el total previsto se movió más que la tolerancia (±max(0,5 h, 10 % del programado)) o el carril se pasó, reestima con un motivo corto: en el contrato y, si reportas a sielay, con `estimate` completo y `reason` (`reporte-sielay.md`). No pide aprobación salvo que cambie el Goal, los criterios, los no-goals o la autoridad.

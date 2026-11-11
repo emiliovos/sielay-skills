@@ -8,7 +8,7 @@ Lee antes: `contrato-y-estimado.md`, `etapas.md` (solo la ruta de cada etapa y l
 - **Aprobaciones: una.** El Frame y el plan van juntos en la tarjeta única, y el sí cubre el merge. Con `--pausas` el plan se separa del Frame (dos aprobaciones).
 - **Investigación: no.** Sin etapa de Evidencia; el código que el objetivo toca se lee en el Frame, con lectura dirigida.
 - **Red team: no.** La revisión con contexto limpio y la pasada normal de CI son la red de seguridad.
-- **Plan:** rápido, en una o dos fases (`/ak:plan --fast`; en modo nativo, un `planner`), sin paralelo, sin `contracts.md` y sin carriles.
+- **Plan:** rápido, en una o dos fases (`/ak:plan --fast`; en modo nativo, un `planner`), sin paralelo, sin `contracts.md` y sin carriles, pero con su `base_sha` y sus condiciones de paro (`ejecucion-autonoma.md`, «SHA base y deriva»).
 - **Agentes que escriben: uno** (`/ak:cook --auto` o un `fullstack-developer`), que escribe también sus pruebas. `--terminales` no vale en chico: se ignora y se dice en el Frame.
 - **Retros previas: se saltan.** No se leen retros de builds anteriores.
 - **Verificación corta:** compila, arranca y una captura del resultado; sin UI, la salida del comando. La compuerta del repo corre igual que en los otros niveles. No hay e2e aparte.

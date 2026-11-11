@@ -11,7 +11,7 @@ metadata:
   deps: "git en el repo destino. Recomendado: AgentKit (skills /ak:*); sin él, cada etapa se hace con subagentes nativos. Opcional: /si:checkpoint para el cierre (--checkpoint) y red a context7.com (o su MCP) para consultar la doc de dependencias en las etapas 2 y 3."
   installs: []
   risk: none
-  version: "2.11.0"
+  version: "2.14.0"
 ---
 
 # Build-auto: backbone de proyecto autónomo
@@ -66,7 +66,7 @@ Lo que no está en este archivo está en `references/`:
 - `presupuesto-de-contexto.md`: el corte a 110 K con checkpoint y cómo se activa (`--activar <build_id>` al reportar el arranque), la lectura dirigida, la concurrencia y los subagentes.
 - `reporte-sielay.md` (núcleo) y `reporte-sielay-anexo.md`: el reporte del build. Si la sesión tiene la herramienta `link_build_stage` (plugin `sielay-link`; si solo ves su nombre entre las diferidas, carga el esquema con ToolSearch y cuenta como tenerla), lee el núcleo antes del Frame y reporta en sus momentos; el anexo, al llegar a cada momento. El `build_id` es `<repo>-<carpeta-del-plan>`. Sin la herramienta, la skill sigue igual, sin error ni pregunta.
 - Antes de la etapa 4, lee las que apliquen y síguelas:
-  - `ejecucion-autonoma.md`: antes de paralelizar, quién ejecuta, encargos, reglas durante la ejecución, qué reportan los revisores y el tope de revisiones; incluye el evaluador de la etapa 6.
+  - `ejecucion-autonoma.md`: antes de paralelizar, quién ejecuta, encargos, reglas durante la ejecución, qué reportan los revisores, el tope de revisiones y el de rondas de CI; incluye el evaluador de la etapa 6.
   - `compuerta-de-pruebas.md`: los tres niveles de la compuerta, las variantes `rama+PR` y `main directo`, y los huecos conocidos.
   - `disciplina-de-pruebas.md`: qué es una prueba que sirve, cuánto puede costar y el reporte final.
   - `receta-de-deploy.md`: solo con `--alcance produccion`.
@@ -101,7 +101,9 @@ Cada aprobación cubre el gate que se está mostrando: al pedirla, nombra ese ga
 - Nunca publicar sin `--alcance produccion`. Nunca editar archivos en el checkout que sirve producción; en él solo corre el comando de publicación del plan.
 - Una compuerta nueva o un cambio a la existente es una decisión aparte que solo aprueba la persona, preguntada por su nombre; las aprobaciones del Frame y del plan no la cubren. Si esa compuerta es el objetivo que la persona pidió, ese pedido es la decisión. Sin ella, ningún carril ni agente la agrega ni la cambia.
 - Una prueba saltada cuenta como roja. Nunca debilitar una prueba ni un criterio para que pase.
-- Si tras el tope de revisión queda algún Critical/High, no entregues: para y reporta.
+- Si tras el tope de revisión queda algún Critical/High, no entregues: para y reporta. Desde la segunda vuelta, si el conteo de Critical/High no baja, para y escala sin gastar la vuelta que queda.
+- Tras 2 rondas rojas de CI en un carril o en el PR no hay tercera: para y pasa a la persona. Antes de reintentar, cada rojo se clasifica como código, prueba o entorno (`references/ejecucion-autonoma.md`).
+- Un carril que cierra sin la línea `Status:` cuenta como `BLOCKED`.
 - Cada agente detiene solo sus procesos y no toca la config de Claude Code ni sesiones ajenas. Con `--terminales`, el coordinador solo opera las sesiones que el reparto le asigna, como dice `references/terminales.md`.
 - Si una tarea parece cruzar un guardarraíl del repo: para y pregunta.
 - Con `--fix` valen todas las anteriores; el cambio que crece fuera del diagnóstico aprobado cuenta como cruzar el alcance.

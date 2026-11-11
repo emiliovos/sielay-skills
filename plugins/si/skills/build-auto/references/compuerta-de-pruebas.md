@@ -12,9 +12,10 @@ La garantía va en la entrega, no en cada push, y el deploy solo comprueba un se
 Además: **un solo lock de suite por host**, tomado por los propios scripts (dos suites a la vez en pocos núcleos se vuelven inestables), y una **corrida nocturna de la suite completa** que cubre lo que el selector o los carriles dejan pasar.
 
 ## Variante `rama+PR`
-- Con rama de integración, la entrega es **un** PR `build/<slug>` → rama principal y **un** solo merge-pr por build; los carriles no pasan por el script de merge, solo por su CI y su revisión. Si el repo tiene cola de merge, el build entra con una sola entrada (`--enqueue` o el equivalente que el repo declare).
+- Con rama de integración, la entrega es **un** PR `build/<slug>` → rama principal y **un** solo merge por build; los carriles no pasan por el merge, solo por su CI y su revisión. Si el repo tiene cola de merge, el build entra con una sola entrada (la del repo: en sielay, la merge queue nativa con `gh pr merge <N> --auto`).
 - La entrega es un script de merge que corre, sobre la mezcla de la rama principal con el PR, lo que elige el selector (nada, afectadas o completa). Si el repo lo tiene, también con el **reloj adelantado** (por ejemplo +1 y +30 días). Si pasa, mergea y sella el SHA del merge commit.
 - Se lanza en segundo plano desde un **runner limpio**: un worktree aparte, al día con la rama principal antes de cada merge.
+- **Antes de encolar, el chequeo de deriva** sobre las rutas del plan (`ejecucion-autonoma.md`, «SHA base y deriva»). Con deriva no se encola: se para y se dice.
 - **El merge usa el head que está en el remoto.** Si falló el push del rebase, se mergea el head anterior: confirma que el push llegó antes de lanzar el merge.
 - PRs apilados: cambia la base del hijo a la rama principal antes de mergear el padre. Nunca borres una rama sin confirmar que el merge quedó hecho.
 
@@ -30,6 +31,7 @@ Cuando la ficha dice que las pruebas corren en CI remoto (un workflow en runners
 - La rama de integración se empuja y su corrida es la que reusa el merge del PR final. Si la rama principal se movió y el merge ya no puede reusarla, rebasa una vez, empuja y espera la corrida nueva; no la fuerces localmente salvo que el repo lo prevea.
 - Si los runners quedan fuera de línea a media corrida, el build vuelve a concurrencia local (2) y sigue con la compuerta local del repo; dilo en una línea.
 - Un rojo del workflow sobre el mismo árbol bloquea la entrega igual que un rojo local.
+- **Cada rojo es una ronda, con tope de 2** por carril y por PR. Antes de reintentar, el rojo se clasifica como código, prueba o entorno; tras la segunda ronda roja, a la persona (`ejecucion-autonoma.md`, «Tope de 2 rondas rojas de CI»). Relanzar la corrida por un rojo de entorno también cuenta como ronda.
 
 ## Si el repo no tiene compuerta
 No la crees ni la propongas como fase del plan: menciónalo en el Frame y entrega con la verificación que define el plan. Una compuerta nueva, o un cambio a la existente, es una decisión aparte que solo aprueba la persona; las aprobaciones del Frame y del plan no la cubren.
