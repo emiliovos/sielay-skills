@@ -29,5 +29,7 @@ El sí cubre el merge. Cubre además el deploy solo si el alcance es `--alcance 
 ## Si el cambio crece
 Si en la ejecución el cambio pasa de 3 archivos o aparece un riesgo alto, para, dilo en una línea, carga la referencia del nivel que sube (`nivel-medio.md`) y pide el sí que la tarjeta no cubría. Nada fuera de lo aprobado se hace sin ese sí.
 
+Lo que veas fuera del objetivo y no lo frene va en una sección «Fuera de alcance» del reporte final, una línea por hallazgo con el formato de `ejecucion-autonoma.md` («Fuera de alcance»). Anotarlo no lo aprueba.
+
 ## Reporte a sielay
 `flow: "chico"` y `nivel:chico` en `flags`. Las etapas que no corren no se reportan. Si el nivel sube, se reporta el `flow` nuevo y `flags` completos (el hub reemplaza la lista entera), conservando los demás, como `parent:<id>`.

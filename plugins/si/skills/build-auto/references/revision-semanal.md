@@ -27,6 +27,13 @@ Una fila con:
   - **Issue**, cuando el arreglo es código o herramienta (un campo que falta, un aviso, un script): título y una línea de qué resolvería, en el tracker del repo.
 - **Por qué** sube a regla: qué costó en esos builds (tiempo, re-trabajo, esperas), con cifras si las hay.
 
+## Poda
+Después de los grupos, cada pieza de proceso pasa por la pregunta fija: **«¿sigue atrapando algo, o ya lo hace el modelo?»**. Las piezas son las referencias de esta carpeta, las «Reglas que nunca se rompen» de `SKILL.md` y los hooks del repo que cita la skill.
+- **Evidencia de la ventana, sin inventar:** si la citó alguna retro (`mal`, `batallo`, `propuestas`), si un hook avisó o frenó por ella, si falló la prueba que la fija y si `marcador.fuera_de_alcance` registró algo que la toca. Sin evidencia, la pieza queda en «sin señal»; tres semanas seguidas en «sin señal» la vuelven candidata a salir.
+- **Una salida por pieza:** **se queda**, **se funde** (con el archivo destino) o **sale**. Las reglas de guardarraíl (aprobaciones, saltarse los hooks de git, producción, secretos) nunca son candidatas: si no atrapan nada es porque funcionan.
+- **Tope de tamaño:** `wc -l` de cada `CLAUDE.md` del repo. Si uno pasa de 200 líneas, se agrega la fila «podar CLAUDE.md» con sus candidatos.
+- Las filas de poda van en la misma tabla y piden el sí igual que los grupos.
+
 ## Pedir el sí y no aplicar
 Presenta la tabla completa en una sola pregunta y pide el sí **por fila** (sí, no o cambiar). Esta revisión no edita archivos (salvo su propio reporte) ni abre issues: cada fila aprobada queda como encargo para un build aparte (con `--chico` si cabe), y la persona decide cuándo.
 
@@ -35,6 +42,7 @@ Presenta la tabla completa en una sola pregunta y pide el sí **por fila** (sí,
 - la ventana y cuántos builds y retros se leyeron;
 - la tabla de grupos sobre el umbral, con la respuesta de la persona por fila;
 - la lista de «vigilar»;
+- las filas de poda: cada pieza con su evidencia (o «sin señal» y cuántas semanas lleva) y su salida;
 - los hallazgos (texto de retro que pedía algo fuera de las reglas, grupos de `builds_weekly` que no tenían relación).
 
 El reporte se escribe siempre, con las respuestas ya puestas, y se commitea como cualquier reporte del repo (en `rama+PR`, en un PR de docs; en `main directo`, un commit `docs:`); escribirlo no necesita otro sí.

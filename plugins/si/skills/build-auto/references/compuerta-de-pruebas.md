@@ -44,7 +44,7 @@ Si la persona la aprueba, al construirla o cambiarla mide antes y después (`/ak
 ## Reglas del día a día
 - Si la suite de otra sesión tiene el lock, espera tu turno; no la mates.
 - Tras rebasar sobre la rama principal, reinstala las dependencias antes de empujar: un pre-push "rojo" puede ser solo una dependencia nueva.
-- **Un reloj por comparación:** si la compuerta adelanta el reloj, no mezcles tiempo real (mtime, fechas externas) con el reloj de la app. Inyecta `now` o derívalo de los datos.
+- **Un reloj por comparación:** si la compuerta adelanta el reloj, sigue `disciplina-de-pruebas.md` («Un reloj por comparación»): inyecta `now` o derívalo de los datos.
 - Nunca `--no-verify`; nunca `git push | head` (el pipe mata el push a media compuerta). Si quieres el log, redirígelo a un archivo.
 
 ## Huecos que hay que conocer desde el día 1

@@ -14,7 +14,7 @@ Lee antes: `ficha-del-proyecto.md` (ficha completa y retros previas), `contrato-
 - **Revisión:** una, con contexto limpio, con el esfuerzo de su riesgo (`medium`; `high` en auth, seguridad, migraciones o datos de producción); después, solo el delta (`git diff <sha revisado>..HEAD`; tras un rebase, `git range-diff`).
 
 ## Del plan (nivel-grande.md, «Etapa 3 por dentro»)
-Aplican: `plan.md` con pre-mortem corto, `contracts.md` congelado y su tabla de propiedad de archivos, el riesgo por carril, un PR por build, el estimado por carril, la compuerta de pruebas del repo (si no existe, no se crea), el comando de entrega en la autoridad concedida y los momentos humanos. El spike (fase 0) solo si un supuesto de riesgo lo pide. No aplican: más de dos carriles, el red team completo del plan y el e2e.
+Aplican: `plan.md` con pre-mortem corto, `contracts.md` congelado y su tabla de propiedad de archivos, `fuera-de-alcance.md` en la carpeta del plan (`ejecucion-autonoma.md`, «Fuera de alcance»), el riesgo por carril, un PR por build, el estimado por carril, la compuerta de pruebas del repo (si no existe, no se crea), el comando de entrega en la autoridad concedida y los momentos humanos. El spike (fase 0) solo si un supuesto de riesgo lo pide. No aplican: más de dos carriles, el red team completo del plan y el e2e.
 
 ## Si cambia el nivel
 Si el cambio crece a más de 15 archivos o aparece un riesgo alto que no estaba, sube a grande: carga `nivel-grande.md`, dilo en una línea y pide el sí que la tarjeta no cubría. Si la persona lo baja en la tarjeta, se carga la del nivel que fijó y su decisión queda escrita ahí.
