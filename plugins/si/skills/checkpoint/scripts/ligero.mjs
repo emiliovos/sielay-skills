@@ -34,11 +34,17 @@ export function parseArgs(argv) {
   return o;
 }
 
+// Un clon puede no tener origin/HEAD; nunca @{upstream}: una rama empujada se compararía consigo misma.
+const RAMAS_BASE = ['origin/HEAD', 'origin/main', 'origin/master'];
+
 // Commits de la rama que aún no llegan a master: empujados sin PR tampoco están cerrados.
 function fueraDeOrigen(repo, run) {
-  const r = run('git', ['-C', repo, 'rev-list', '--count', 'origin/HEAD..HEAD']);
-  const n = r.ok ? Number(r.salida.trim()) : NaN;
-  return Number.isInteger(n) ? n : null;
+  for (const base of RAMAS_BASE) {
+    const r = run('git', ['-C', repo, 'rev-list', '--count', `${base}..HEAD`]);
+    const n = r.ok ? Number(r.salida.trim()) : NaN;
+    if (Number.isInteger(n)) return { base, n };
+  }
+  return null;
 }
 
 // Lista de motivos por los que la terminal no está libre; vacía si se puede cerrar.
@@ -58,8 +64,8 @@ export function motivosAbierto(estado, { run = ejecutar } = {}) {
     if (g.adelante === null || g.adelante === undefined) m.push(`${g.repo}: no se pudo contar lo que falta por empujar`);
     else if (g.adelante > 0) m.push(`${g.repo}: ${g.adelante} sin push`);
     const fuera = fueraDeOrigen(g.repo, run);
-    if (fuera === null) m.push(`${g.repo}: no se pudo comparar con origin/HEAD`);
-    else if (fuera > 0) m.push(`${g.repo}: ${fuera} commits fuera de origin/HEAD`);
+    if (fuera === null) m.push(`${g.repo}: no se pudo comparar con ${RAMAS_BASE.join(', ')}`);
+    else if (fuera.n > 0) m.push(`${g.repo}: ${fuera.n} commits fuera de ${fuera.base}`);
     if (!g.rama) m.push(`${g.repo}: rama desconocida`);
     if (!Array.isArray(g.prs)) m.push(`${g.repo}: no se pudo consultar los PRs`);
     for (const p of (g.prs ?? []).filter((x) => x.rama === g.rama)) m.push(`${g.repo}: PR #${p.n} abierto en ${g.rama}`);
