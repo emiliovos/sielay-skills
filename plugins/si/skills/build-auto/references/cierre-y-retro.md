@@ -33,6 +33,18 @@ marcador:
   fuera_de_alcance:           # de `fuera-de-alcance.md` (ejecucion-autonoma.md, «Fuera de alcance»)
     hallazgos: 0              # líneas del registro
     piden_issue: 0            # las que tienen «issue» como siguiente paso
+calibracion:                  # solo grande; null si el repo no tiene juego
+  juego: ""                   # ruta del doc del repo
+  concordancia: "x/3"         # de la primera pasada (la que cuenta)
+  concordancia_repeticion: "" # de la segunda pasada, si la hubo; "x/n" con n los casos no vistos que juzgó
+  repitio: false              # true si hubo la segunda pasada
+  falsos_positivos: 0         # de la primera pasada
+  defectos_que_dejo_pasar: 0  # de la primera pasada
+revision_ciega:               # solo con --revision-ciega; null sin la bandera
+  solo_cumplimiento: 0        # hallazgos que solo vio la revisión de cumplimiento
+  solo_calidad: 0
+  solo_pruebas_ciegas: 0      # defectos que solo atraparon las pruebas a ciegas
+  pruebas_mal_hechas: 0
 fases:          # una por etapa o carril que corrió, en orden
   - fase: ""                  # "1 Frame", "4 carril backend", "6 revisión de integración"…
     modelo: ""                # el que corrió de verdad, según medir-contexto.mjs
@@ -46,6 +58,7 @@ fases:          # una por etapa o carril que corrió, en orden
 - **Redacción de cada lista:** un hecho por ítem, una línea (~100 caracteres, máximo 160), que empiece por lo que pasó o lo que se hizo, con PR o SHA cuando aplique. Sin adjetivos ni jerga ("robusto", "sinergia", "end-to-end"). Lo que no aplica va vacío; no se rellena.
 - Una propuesta es una regla concreta y accionable ("fijar el tope de tokens por carril desde el Frame"), no una queja.
 - **`defectos_solo_revision` se cuenta de los hallazgos de la revisión adversaria**: los que se corrigieron y que ninguna prueba ni corrida de CI había marcado en rojo. Un hallazgo descartado o que ya había atrapado una prueba no cuenta. Sin revisión adversaria, `0` y una línea en `mal` que lo diga.
+- **`calibracion` y `revision_ciega` van a nivel raíz y cuentan la primera pasada.** Con `--revision-ciega`, `defectos_solo_revision` = `solo_cumplimiento` + `solo_calidad`. Sin la bandera o sin juego, el bloque va en `null`.
 - Las fallas que la revisión no vio son el dato más útil: di qué clase de bug era y qué lo habría atrapado.
 - **Un grep que habría atrapado algo se vuelve regla.** Si una falla (de la revisión, la CI, el e2e o producción) era código que nadie integró, o la habría visto un grep, va en `propuestas` con el grep completo y dónde corre: una fila más para la tabla de cableado de esa clase de fase (`applies_to: build-auto`) o un chequeo del repo (`applies_to: repo`). La revisión semanal las agrupa.
 - **`propuestas_previas` se cuenta de la tabla del Frame**, fila por fila: `leidas` = aplicadas + no aplicadas. Un «sí» que no llegó a aplicarse cuenta como no aplicado y va en `mal` con su porqué. Sin retros previas, los tres en 0.
