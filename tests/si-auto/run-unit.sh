@@ -7,10 +7,12 @@ set -u
 RAIZ="$(cd "$(dirname "$0")/../.." && pwd)"
 S="$RAIZ/plugins/si-auto/scripts"
 TMP="$(mktemp -d)"
-# Proceso falso llamado "claude" para simular una sesión viva.
-mkdir -p "$TMP/falso" && cp "$(command -v sleep)" "$TMP/falso/claude"
-"$TMP/falso/claude" 600 >/dev/null 2>&1 & CLAUDE_FALSO=$!
-trap 'kill "$CLAUDE_FALSO" 2>/dev/null; rm -rf "$TMP"' EXIT
+# Proceso falso llamado "claude" para simular una sesión viva. Es una copia de
+# bash y no de sleep: donde sleep es un binario multicall (uutils, Ubuntu 26.04)
+# la copia llamada "claude" no reconoce su nombre y sale al instante.
+mkdir -p "$TMP/falso" && cp "$(command -v bash)" "$TMP/falso/claude"
+"$TMP/falso/claude" -c 'sleep 600 & wait' >/dev/null 2>&1 & CLAUDE_FALSO=$!
+trap 'pkill -P "$CLAUDE_FALSO" 2>/dev/null; kill "$CLAUDE_FALSO" 2>/dev/null; rm -rf "$TMP"' EXIT
 fallos=0; casos=0
 ok()   { casos=$((casos+1)); echo "ok   $1"; }
 mal()  { casos=$((casos+1)); fallos=$((fallos+1)); echo "FAIL $1${2:+ — $2}"; }
