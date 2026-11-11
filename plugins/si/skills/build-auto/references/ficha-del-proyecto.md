@@ -41,8 +41,6 @@ Arma esta ficha:
 
 Si el push o el merge a main publica solo, `merge` equivale a producción: necesitas `--alcance produccion` o te detienes antes de entregar.
 
-Commits y PRs siempre en conventional commits y **sin atribución de IA** (ni Co-Authored-By, ni trailers de sesión, ni "Generated with"), salvo que el repo exija otra cosa.
-
 **El Frame es una sola tarjeta con los defaults ya llenos**: la ficha, el Goal, el alcance, el estimado y los criterios propuestos. La persona solo corrige. Pregunta únicamente los huecos: los campos de la ficha que faltan y las decisiones de producto que cambian los criterios. Nunca deduzcas un comando de la prosa: si el repo describe una compuerta pero no da el comando, pregúntalo. La tarjeta incluye además:
 - **Disponibilidad:** cuándo puede la persona aprobar los gates, para agrupar los momentos humanos y no esperarla de más.
 - **Retros previas:** la tabla de «Retros previas» (abajo), ya llena (solo medio y grande).

@@ -14,7 +14,7 @@ Más de 15 archivos, o un medio con riesgo alto. Es el flujo completo de siempre
 - La pasada normal de CI corre igual que en los otros niveles.
 
 ## Etapa 3 por dentro: un plan listo para correr solo
-Plan en `plans/{fecha}-{slug}/` (o donde el repo guarde sus planes) con `plan.md`, `contracts.md` y `phase-NN-*.md` (un archivo por carril; la fase 0 es el spike, si hay).
+Plan en `plans/{fecha}-{slug}/` (o donde el repo guarde sus planes) con `plan.md`, `contracts.md`, `phase-NN-*.md` (un archivo por carril; la fase 0 es el spike, si hay) y `fuera-de-alcance.md`, donde carriles y revisores anotan lo que ven fuera del plan (`ejecucion-autonoma.md`, «Fuera de alcance»).
 - **Pre-mortem** del plan («el plan ya falló, ¿por qué?») en `plan.md`, como dice `references/puntos-ciegos-y-context7.md`.
 - **Fase 0 = spike** corto de los supuestos de mayor riesgo (entre ellos, todos los puntos ciegos con «Spike: sí»), en un directorio desechable, con **regla de rama**: si falla X → plan B; si falla Y → parar. Un supuesto medible ("< 50 ms con datos realistas") puede ir como criterio de la primera fase, con su regla.
 - **`contracts.md` congelado antes de paralelizar:** tablas, APIs con un JSON de ejemplo, interfaces, constantes compartidas y una **tabla de propiedad de archivos** por carril. Cambios después = "Enmienda {fecha}" al final. Una enmienda técnica la decides tú; una que toque el Goal, los criterios, los no-goals o la autoridad necesita la aprobación del usuario.

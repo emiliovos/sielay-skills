@@ -26,6 +26,7 @@ En `main directo` el aislamiento por worktree y el orden de integración se mant
   - dónde dejar borradores, prototipos y logs: un directorio desechable propio, fuera del repo, que reporta al terminar;
   - "no mergees, no empujes a main";
   - "si el trabajo sale de tus archivos o de los criterios, no lo hagas: descríbelo y termina con `BLOCKED` o `DONE_WITH_CONCERNS`";
+  - "lo que veas fuera de tus archivos y de los criterios y no te frene (un bug vecino, una deuda, una prueba floja) va en una línea de `fuera-de-alcance.md`, no al diff" (sección «Fuera de alcance»);
   - "no cambies la `clave` de un criterio aprobado: repórtala y termina con `BLOCKED`";
   - "después de cada rebase, reinstala las dependencias antes de empujar";
   - que termine con `Status: DONE | DONE_WITH_CONCERNS | BLOCKED`.
@@ -44,6 +45,11 @@ Un plan se escribe contra un estado del código; si la rama principal lo movió 
 - **Si hay deriva, para y lo dice.** El carril termina con `BLOCKED` y la salida del comando; el coordinador lo anota en `plan.md` y en el reporte (`status: "blocked"`). Solo el coordinador reanuda: lee el diff de la deriva y, si el plan sigue valiendo, anota en `plan.md` el `base_sha` nuevo con una línea de por qué sigue valiendo; si no, el cambio sale de lo aprobado y se pregunta.
 - Una condición de paro que se cumple funciona igual: `BLOCKED`, con la evidencia, y nadie la salta para terminar.
 
+## Fuera de alcance
+- **Un registro por build:** `fuera-de-alcance.md` en la carpeta del plan; en chico, que no tiene carpeta, una sección «Fuera de alcance» en el reporte final. Escriben los carriles y los revisores; el coordinador lo lee.
+- **Una línea por hallazgo:** `AAMMDD HH:MM · carril · archivo:línea · qué vio · por qué no lo tocó · siguiente paso (issue, encargo o nada)`.
+- **Anotarlo no amplía el alcance.** Tocar algo del registro pide la misma aprobación que un trabajo que crece (`SKILL.md`, «Aprobaciones»). El cierre lo cuenta (`cierre-y-retro.md`).
+
 ## Durante
 - **Verificar por carril:** las pruebas afectadas o, si la compuerta corre en CI remoto, la corrida del workflow sobre el push del carril; con CI remoto no corras pruebas locales, tampoco en subagentes. Si el workflow del repo no corre en push, dispara la corrida del carril a mano (`gh workflow run <workflow> --ref <rama>`; solo sirve si la rama ya trae esa versión del workflow) o no esperes CI hasta el PR de integración. La CI que cuenta para la entrega es la de `build/<slug>`; la de un carril solo sirve para ver la rama, nunca se reusa para el sello (su head no es el del PR final), y solo vale como verificación si ese carril no comparte archivos con los demás.
 - **Esperar la CI:** con `link_watch` (sielay-link 1.7.0 o posterior), pide al hub que avise y sigue con otra cosa; si falla, usa el respaldo. Respaldo: `gh pr checks <N> --watch --fail-fast` para un PR, o `gh run watch <id> --exit-status` para una corrida disparada a mano, siempre con `run_in_background`. Nunca Monitor ni bucles de `gh … --json | jq`. Verde es la corrida de `pull_request` (o la que el repo declare para el sello), no la de `push`. Si el workflow no corre en push, no esperes una corrida de push: no va a llegar.
@@ -61,6 +67,7 @@ Un plan se escribe contra un estado del código; si la rama principal lo movió 
   - reporta solo lo que afecta la corrección, la seguridad o los requisitos; el resto va como opcional y no bloquea. Pon esto en su encargo;
   - marca la **clase completa** del bug (todas las apariciones, con un grep), no una línea;
   - no repite hallazgos ya reportados;
+  - lo que vea fuera de los archivos y de los criterios del plan lo anota en `fuera-de-alcance.md` y no lo cuenta como hallazgo;
   - máximo **3 vueltas** (1 en riesgo bajo). Cada vuelta corrige en lote todo lo Critical y High; desde la segunda, re-revisa **solo el diff nuevo**;
   - reporta el conteo de Critical y High abiertos en cada vuelta. **Desde la segunda vuelta, si ese conteo no baja respecto a la anterior, para y escala** a la persona con los hallazgos, sin gastar la vuelta que queda;
   - antes de declarar que pasa, el verificador corre la **compuerta completa** del repo, no una o dos pruebas.
@@ -76,7 +83,6 @@ Un plan se escribe contra un estado del código; si la rama principal lo movió 
 - **Con UI, pasada «captura contra referencia, por pantalla»** antes de cerrar la etapa 5: compara cada pantalla de `build/<slug>` con su referencia aprobada (diseño, maqueta o captura previa). Cada diferencia se corrige o se acepta de forma explícita y va a la retro.
 - Después de rebasar, reinstala las dependencias antes de empujar. Antes de lanzar un merge, confirma que el push del rebase llegó al remoto.
 - Si la suite de otra sesión tiene el lock, espera tu turno; no la mates.
-- Nunca `--no-verify`; nunca `git push | head`; nunca envolver el push o el merge en otro lock si la compuerta ya toma el suyo.
 - Procesos: cada agente detiene solo sus PIDs (por PID, no con un patrón amplio), y nada de tocar la config de Claude Code ni sesiones ajenas.
 
 ## Al cerrar cada carril

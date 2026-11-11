@@ -30,6 +30,9 @@ marcador:
     leidas: 0                 # filas de la tabla (propuestas y problemas leídos)
     aplicadas: 0              # filas con «sí» que de verdad se aplicaron
     no_aplicadas: 0           # filas con «no», más los «sí» que al final no se aplicaron
+  fuera_de_alcance:           # de `fuera-de-alcance.md` (ejecucion-autonoma.md, «Fuera de alcance»)
+    hallazgos: 0              # líneas del registro
+    piden_issue: 0            # las que tienen «issue» como siguiente paso
 fases:          # una por etapa o carril que corrió, en orden
   - fase: ""                  # "1 Frame", "4 carril backend", "6 revisión de integración"…
     modelo: ""                # el que corrió de verdad, según medir-contexto.mjs
@@ -57,5 +60,5 @@ El hub cierra solo un build entregado cuando el coordinador lleva 20 minutos sin
 1. Escribe `retro.yaml` (antes de encolar el merge, como dice arriba) y complétalo con lo que se sepa al cerrar.
 2. Al confirmar el merge, manda `retro` a sielay (`reporte-sielay.md`) junto con `status: "done"`, `stage: 7` y `outcome`. Si el campo `retro` del plugin no tiene lugar para `fases`, resúmelas en una línea del `summary` final («coordinador opus máx 140 K, 1 corte; carriles sonnet máx 90 K; revisión opus 60 K»). `retro` lleva también `defectos_solo_revision` (entero ≥ 0); si el plugin rechaza la llamada por ese campo, repítela sin él y pon `- Defectos que solo halló la revisión: N` en el `summary`. Además, siempre, una línea con `propuestas_previas` (`- Retros previas: 5 leídas, 3 aplicadas, 2 no`), porque el campo `retro` no la lleva.
 3. Si el entorno publica artifacts, publica el marcador como una página de cifras con su fuente (de dónde sale cada número). Sin eso, el marcador va en el reporte final.
-4. Escribe el reporte final estilo brief: primero lo que necesita a la persona (decisiones, momentos humanos, pendientes), luego lo que pasó.
+4. Escribe el reporte final estilo brief: primero lo que necesita a la persona (decisiones, momentos humanos, pendientes), luego lo que pasó. El reporte lista los hallazgos de `fuera-de-alcance.md` que piden issue y el conteo total; en chico, la sección «Fuera de alcance» va ahí mismo.
 5. Commitea `retro.yaml` con los demás reportes del plan, según el modo de entrega.
