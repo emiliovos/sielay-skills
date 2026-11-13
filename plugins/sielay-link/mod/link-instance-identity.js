@@ -27,6 +27,8 @@
 // `pid` existed has no proof, so it is adopted only after STALE_NO_PID_MS
 // without renewal (a day: any live terminal that merely paused is long back).
 
+import { pidFromSocket } from './link-launch-mode.js'
+
 export const INSTANCE_LEASE_MS = 90_000
 export const MAX_RECORDS = 8
 export const STALE_NO_PID_MS = 24 * 60 * 60 * 1000
@@ -198,4 +200,27 @@ export async function adoptOrphans({ store, key, mine, now, ownerAlive, adopt, p
   }
   if (failure !== undefined) throw failure
   return adopted
+}
+
+/**
+ * This Claude Code's pid, trusted only when two independent facts agree with
+ * it: the messaging socket's name (when there is a socket) carries the same
+ * pid, and that pid's command line is a claude. Anything else is undefined, and
+ * the record falls back to the 24 h rule.
+ * @param {{
+ *   readPid: () => Promise<number|undefined>,
+ *   socket: string|undefined,
+ *   processArgs: (pid: string) => Promise<string|undefined>,
+ * }} input
+ * @returns {Promise<number|undefined>}
+ */
+export async function verifiedOwnPid({ readPid, socket, processArgs }) {
+  try {
+    const pid = await readPid()
+    if (typeof pid !== 'number' || !Number.isSafeInteger(pid) || pid <= 0) return undefined
+    if (socket && String(pid) !== pidFromSocket(socket)) return undefined
+    return /claude/i.test((await processArgs(String(pid))) ?? '') ? pid : undefined
+  } catch {
+    return undefined
+  }
 }

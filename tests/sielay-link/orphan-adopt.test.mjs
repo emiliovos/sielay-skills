@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { adoptOrphans, claimInstanceId, instanceKey, INSTANCE_LEASE_MS, STALE_NO_PID_MS } from '../../plugins/sielay-link/mod/link-instance-identity.js'
+import { adoptOrphans, claimInstanceId, instanceKey, INSTANCE_LEASE_MS, STALE_NO_PID_MS, verifiedOwnPid } from '../../plugins/sielay-link/mod/link-instance-identity.js'
 import { createInbox } from '../../plugins/sielay-link/mod/link-inbox.js'
 import { createHeldQueue } from '../../plugins/sielay-link/mod/link-quiet-hold.js'
 import { createInboundStore } from '../../plugins/sielay-link/mod/link-inbound-store.js'
@@ -263,4 +263,15 @@ test('(e) the notice counts the unread, with the adopted ones, and is silent wit
   assert.equal(unreadLine(1), '📨 1 mensaje sin leer: llama link_read')
   await p2.inbox.take(mine.id)
   assert.equal(await p2.inbox.unreadCount(mine.id), 0)
+})
+
+test('the own pid is trusted only when the socket name and the command line agree', async () => {
+  const run = (pid, socket, args) => verifiedOwnPid({ readPid: async () => pid, socket, processArgs: async () => args })
+  assert.equal(await run(4242, '/tmp/cc-socks/4242.sock', 'claude --plugin-dir x'), 4242)
+  assert.equal(await run(4242, undefined, '/usr/bin/claude'), 4242, 'no socket: the command line decides')
+  assert.equal(await run(4242, '/tmp/cc-socks/9999.sock', 'claude'), undefined, 'socket names another pid')
+  assert.equal(await run(4242, '/tmp/cc-socks/4242.sock', 'bash -l'), undefined, 'not a claude')
+  assert.equal(await run(4242, undefined, undefined), undefined)
+  assert.equal(await run(undefined, undefined, 'claude'), undefined)
+  assert.equal(await verifiedOwnPid({ readPid: async () => { throw new Error('x') }, socket: undefined, processArgs: async () => 'claude' }), undefined)
 })
