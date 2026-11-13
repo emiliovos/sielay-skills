@@ -122,21 +122,40 @@ async function readProjectFile($, cwd) {
 const ADOPT_SETTLE_MS = 50
 
 /**
- * Whether a process still runs: kill(pid, 0) when the host lets us, else procfs;
- * when neither can tell, it counts as running (nothing is adopted on a guess).
+ * Whether a process still runs, by the same means as a `sock:` owner
+ * (socketOwnerAlive): its /proc entry. Without procfs nothing can tell, so it
+ * counts as running and nothing is adopted on a guess.
  * @param {Engine} $ @param {number} pid
  */
 async function pidRuns($, pid) {
-  if (typeof process !== 'undefined' && typeof process.kill === 'function') {
-    try {
-      process.kill(pid, 0)
-      return true
-    } catch (err) {
-      return /** @type {{ code?: string }} */ (err)?.code !== 'ESRCH'
-    }
+  try {
+    if (!(await $.fs.exists('/proc/self'))) return true
+    return await $.fs.exists(`/proc/${pid}`)
+  } catch {
+    return true
   }
-  if (await $.fs.exists('/proc/self')) return $.fs.exists(`/proc/${pid}`)
-  return true
+}
+
+/**
+ * This Claude Code's pid, read once per mod (the adapter runs `echo $PPID`
+ * through `$.process.run`, the only place the gate allows it). No adapter, a
+ * failure or a non-integer leaves the record without pid (the 24 h rule).
+ * @param {PayloadRuntime} rt
+ * @returns {Promise<number|undefined>}
+ */
+async function ownPid(rt) {
+  if (rt.ownPid === undefined) {
+    let pid = null
+    try {
+      const v = await rt.adapter?.ownPid?.()
+      if (typeof v === 'number' && Number.isSafeInteger(v) && v > 0) pid = v
+    } catch {
+      // stays without pid
+    }
+    if (pid === null && !rt.adapter) return undefined // not ready: try again later
+    rt.ownPid = pid
+  }
+  return rt.ownPid ?? undefined
 }
 
 /**
@@ -155,7 +174,7 @@ async function instanceIdFor($, rt, hash, name, sessionId, now) {
     now,
     ownerAlive: async (/** @type {string} */ owner) => (owner.startsWith('sock:') ? socketOwnerAlive(owner.slice(5), path => $.fs.exists(path)) : true),
   }
-  const pid = typeof process !== 'undefined' && typeof process.pid === 'number' ? process.pid : undefined
+  const pid = await ownPid(rt)
   const id = await claimInstanceId({ ...common, pid, newId: () => crypto.randomUUID() })
   // what an earlier id of this same (folder, name) left behind comes to this one; a failure retries at the next poll
   const adopt = rt.adopt
@@ -185,7 +204,7 @@ async function safePollBuild($, rt) {
 
 /**
  * @typedef {{ name: string, source: import('./link-session-name-resolution.js').NameSource, hash: string }} NamePin
- * @typedef {{ adapter: { tmuxSessionName: (env: string|undefined) => Promise<string|undefined> } | null, tmux: { name?: string, at: number }, namePin?: NamePin|null,
+ * @typedef {{ adapter: { tmuxSessionName: (env: string|undefined) => Promise<string|undefined>, ownPid?: () => Promise<number|undefined> } | null, ownPid?: number|null, tmux: { name?: string, at: number }, namePin?: NamePin|null,
  *   adopt?: ((fromId: string, toId: string) => Promise<void>) | null }
  *   & import('./link-build-hooks.js').BuildRuntime} PayloadRuntime
  */
