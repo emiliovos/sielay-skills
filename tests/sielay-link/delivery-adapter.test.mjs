@@ -108,3 +108,17 @@ test('tmux name only inside tmux, trimmed; hostname trimmed', async () => {
   assert.equal(await a.tmuxSessionName('/tmp/tmux-1/default,1,0'), 'api')
   assert.equal(await a.hostname(), 'box-1')
 })
+
+test('ownPid: a valid integer, else undefined for garbage, a failing exit or a throw', async () => {
+  const mk = answer => createDeliveryAdapter({ proc: fakeProc(answer), helperPath: HELPER, submitPrompt: async () => {} })
+  const ok = fakeProc(() => ({ exitCode: 0, stdout: '355278\n', stderr: '' }))
+  const a = createDeliveryAdapter({ proc: ok, helperPath: HELPER, submitPrompt: async () => {} })
+  assert.equal(await a.ownPid(), 355278)
+  assert.deepEqual(ok.calls[0].argv, ['sh', '-c', 'echo $PPID'])
+  assert.ok(ok.calls[0].init.timeoutMs <= 5_000)
+  for (const stdout of ['', 'abc\n', '0\n', '-5\n', '12 34\n', '1.5\n', '99999999999999\n']) {
+    assert.equal(await mk(() => ({ exitCode: 0, stdout, stderr: '' })).ownPid(), undefined, JSON.stringify(stdout))
+  }
+  assert.equal(await mk(() => ({ exitCode: 1, stdout: '42\n', stderr: '' })).ownPid(), undefined)
+  assert.equal(await mk(() => { throw new Error('boom') }).ownPid(), undefined)
+})
