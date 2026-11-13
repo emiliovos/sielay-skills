@@ -84,6 +84,39 @@ export function createInbox(store, now) {
     },
 
     /**
+     * Moves the unread messages of a dead instance's inbox to the live one
+     * (link-instance-identity.js adoptOrphans), through the same queue as add
+     * and take. Skips ids the live inbox has, keeps `at`, and empties the old key.
+     * @param {string} fromId @param {string} toId @returns {Promise<number>} how many unread were added
+     */
+    adopt(fromId, toId) {
+      return serial(async () => {
+        if (fromId === toId) return 0
+        const entries = await load(toId)
+        const have = new Set(entries.map(e => e.d.id))
+        const moved = (await load(fromId)).filter(e => !e.read && !have.has(e.d.id))
+        if (moved.length > 0) {
+          written.add(toId)
+          await save(toId, [...entries, ...moved].sort((x, y) => x.at - y.at))
+        }
+        await store.set(`inbox.${fromId}`, [])
+        return moved.length
+      })
+    },
+
+    /**
+     * How many unread messages `take(instanceId)` would give.
+     * @param {string} instanceId @returns {Promise<number>}
+     */
+    unreadCount(instanceId) {
+      return serial(async () => {
+        let n = 0
+        for (const id of new Set([instanceId, ...written])) n += (await load(id)).filter(e => !e.read).length
+        return n
+      })
+    },
+
+    /**
      * The unread messages (of one conversation, or all), marked read, from the
      * current instance id and every earlier one of this session. A
      * conversation with nothing unread gives its last message again.

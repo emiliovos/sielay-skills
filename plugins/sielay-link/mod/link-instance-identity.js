@@ -45,6 +45,14 @@ function readRecords(v) {
 }
 
 /**
+ * A record is free when its lease lapsed or its owner is gone.
+ * @param {InstanceRecord} r @param {number} now @param {(owner: string) => Promise<boolean>} ownerAlive @param {number} leaseMs
+ */
+async function isFree(r, now, ownerAlive, leaseMs) {
+  return now - r.renewed_at > leaseMs || !(await ownerAlive(r.owner))
+}
+
+/**
  * @param {{
  *   store: { get: (key: string) => Promise<unknown>, set: (key: string, value: unknown) => Promise<void> },
  *   key: string,
@@ -63,8 +71,7 @@ export async function claimInstanceId({ store, key, me, now, ownerAlive, newId, 
   let mine = records.find(r => r.owner === me)
   if (!mine) {
     for (const r of [...records].sort((a, b) => b.renewed_at - a.renewed_at)) {
-      const lapsed = now - r.renewed_at > leaseMs
-      if (lapsed || !(await ownerAlive(r.owner))) {
+      if (await isFree(r, now, ownerAlive, leaseMs)) {
         mine = r
         break
       }
@@ -104,4 +111,44 @@ export async function socketOwnerAlive(path, exists) {
     // procfs not readable here: keep the file's answer
     return true
   }
+}
+
+/**
+ * What a dead instance left in `held.<id>` and `inbox.<id>` goes to the live one.
+ * Without a messaging socket a /clear changes the owner (the session id) while
+ * the old record is still within its lease, so a new id is minted and the old
+ * one's mailboxes would be unreachable. Once an OTHER record of the same key is
+ * free (the rule of claimInstanceId), `adopt(from, to)` moves its mailboxes and
+ * the record leaves the list. A record whose move fails stays for the next
+ * poll and the error is thrown after the others were tried. Never touches
+ * another key, nor a record whose owner is alive and renewing.
+ * @param {{
+ *   store: { get: (key: string) => Promise<unknown>, set: (key: string, value: unknown) => Promise<void> },
+ *   key: string, mine: string, now: number,
+ *   ownerAlive: (owner: string) => Promise<boolean>,
+ *   adopt: (fromId: string, toId: string) => Promise<void>,
+ *   leaseMs?: number,
+ * }} input
+ * @returns {Promise<string[]>} the instance ids adopted
+ */
+export async function adoptOrphans({ store, key, mine, now, ownerAlive, adopt, leaseMs = INSTANCE_LEASE_MS }) {
+  const adopted = []
+  /** @type {unknown} */
+  let failure
+  for (const r of readRecords(await store.get(key))) {
+    if (r.instance_id === mine || !(await isFree(r, now, ownerAlive, leaseMs))) continue
+    try {
+      await adopt(r.instance_id, mine)
+      adopted.push(r.instance_id)
+    } catch (err) {
+      failure ??= err
+    }
+  }
+  if (adopted.length > 0) {
+    // read again: a claim may have written since the first read
+    const left = readRecords(await store.get(key)).filter(r => !adopted.includes(r.instance_id))
+    await store.set(key, left)
+  }
+  if (failure !== undefined) throw failure
+  return adopted
 }

@@ -113,6 +113,9 @@ export function createInboundHandler({ store, adapter, readMode, onStrip, onConv
   return {
     currentStrip,
 
+    /** A dead instance's held messages join this one's (link-instance-identity.js adoptOrphans). @param {string} fromId @param {string} toId */
+    adoptHeld: (fromId, toId) => held.adopt(fromId, toId),
+
     /** The session's main turn started: what was held goes in with it. */
     async onTurnStart() {
       if (lastInstance !== undefined) await held.flush(lastInstance)

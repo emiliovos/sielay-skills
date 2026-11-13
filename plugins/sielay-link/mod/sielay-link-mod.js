@@ -10,7 +10,7 @@ import { toolSpecsFor } from './link-tool-specs.js'
 import { reportState } from './link-build-tool.js'
 import { runLinkCommand } from './link-commands.js'
 import { PROMPT_FALLBACK_CONTEXT } from './link-inbound-framing.js'
-import { discoveryFor } from './link-discovery-context.js'
+import { discoveryFor, unreadLine } from './link-discovery-context.js'
 import { endOnClose } from './link-session-end.js'
 import { carryModeOnClear, restoreModeCarry } from './link-mode-carry.js'
 import { renderBand } from './link-band.jsx'
@@ -171,6 +171,7 @@ export function register(on, options) {
   // /clear keeps the build and the last mode seen (the rest of the session state is the host's).
   on('session.end', async ($, e, next) => {
     rt.discoveryAnnounced = false
+    rt.unreadNoticeDue = true
     await carryOnClear($, rt, e)
     await carryModeOnClear($, rt, e)
     await endOnClose($, rt, e, () => isOff($))
@@ -190,20 +191,33 @@ export function register(on, options) {
   on('prompt.submit', async ($, e, next) => {
     const ownPrompt = e.origin?.kind === 'plugin' && e.origin.name === $.plugin.name
     if (ownPrompt) return next({ ...e, context: [...(e.context ?? []), PROMPT_FALLBACK_CONTEXT] })
-    if (rt.discoveryAnnounced) return next(e)
-    const text = discoveryFor({
-      announced: rt.discoveryAnnounced,
-      connected: rt.client !== null,
-      off: await isOff($),
-      minimal: await isMinimal($),
-      ownPrompt,
-      command: e.command !== undefined,
-      address: (await $.state.get(STATUS)).value?.address,
-      addressPrefix: rt.addressPrefix,
-    })
-    if (text === null) return next(e)
-    const entered = await next({ ...e, context: [...(e.context ?? []), text] })
-    if (entered.drop === undefined) rt.discoveryAnnounced = true
+    if (e.command !== undefined) return next(e)
+    const lines = []
+    if (!rt.discoveryAnnounced) {
+      const text = discoveryFor({
+        announced: rt.discoveryAnnounced,
+        connected: rt.client !== null,
+        off: await isOff($),
+        minimal: await isMinimal($),
+        ownPrompt,
+        command: false,
+        address: (await $.state.get(STATUS)).value?.address,
+        addressPrefix: rt.addressPrefix,
+      })
+      if (text !== null) lines.push(text)
+    }
+    // Unread messages at start or after /clear (also what an earlier instance_id left): once, until an adoption brings more.
+    const wasDue = rt.unreadNoticeDue
+    if (wasDue && rt.inbox && rt.client !== null && !(await isOff($)) && !(await isMinimal($))) {
+      rt.unreadNoticeDue = false
+      const line = unreadLine(await rt.inbox.unreadCount((await sessionPayload($, rt)).instance_id))
+      if (line !== null) lines.push(line)
+    }
+    if (lines.length === 0) return next(e)
+    const entered = await next({ ...e, context: [...(e.context ?? []), ...lines] })
+    if (entered.drop === undefined) {
+      if (!rt.discoveryAnnounced && lines.some(l => l.startsWith('[sielay-link]'))) rt.discoveryAnnounced = true
+    } else if (wasDue) rt.unreadNoticeDue = true // the prompt did not enter: the next one tries again
     return entered
   }).catch(passThrough)
 

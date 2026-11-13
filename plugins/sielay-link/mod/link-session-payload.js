@@ -5,7 +5,7 @@
 
 import { modeState } from './link-mode-freshness.js'
 import { resolveSessionName, cwdHash } from './link-session-name-resolution.js'
-import { claimInstanceId, instanceKey, socketOwnerAlive } from './link-instance-identity.js'
+import { adoptOrphans, claimInstanceId, instanceKey, socketOwnerAlive } from './link-instance-identity.js'
 import { pollBuildFields } from './link-build-hooks.js'
 import { sessionRepo } from './link-session-repo.js'
 import { restoreModeCarry } from './link-mode-carry.js'
@@ -124,18 +124,28 @@ async function readProjectFile($, cwd) {
  * restarts, distinct for a second terminal live in the same folder (see
  * link-instance-identity.js). The owner is this Claude Code process's
  * messaging socket, alive while the PID in its name runs.
- * @param {Engine} $ @param {string} hash @param {string} name @param {string} sessionId @param {number} now
+ * @param {Engine} $ @param {PayloadRuntime} rt @param {string} hash @param {string} name @param {string} sessionId @param {number} now
  */
-async function instanceIdFor($, hash, name, sessionId, now) {
+async function instanceIdFor($, rt, hash, name, sessionId, now) {
   const socket = await $.env.get('CLAUDE_CODE_MESSAGING_SOCKET')
-  return claimInstanceId({
-    store: { get: key => $.store.get(key), set: (key, value) => $.store.set(key, value) },
+  const common = {
+    store: { get: (/** @type {string} */ key) => $.store.get(key), set: (/** @type {string} */ key, /** @type {unknown} */ value) => $.store.set(key, value) },
     key: instanceKey(hash, name),
     me: socket ? `sock:${socket}` : `sess:${sessionId}`,
     now,
-    ownerAlive: async owner => (owner.startsWith('sock:') ? socketOwnerAlive(owner.slice(5), path => $.fs.exists(path)) : true),
-    newId: () => crypto.randomUUID(),
-  })
+    ownerAlive: async (/** @type {string} */ owner) => (owner.startsWith('sock:') ? socketOwnerAlive(owner.slice(5), path => $.fs.exists(path)) : true),
+  }
+  const id = await claimInstanceId({ ...common, newId: () => crypto.randomUUID() })
+  // what an earlier id of this same (folder, name) left behind comes to this one; a failure retries at the next poll
+  const adopt = rt.adopt
+  if (adopt) {
+    try {
+      await adoptOrphans({ store: common.store, key: common.key, mine: id, now, ownerAlive: common.ownerAlive, adopt: (from, to) => adopt(from, to) })
+    } catch (err) {
+      $.ui.log(`sielay-link: no se pudo recoger lo pendiente de una sesión anterior (${err instanceof Error ? err.name : typeof err})`)
+    }
+  }
+  return id
 }
 
 /**
@@ -154,7 +164,8 @@ async function safePollBuild($, rt) {
 
 /**
  * @typedef {{ name: string, source: import('./link-session-name-resolution.js').NameSource, hash: string }} NamePin
- * @typedef {{ adapter: { tmuxSessionName: (env: string|undefined) => Promise<string|undefined> } | null, tmux: { name?: string, at: number }, namePin?: NamePin|null }
+ * @typedef {{ adapter: { tmuxSessionName: (env: string|undefined) => Promise<string|undefined> } | null, tmux: { name?: string, at: number }, namePin?: NamePin|null,
+ *   adopt?: ((fromId: string, toId: string) => Promise<void>) | null }
  *   & import('./link-build-hooks.js').BuildRuntime} PayloadRuntime
  */
 
@@ -205,7 +216,7 @@ export async function buildSessionPayload($, rt, { withBuild = false } = {}) {
   })
   const resolved = pinName(rt, { ...fresh, hash: liveHash }, Boolean(tmuxEnv) && !rt.tmux.name)
   const hash = resolved.hash
-  const instanceId = await instanceIdFor($, hash, resolved.name, sessionId, now)
+  const instanceId = await instanceIdFor($, rt, hash, resolved.name, sessionId, now)
   const buildFields = withBuild ? await safePollBuild($, rt) : {}
   return {
     session: {

@@ -77,3 +77,12 @@ export async function ownAddress({ address, addressPrefix, sessionName }) {
   const composed = `${addressPrefix}/${await sessionName()}`
   return isAddress(composed) ? composed : null
 }
+
+/**
+ * The line a session gets at start (or after /clear) when messages wait in its inbox.
+ * @param {number} count the unread messages @returns {string|null}
+ */
+export function unreadLine(count) {
+  if (!Number.isInteger(count) || count < 1) return null
+  return `📨 ${count} ${count === 1 ? 'mensaje sin leer' : 'mensajes sin leer'}: llama link_read`
+}
