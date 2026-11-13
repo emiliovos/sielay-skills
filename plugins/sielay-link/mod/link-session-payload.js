@@ -119,6 +119,26 @@ async function readProjectFile($, cwd) {
   }
 }
 
+const ADOPT_SETTLE_MS = 50
+
+/**
+ * Whether a process still runs: kill(pid, 0) when the host lets us, else procfs;
+ * when neither can tell, it counts as running (nothing is adopted on a guess).
+ * @param {Engine} $ @param {number} pid
+ */
+async function pidRuns($, pid) {
+  if (typeof process !== 'undefined' && typeof process.kill === 'function') {
+    try {
+      process.kill(pid, 0)
+      return true
+    } catch (err) {
+      return /** @type {{ code?: string }} */ (err)?.code !== 'ESRCH'
+    }
+  }
+  if (await $.fs.exists('/proc/self')) return $.fs.exists(`/proc/${pid}`)
+  return true
+}
+
 /**
  * The instance_id for (cwd, name): reused across reloads, /clear, --resume and
  * restarts, distinct for a second terminal live in the same folder (see
@@ -135,12 +155,13 @@ async function instanceIdFor($, rt, hash, name, sessionId, now) {
     now,
     ownerAlive: async (/** @type {string} */ owner) => (owner.startsWith('sock:') ? socketOwnerAlive(owner.slice(5), path => $.fs.exists(path)) : true),
   }
-  const id = await claimInstanceId({ ...common, newId: () => crypto.randomUUID() })
+  const pid = typeof process !== 'undefined' && typeof process.pid === 'number' ? process.pid : undefined
+  const id = await claimInstanceId({ ...common, pid, newId: () => crypto.randomUUID() })
   // what an earlier id of this same (folder, name) left behind comes to this one; a failure retries at the next poll
   const adopt = rt.adopt
   if (adopt) {
     try {
-      await adoptOrphans({ store: common.store, key: common.key, mine: id, now, ownerAlive: common.ownerAlive, adopt: (from, to) => adopt(from, to) })
+      await adoptOrphans({ store: common.store, key: common.key, mine: id, now, ownerAlive: common.ownerAlive, adopt: (from, to) => adopt(from, to), pid, pidAlive: p => pidRuns($, p), settle: () => new Promise(res => void $.clock.after(ADOPT_SETTLE_MS, () => res())) })
     } catch (err) {
       $.ui.log(`sielay-link: no se pudo recoger lo pendiente de una sesión anterior (${err instanceof Error ? err.name : typeof err})`)
     }

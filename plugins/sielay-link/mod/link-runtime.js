@@ -223,7 +223,8 @@ export async function startLink($, rt) {
   rt.adopt = async (fromId, toId) => {
     const inbox = rt.inbox
     const handler = rt.handler
-    if (!inbox || !handler) return
+    // not ready: throw so adoptOrphans keeps the record and the mailboxes for the next poll
+    if (!inbox || !handler) throw new Error('inbox not ready')
     if ((await inbox.adopt(fromId, toId)) > 0) rt.unreadNoticeDue = true
     await handler.adoptHeld(fromId, toId)
   }

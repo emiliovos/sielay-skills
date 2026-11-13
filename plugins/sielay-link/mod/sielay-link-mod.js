@@ -209,8 +209,10 @@ export function register(on, options) {
     // Unread messages at start or after /clear (also what an earlier instance_id left): once, until an adoption brings more.
     const wasDue = rt.unreadNoticeDue
     if (wasDue && rt.inbox && rt.client !== null && !(await isOff($)) && !(await isMinimal($))) {
+      // payload first: it runs the adoption, which may raise the flag again
+      const instanceId = (await sessionPayload($, rt)).instance_id
       rt.unreadNoticeDue = false
-      const line = unreadLine(await rt.inbox.unreadCount((await sessionPayload($, rt)).instance_id))
+      const line = unreadLine(await rt.inbox.unreadCount(instanceId))
       if (line !== null) lines.push(line)
     }
     if (lines.length === 0) return next(e)
