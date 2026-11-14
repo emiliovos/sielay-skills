@@ -10,22 +10,22 @@
 // of { instance_id, owner, renewed_at }. `owner` names the live Claude Code
 // process: its messaging socket path when it has one (the same across reloads
 // and /clear, different per terminal, gone when the process exits), else the
-// session id. A record is this session's when the owner is us; it is free when
-// its owner is no longer alive (socketOwnerAlive: the socket file outlives its
-// process, so the PID in its name is what tells) or stopped renewing for
-// INSTANCE_LEASE_MS. A new
-// id is minted only while every record is held by another live process.
+// session id. A record is this session's when the owner is us; another owner's
+// record is taken (its id claimed, its mailboxes adopted) only on positive
+// proof that the owner is dead (ownerDead). A lapsed lease alone is no proof:
+// it also happens to a live terminal (`/link off` stops renewing, a suspend
+// lasts longer than the lease), and taking its id would hand this session the
+// hub row, the unread and the held messages of a terminal that still runs.
+// A new id is minted while no record is ours or provably dead.
 // Two processes claiming at the same instant may race; the next poll settles it.
 //
-// Adopting a record's mailboxes is stricter than claiming its id: it needs
-// positive proof that the owner is dead, because a lapsed lease alone also
-// happens to a live terminal (`/link off` stops renewing, a suspend lasts
-// longer than the lease) and its unread and held messages must stay put.
-// A `sock:` owner is dead when its process is gone (the lease is ignored). A
+// A `sock:` owner is dead when its process is gone (socketOwnerAlive: the
+// socket file outlives its process, so the PID in its name is what tells). A
 // `sess:` owner is dead when the `pid` stored in the record no longer runs, or
-// is our own pid (a /clear inside the same process). A record written before
-// `pid` existed has no proof, so it is adopted only after STALE_NO_PID_MS
-// without renewal (a day: any live terminal that merely paused is long back).
+// is our own pid (a /clear inside the same process). Where liveness cannot be
+// told (a record written before `pid` existed, or a socket on a machine
+// without procfs) the record is taken only after STALE_NO_PID_MS without
+// renewal (a day: any live terminal that merely paused is long back).
 
 import { pidFromSocket } from './link-launch-mode.js'
 
@@ -60,14 +60,6 @@ function readRecords(v) {
 }
 
 /**
- * A record is free when its lease lapsed or its owner is gone.
- * @param {InstanceRecord} r @param {number} now @param {(owner: string) => Promise<boolean>} ownerAlive @param {number} leaseMs
- */
-async function isFree(r, now, ownerAlive, leaseMs) {
-  return now - r.renewed_at > leaseMs || !(await ownerAlive(r.owner))
-}
-
-/**
  * @param {{
  *   store: { get: (key: string) => Promise<unknown>, set: (key: string, value: unknown) => Promise<void> },
  *   key: string,
@@ -75,19 +67,19 @@ async function isFree(r, now, ownerAlive, leaseMs) {
  *   now: number,
  *   ownerAlive: (owner: string) => Promise<boolean>,
  *   newId: () => string,
- *   leaseMs?: number,
  *   pid?: number,
+ *   pidAlive?: (pid: number) => Promise<boolean>,
  * }} input
  * @returns {Promise<string>}
  */
-export async function claimInstanceId({ store, key, me, now, ownerAlive, newId, leaseMs = INSTANCE_LEASE_MS, pid }) {
+export async function claimInstanceId({ store, key, me, now, ownerAlive, newId, pid, pidAlive = async () => true }) {
   const records = readRecords(await store.get(key))
 
   /** @type {InstanceRecord|undefined} */
   let mine = records.find(r => r.owner === me)
   if (!mine) {
     for (const r of [...records].sort((a, b) => b.renewed_at - a.renewed_at)) {
-      if (await isFree(r, now, ownerAlive, leaseMs)) {
+      if (await ownerDead(r, now, ownerAlive, pid, pidAlive)) {
         mine = r
         break
       }
@@ -139,7 +131,8 @@ export async function socketOwnerAlive(path, exists) {
  * @param {number|undefined} myPid @param {(pid: number) => Promise<boolean>} pidAlive
  */
 async function ownerDead(r, now, ownerAlive, myPid, pidAlive) {
-  if (r.owner.startsWith('sock:')) return !(await ownerAlive(r.owner))
+  // without procfs a socket file left by a crash reads as alive: the day-long silence settles it
+  if (r.owner.startsWith('sock:')) return !(await ownerAlive(r.owner)) || now - r.renewed_at > STALE_NO_PID_MS
   if (typeof r.pid === 'number') return r.pid === myPid || !(await pidAlive(r.pid))
   return now - r.renewed_at > STALE_NO_PID_MS
 }

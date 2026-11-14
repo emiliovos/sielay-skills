@@ -170,7 +170,7 @@ async function instanceIdFor($, rt, hash, name, sessionId, now) {
     ownerAlive: async (/** @type {string} */ owner) => (owner.startsWith('sock:') ? socketOwnerAlive(owner.slice(5), path => $.fs.exists(path)) : true),
   }
   const pid = await ownPid($, rt)
-  const id = await claimInstanceId({ ...common, pid, newId: () => crypto.randomUUID() })
+  const id = await claimInstanceId({ ...common, pid, pidAlive: p => pidRuns($, p), newId: () => crypto.randomUUID() })
   // what an earlier id of this same (folder, name) left behind comes to this one; a failure retries at the next poll
   const adopt = rt.adopt
   if (adopt) {

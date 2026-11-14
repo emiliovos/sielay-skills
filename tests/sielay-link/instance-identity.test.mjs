@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { claimInstanceId, instanceKey, socketOwnerAlive, INSTANCE_LEASE_MS, MAX_RECORDS } from '../../plugins/sielay-link/mod/link-instance-identity.js'
+import { claimInstanceId, instanceKey, socketOwnerAlive, INSTANCE_LEASE_MS, MAX_RECORDS, STALE_NO_PID_MS } from '../../plugins/sielay-link/mod/link-instance-identity.js'
 
 function memStore() {
   const m = new Map()
@@ -52,14 +52,47 @@ test('two live terminals in the same folder get distinct ids, each stable on its
   assert.equal(w.store.m.get('instance.hash-a.api').length, 2)
 })
 
-test('a holder that stopped renewing past the lease is taken over (crash left its socket behind)', async () => {
+test('a live holder that stopped renewing past the lease keeps its id (/link off, a suspend)', async () => {
   const w = world()
   w.alive.add('sock:A')
   w.alive.add('sock:B')
   const a = await w.claim('sock:A', 0)
-  assert.notEqual(await w.claim('sock:B', INSTANCE_LEASE_MS - 1), a, 'still leased: not taken')
+  const b = await w.claim('sock:B', INSTANCE_LEASE_MS * 10)
+  assert.notEqual(b, a, 'lease lapsed but A still runs: never taken')
+  assert.equal(await w.claim('sock:A', INSTANCE_LEASE_MS * 11), a, 'A comes back to its own id')
+})
+
+test('a holder whose process is gone is taken over (crash left its socket behind)', async () => {
+  const w = world()
+  w.alive.add('sock:A')
+  const a = await w.claim('sock:A', 0)
+  w.alive.delete('sock:A')
+  w.alive.add('sock:B')
+  assert.equal(await w.claim('sock:B', 5_000), a)
+})
+
+test('a socket whose liveness cannot be told (no procfs) is taken only after a day of silence', async () => {
+  const w = world()
+  w.alive.add('sock:A') // the file stays and nothing says its process died
+  w.alive.add('sock:B')
+  const a = await w.claim('sock:A', 0)
+  assert.notEqual(await w.claim('sock:B', STALE_NO_PID_MS - 1), a)
   w.store.m.set('instance.hash-a.api', [{ instance_id: a, owner: 'sock:A', renewed_at: 0 }])
-  assert.equal(await w.claim('sock:B', INSTANCE_LEASE_MS + 1), a, 'lease lapsed: taken over')
+  assert.equal(await w.claim('sock:B', STALE_NO_PID_MS + 1), a)
+})
+
+test('without a socket, a /clear in the same process keeps the id; another live process does not take it', async () => {
+  const w = world()
+  const pids = new Set([100, 200])
+  const claim = (me, now, pid) => claimInstanceId({
+    store: w.store, key: instanceKey('hash-a', 'api'), me, now, ownerAlive: async () => true,
+    newId: () => `sess-${me}`, pid, pidAlive: async p => pids.has(p),
+  })
+  const first = await claim('sess:S1', 0, 100)
+  assert.equal(await claim('sess:S2', 1_000, 100), first, '/clear: new session id, same pid')
+  assert.notEqual(await claim('sess:T1', INSTANCE_LEASE_MS * 10, 200), first, 'a live terminal with a lapsed lease keeps it')
+  pids.delete(100)
+  assert.equal(await claim('sess:U1', INSTANCE_LEASE_MS * 11, 300), first, 'its pid died: taken over')
 })
 
 test('a third terminal while two are live mints a third id; the list stays bounded', async () => {

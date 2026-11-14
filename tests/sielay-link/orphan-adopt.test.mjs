@@ -56,7 +56,7 @@ test('(a) a second live terminal inside the lease mints another id, and nothing 
   assert.deepEqual(await w.store.get(`inbox.${before.id}`).then(v => v.map(e => e.d.id)), ['m1'])
 })
 
-test('(a) a /clear in the same process (same pid, new session id) adopts at once', async () => {
+test('(a) a /clear in the same process (same pid, new session id) reuses the dead id and keeps its mail', async () => {
   const w = machine()
   const p = w.proc(101)
   const before = await p.poll('sess:A')
@@ -64,13 +64,14 @@ test('(a) a /clear in the same process (same pid, new session id) adopts at once
   await p.held.add(before.id, msg('h1'))
   w.clock += 10_000
   const after = await p.poll('sess:B')
-  assert.notEqual(after.id, before.id)
-  assert.deepEqual(after.adopted, [before.id])
+  assert.equal(after.id, before.id, 'the own pid on the record is proof of death: the id is reused')
+  assert.deepEqual(after.adopted, [], 'nothing to move: the mail is already under this id')
   assert.deepEqual((await p.inbox.take(after.id)).map(d => d.id), ['m1'])
   assert.deepEqual((await w.readHeld(after.id)).map(h => h.delivery.id), ['h1'])
+  assert.equal((await w.store.get(instanceKey('h', 'api'))).length, 1)
 })
 
-test('(b) when the old process is gone, the unread and the held of the old id reach the new one, once', async () => {
+test('(b) when the old process is gone, the new one reuses its id and reaches the unread and the held, once', async () => {
   const w = machine()
   const p1 = w.proc(101)
   const old = await p1.poll('sess:A')
@@ -83,16 +84,58 @@ test('(b) when the old process is gone, the unread and the held of the old id re
   w.clock += 10_000
   const p2 = w.proc(102)
   const again = await p2.poll('sess:B')
-  assert.deepEqual(again.adopted, [old.id])
-  assert.deepEqual((await p2.inbox.take(again.id)).map(d => d.id), ['m3'], 'only the unread moved, read ones stay behind')
+  assert.equal(again.id, old.id)
+  assert.deepEqual(again.adopted, [])
+  assert.deepEqual((await p2.inbox.take(again.id)).map(d => d.id), ['m3'], 'only the unread is reachable, read ones stay behind')
   assert.deepEqual((await w.readHeld(again.id)).map(h => h.delivery.id), ['h1'])
-  assert.deepEqual(await w.store.get(`held.${old.id}`), [])
-  assert.deepEqual(await w.store.get(`inbox.${old.id}`), [])
-  assert.deepEqual((await w.store.get(instanceKey('h', 'api'))).map(r => r.instance_id), [again.id], 'the record is gone from the list')
+  assert.deepEqual((await w.store.get(instanceKey('h', 'api'))).map(r => r.instance_id), [again.id])
   // a second poll adopts nothing more and duplicates nothing
   assert.deepEqual((await p2.poll('sess:B')).adopted, [])
   assert.deepEqual((await w.readHeld(again.id)).map(h => h.delivery.id), ['h1'])
 })
+
+/**
+ * `n` terminals alive at once in the same folder (each mints its own id, oldest
+ * first), then all of them die. Returns their ids, oldest first.
+ */
+async function deadTerminals(w, n) {
+  const procs = Array.from({ length: n }, (_, i) => w.proc(101 + i))
+  const ids = []
+  for (const [i, p] of procs.entries()) {
+    ids.push((await p.poll(`sess:${i}`)).id)
+    w.clock += 10_000
+  }
+  assert.equal(new Set(ids).size, n, 'live terminals get distinct ids')
+  for (const p of procs) w.alive.delete(p.pid)
+  return { procs, ids }
+}
+
+test('(b) with several dead records the claim takes the newest and the others are adopted, once', async () => {
+  const w = machine()
+  const { procs, ids } = await deadTerminals(w, 3)
+  const [old1, old2, newest] = ids
+  await procs[0].inbox.add(old1, msg('m1'))
+  await procs[0].inbox.add(old1, msg('m1r'))
+  assert.equal((await procs[0].inbox.take(old1, 'c')).length, 2) // read: stays behind
+  await procs[0].inbox.add(old1, msg('m1u', 'd'))
+  await procs[0].held.add(old1, msg('h1'))
+  await procs[1].inbox.add(old2, msg('m2'))
+  await procs[2].inbox.add(newest, msg('m3'))
+  const p = w.proc(200)
+  const again = await p.poll('sess:N')
+  assert.equal(again.id, newest, 'the most recent dead record is claimed')
+  assert.deepEqual(again.adopted.sort(), [old1, old2].sort())
+  assert.deepEqual((await p.inbox.take(again.id)).map(d => d.id).sort(), ['m1u', 'm2', 'm3'])
+  assert.deepEqual((await w.readHeld(again.id)).map(h => h.delivery.id), ['h1'])
+  for (const id of [old1, old2]) {
+    assert.deepEqual((await w.store.get(`inbox.${id}`)) ?? [], [])
+    assert.deepEqual((await w.store.get(`held.${id}`)) ?? [], [])
+  }
+  assert.deepEqual((await w.store.get(instanceKey('h', 'api'))).map(r => r.instance_id), [again.id], 'the records are gone from the list')
+  assert.deepEqual((await p.poll('sess:N')).adopted, [])
+  assert.deepEqual((await w.readHeld(again.id)).map(h => h.delivery.id), ['h1'])
+})
+
 
 test('(b) a message already in the new id is not duplicated and keeps its time', async () => {
   const w = machine()
@@ -152,14 +195,13 @@ test('(c) a live sock: owner with a lapsed lease keeps its mailboxes; a dead one
 
 test('(c) a sess: owner whose pid died is adopted, even inside the lease', async () => {
   const w = machine()
-  const p1 = w.proc(101)
-  const old = await p1.poll('sess:A')
-  await p1.inbox.add(old.id, msg('m1'))
-  w.alive.delete(101)
-  const p2 = w.proc(102)
-  const fresh = await p2.poll('sess:B')
-  assert.deepEqual(fresh.adopted, [old.id])
-  assert.deepEqual((await p2.inbox.take(fresh.id)).map(d => d.id), ['m1'])
+  const { procs, ids } = await deadTerminals(w, 2)
+  await procs[0].inbox.add(ids[0], msg('m1'))
+  const p = w.proc(200)
+  const fresh = await p.poll('sess:N')
+  assert.equal(fresh.id, ids[1])
+  assert.deepEqual(fresh.adopted, [ids[0]])
+  assert.deepEqual((await p.inbox.take(fresh.id)).map(d => d.id), ['m1'])
 })
 
 test('(c) a record without a pid is adopted only after a day without renewal', async () => {
@@ -180,25 +222,24 @@ test('(c) a record without a pid is adopted only after a day without renewal', a
 
 test('(c) two processes adopting the same dead id at once do not duplicate its messages', async () => {
   const w = machine()
-  const p1 = w.proc(101)
-  const old = await p1.poll('sess:A')
-  await p1.inbox.add(old.id, msg('m1'))
-  await p1.held.add(old.id, msg('h1'))
-  w.alive.delete(101)
-  const [p2, p3] = [w.proc(102), w.proc(103)]
+  const { procs, ids } = await deadTerminals(w, 3)
+  await procs[0].inbox.add(ids[0], msg('m1'))
+  await procs[0].held.add(ids[0], msg('h1'))
+  const [p2, p3] = [w.proc(202), w.proc(203)]
   const settle = () => new Promise(r => setTimeout(r, 10))
-  const ids = []
+  const claimed = []
   for (const [p, me] of [[p2, 'sess:B'], [p3, 'sess:C']]) {
-    ids.push(await claimInstanceId({ ...p.common(), me, newId: () => `inst-${(w.n += 1)}` }))
+    claimed.push(await claimInstanceId({ ...p.common(), me, newId: () => `inst-${(w.n += 1)}` }))
   }
+  assert.deepEqual(claimed, [ids[2], ids[1]], 'each claim takes a different dead record; the oldest stays for adoption')
   const run = (p, id) => adoptOrphans({ ...p.common(), mine: id, settle, adopt: async (from, to) => {
     await p.inbox.adopt(from, to)
     await p.held.adopt(from, to)
   } })
-  const results = await Promise.all([run(p2, ids[0]), run(p3, ids[1])])
-  assert.equal(results.flat().length, 1, 'exactly one process adopted')
-  const unread = (await Promise.all(ids.map(id => w.store.get(`inbox.${id}`)))).flatMap(v => v ?? [])
-  const held = (await Promise.all(ids.map(id => w.readHeld(id)))).flat()
+  const results = await Promise.all([run(p2, claimed[0]), run(p3, claimed[1])])
+  assert.deepEqual(results.flat(), [ids[0]], 'exactly one process adopted')
+  const unread = (await Promise.all(claimed.map(id => w.store.get(`inbox.${id}`)))).flatMap(v => v ?? [])
+  const held = (await Promise.all(claimed.map(id => w.readHeld(id)))).flat()
   assert.deepEqual(unread.map(e => e.d.id), ['m1'])
   assert.deepEqual(held.map(h => h.delivery.id), ['h1'])
 })
