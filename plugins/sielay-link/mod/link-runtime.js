@@ -225,6 +225,8 @@ export async function startLink($, rt) {
     const handler = rt.handler
     // not ready: throw so adoptOrphans keeps the record and the mailboxes for the next poll
     if (!inbox || !handler) throw new Error('inbox not ready')
+    // the dedupe first: a redelivery between two of these steps must not run twice
+    await handler.adoptSeen(fromId, toId)
     if ((await inbox.adopt(fromId, toId)) > 0) rt.unreadNoticeDue = true
     await handler.adoptHeld(fromId, toId)
   }
