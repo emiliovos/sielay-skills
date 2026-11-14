@@ -63,7 +63,7 @@ export function createInboundHandler({ store, adapter, readMode, onStrip, onConv
   const arrival = new Map()
   let arrivals = 0
 
-  const { readSeen, remember, readPending, updatePending, readHeld, writeHeld } = createInboundStore(store)
+  const { readSeen, remember, adoptSeen, adoptPending, readPending, updatePending, readHeld, writeHeld } = createInboundStore(store)
 
   /** The instance of the last poll: a turn starting has no other way to know it. */
   /** @type {string|undefined} */
@@ -112,6 +112,15 @@ export function createInboundHandler({ store, adapter, readMode, onStrip, onConv
 
   return {
     currentStrip,
+
+    /** A dead instance's held messages join this one's (link-instance-identity.js adoptOrphans). @param {string} fromId @param {string} toId */
+    adoptHeld: (fromId, toId) => held.adopt(fromId, toId),
+
+    /** A dead instance's dedupe joins this one's, so its unacked injections are not injected again. @param {string} fromId @param {string} toId */
+    adoptSeen: (fromId, toId) => adoptSeen(fromId, toId),
+
+    /** A dead instance's accepted-but-undelivered messages are retried by this one. @param {string} fromId @param {string} toId */
+    adoptPending: (fromId, toId) => adoptPending(fromId, toId),
 
     /** The session's main turn started: what was held goes in with it. */
     async onTurnStart() {

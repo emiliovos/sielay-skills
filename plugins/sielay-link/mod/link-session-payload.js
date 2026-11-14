@@ -5,7 +5,7 @@
 
 import { modeState } from './link-mode-freshness.js'
 import { resolveSessionName, cwdHash } from './link-session-name-resolution.js'
-import { claimInstanceId, instanceKey, socketOwnerAlive } from './link-instance-identity.js'
+import { adoptOrphans, claimInstanceId, instanceKey, socketOwnerAlive, verifiedOwnPid } from './link-instance-identity.js'
 import { pollBuildFields } from './link-build-hooks.js'
 import { sessionRepo } from './link-session-repo.js'
 import { restoreModeCarry } from './link-mode-carry.js'
@@ -119,23 +119,68 @@ async function readProjectFile($, cwd) {
   }
 }
 
+const ADOPT_SETTLE_MS = 50
+
+/**
+ * Whether a process still runs, by the same means as a `sock:` owner
+ * (socketOwnerAlive): its /proc entry. Without procfs nothing can tell, so it
+ * counts as running and nothing is adopted on a guess.
+ * @param {Engine} $ @param {number} pid
+ */
+async function pidRuns($, pid) {
+  try {
+    if (!(await $.fs.exists('/proc/self'))) return true
+    return await $.fs.exists(`/proc/${pid}`)
+  } catch {
+    return true
+  }
+}
+
+/**
+ * This Claude Code's pid, read once per mod (the adapter runs `echo $PPID`
+ * through `$.process.run`, the only place the gate allows it). No adapter, a
+ * failure or a non-integer leaves the record without pid (the 24 h rule).
+ * @param {Engine} $ @param {PayloadRuntime} rt
+ * @returns {Promise<number|undefined>}
+ */
+async function ownPid($, rt) {
+  if (rt.ownPid === undefined) {
+    const adapter = rt.adapter
+    if (!adapter?.ownPid || !adapter.processArgs) return undefined // not ready: try again later
+    const socket = await $.env.get('CLAUDE_CODE_MESSAGING_SOCKET')
+    rt.ownPid = (await verifiedOwnPid({ readPid: () => adapter.ownPid(), socket, processArgs: p => adapter.processArgs(p) })) ?? null
+  }
+  return rt.ownPid ?? undefined
+}
+
 /**
  * The instance_id for (cwd, name): reused across reloads, /clear, --resume and
  * restarts, distinct for a second terminal live in the same folder (see
  * link-instance-identity.js). The owner is this Claude Code process's
  * messaging socket, alive while the PID in its name runs.
- * @param {Engine} $ @param {string} hash @param {string} name @param {string} sessionId @param {number} now
+ * @param {Engine} $ @param {PayloadRuntime} rt @param {string} hash @param {string} name @param {string} sessionId @param {number} now
  */
-async function instanceIdFor($, hash, name, sessionId, now) {
+async function instanceIdFor($, rt, hash, name, sessionId, now) {
   const socket = await $.env.get('CLAUDE_CODE_MESSAGING_SOCKET')
-  return claimInstanceId({
-    store: { get: key => $.store.get(key), set: (key, value) => $.store.set(key, value) },
+  const common = {
+    store: { get: (/** @type {string} */ key) => $.store.get(key), set: (/** @type {string} */ key, /** @type {unknown} */ value) => $.store.set(key, value) },
     key: instanceKey(hash, name),
     me: socket ? `sock:${socket}` : `sess:${sessionId}`,
     now,
-    ownerAlive: async owner => (owner.startsWith('sock:') ? socketOwnerAlive(owner.slice(5), path => $.fs.exists(path)) : true),
-    newId: () => crypto.randomUUID(),
-  })
+    ownerAlive: async (/** @type {string} */ owner) => (owner.startsWith('sock:') ? socketOwnerAlive(owner.slice(5), path => $.fs.exists(path)) : true),
+  }
+  const pid = await ownPid($, rt)
+  const id = await claimInstanceId({ ...common, pid, newId: () => crypto.randomUUID() })
+  // what an earlier id of this same (folder, name) left behind comes to this one; a failure retries at the next poll
+  const adopt = rt.adopt
+  if (adopt) {
+    try {
+      await adoptOrphans({ store: common.store, key: common.key, mine: id, now, ownerAlive: common.ownerAlive, adopt: (from, to) => adopt(from, to), pid, pidAlive: p => pidRuns($, p), settle: () => new Promise(res => void $.clock.after(ADOPT_SETTLE_MS, () => res())) })
+    } catch (err) {
+      $.ui.log(`sielay-link: no se pudo recoger lo pendiente de una sesión anterior (${err instanceof Error ? err.name : typeof err})`)
+    }
+  }
+  return id
 }
 
 /**
@@ -154,7 +199,8 @@ async function safePollBuild($, rt) {
 
 /**
  * @typedef {{ name: string, source: import('./link-session-name-resolution.js').NameSource, hash: string }} NamePin
- * @typedef {{ adapter: { tmuxSessionName: (env: string|undefined) => Promise<string|undefined> } | null, tmux: { name?: string, at: number }, namePin?: NamePin|null }
+ * @typedef {{ adapter: { tmuxSessionName: (env: string|undefined) => Promise<string|undefined>, ownPid?: () => Promise<number|undefined>, processArgs?: (pid: string) => Promise<string|undefined> } | null, ownPid?: number|null, tmux: { name?: string, at: number }, namePin?: NamePin|null,
+ *   adopt?: ((fromId: string, toId: string) => Promise<void>) | null }
  *   & import('./link-build-hooks.js').BuildRuntime} PayloadRuntime
  */
 
@@ -205,7 +251,7 @@ export async function buildSessionPayload($, rt, { withBuild = false } = {}) {
   })
   const resolved = pinName(rt, { ...fresh, hash: liveHash }, Boolean(tmuxEnv) && !rt.tmux.name)
   const hash = resolved.hash
-  const instanceId = await instanceIdFor($, hash, resolved.name, sessionId, now)
+  const instanceId = await instanceIdFor($, rt, hash, resolved.name, sessionId, now)
   const buildFields = withBuild ? await safePollBuild($, rt) : {}
   return {
     session: {

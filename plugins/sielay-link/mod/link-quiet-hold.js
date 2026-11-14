@@ -92,6 +92,25 @@ export function createHeldQueue({ readHeld, writeHeld, quietRule, isBusy, now, m
   return {
     flush,
 
+    /**
+     * A dead instance's held messages join this one's (no duplicates by delivery id,
+     * oldest first), through the same queue as add and flush.
+     * @param {string} fromId @param {string} toId @returns {Promise<number>} how many were added
+     */
+    adopt(fromId, toId) {
+      return oneAtATime(async () => {
+        if (fromId === toId) return 0
+        const theirs = await readHeld(fromId)
+        if (theirs.length === 0) return 0
+        const mine = await readHeld(toId)
+        const have = new Set(mine.map(h => h.delivery.id))
+        const moved = theirs.filter(h => !have.has(h.delivery.id))
+        if (moved.length > 0) await writeHeld(toId, [...mine, ...moved].sort((x, y) => x.at - y.at))
+        await writeHeld(fromId, [])
+        return moved.length
+      })
+    },
+
     /** @param {string} instanceId @param {Delivery} delivery */
     async add(instanceId, delivery) {
       const at = await now()

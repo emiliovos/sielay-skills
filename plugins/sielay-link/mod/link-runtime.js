@@ -66,6 +66,10 @@ export function createRuntime(options) {
     sentTouchedAt: /** @type {number|undefined} */ (undefined),
     /** The discovery line went into this conversation (link-discovery-context.js); memory only, reset on session.end. */
     discoveryAnnounced: false,
+    /** The unread-messages line is due at the next prompt (link-discovery-context.js unreadLine): true at start and after /clear, and again when an adoption brings unread. Memory only. */
+    unreadNoticeDue: true,
+    /** Moves what a dead instance left in its inbox and held list to the live one; set once the inbox exists. */
+    adopt: /** @type {((fromId: string, toId: string) => Promise<void>) | null} */ (null),
     /** A main-loop turn is running; memory only, a reload starts as idle and holds at most until the limit. */
     turnRunning: false,
     /** `self.address_prefix` from the last peers answer that carried it; memory only. */
@@ -216,6 +220,17 @@ export async function startLink($, rt) {
     isBusy: () => rt.turnRunning,
     now: () => $.clock.now(),
   })
+  rt.adopt = async (fromId, toId) => {
+    const inbox = rt.inbox
+    const handler = rt.handler
+    // not ready: throw so adoptOrphans keeps the record and the mailboxes for the next poll
+    if (!inbox || !handler) throw new Error('inbox not ready')
+    // the dedupe first: a redelivery between two of these steps must not run twice
+    await handler.adoptSeen(fromId, toId)
+    await handler.adoptPending(fromId, toId)
+    if ((await inbox.adopt(fromId, toId)) > 0) rt.unreadNoticeDue = true
+    await handler.adoptHeld(fromId, toId)
+  }
   rt.loop = createPollLoop({
     schedule: (ms, fn) => void $.clock.after(ms, fn),
     getClient: () => rt.client,

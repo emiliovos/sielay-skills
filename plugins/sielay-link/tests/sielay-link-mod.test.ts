@@ -786,6 +786,35 @@ test('discovery: one context line per conversation (without the address before t
   ])
 })
 
+test('unread at start: the first prompt names how many wait; none after link_read or after /clear with nothing unread', { options: { link_token: 'test-token' } }, async ($, on) => {
+  const clock = mock.clock(on, { now: 6_200_000 })
+  mock.store(on)
+  mock.env(on, { HOME: '/nowhere' })
+  fakeHost(on)
+  on('session.end', ($: any, e: any) => ({ sessionId: e.sessionId }))
+  const seen: any[] = []
+  on('prompt.submit', ($: any, e: any) => (seen.push(e), { text: e.text, context: e.context }))
+  fakeHub(on, (path, _body, n) =>
+    path === '/api/link/poll'
+      ? { session: { id: 's', address: 'eva/box/p' }, messages: n === 1 ? [{ ...message('m1'), sent_at: SENT_AT }, { ...message('m2'), sent_at: SENT_AT }] : [], strip: [], poll_after_ms: 60_000 }
+      : {},
+  )
+  await $.session.start({ cwd: '/srv/p', surface: 'terminal', isInteractive: true })
+  await $.classic.UserPromptSubmit({ prompt: 'x', permission_mode: 'bypassPermissions' })
+  await clock.advance(10)
+  await clock.settle()
+  await $.prompt.submit({ text: 'uno' } as any)
+  await $.prompt.submit({ text: 'dos' } as any)
+  await $.tool.call({ tool: 'mcp__sielay-link__link_read' } as any)
+  await $.session.end({ reason: 'clear', sessionId: 'sess-1', resume: {} } as any)
+  await $.prompt.submit({ text: 'tras clear' } as any)
+  expect(seen.map(e => [e.text, (e.context ?? []).filter((l: string) => l.startsWith('📨'))])).toEqual([
+    ['uno', ['📨 2 mensajes sin leer: llama link_read']],
+    ['dos', []],
+    ['tras clear', []],
+  ])
+})
+
 test('discovery: a prompt another hook drops does not use up the line; the next prompt gets it', { options: { link_token: 'test-token' } }, async ($, on) => {
   const clock = mock.clock(on, { now: 6_500_000 })
   mock.store(on)

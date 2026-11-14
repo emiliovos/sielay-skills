@@ -135,6 +135,22 @@ export function createDeliveryAdapter($, { helperPath }) {
       }
     },
 
+    /**
+     * The pid of this Claude Code: the `$PPID` of the shell the engine starts.
+     * @returns {Promise<number|undefined>} a positive integer, else undefined
+     */
+    async ownPid() {
+      try {
+        const r = await $.process.run(['sh', '-c', 'echo $PPID'], { timeoutMs: 3_000 })
+        const out = r.exitCode === 0 ? r.stdout.trim() : ''
+        if (!/^[1-9][0-9]{0,9}$/.test(out)) return undefined
+        const pid = Number(out)
+        return Number.isSafeInteger(pid) ? pid : undefined
+      } catch {
+        return undefined
+      }
+    },
+
     /** @returns {Promise<string|undefined>} the machine's hostname, shown to the approving admin */
     async hostname() {
       try {
