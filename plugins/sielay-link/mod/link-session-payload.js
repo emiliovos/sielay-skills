@@ -123,16 +123,17 @@ const ADOPT_SETTLE_MS = 50
 
 /**
  * Whether a process still runs, by the same means as a `sock:` owner
- * (socketOwnerAlive): its /proc entry. Without procfs nothing can tell, so it
- * counts as running and nothing is adopted on a guess.
+ * (socketOwnerAlive): its /proc entry. Without procfs nothing can tell
+ * (undefined), and ownerDead waits out the day of silence instead of guessing.
  * @param {Engine} $ @param {number} pid
+ * @returns {Promise<boolean|undefined>}
  */
 async function pidRuns($, pid) {
   try {
-    if (!(await $.fs.exists('/proc/self'))) return true
+    if (!(await $.fs.exists('/proc/self'))) return undefined
     return await $.fs.exists(`/proc/${pid}`)
   } catch {
-    return true
+    return undefined
   }
 }
 

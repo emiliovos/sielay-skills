@@ -10,10 +10,11 @@ function memStore() {
 function world() {
   const store = memStore()
   const alive = new Set()
+  const unknown = new Set() // owners whose liveness cannot be told
   let n = 0
   const claim = (me, now, key = instanceKey('hash-a', 'api')) =>
-    claimInstanceId({ store, key, me, now, ownerAlive: async o => alive.has(o), newId: () => `inst-${(n += 1)}` })
-  return { store, alive, claim }
+    claimInstanceId({ store, key, me, now, ownerAlive: async o => (unknown.has(o) ? undefined : alive.has(o)), newId: () => `inst-${(n += 1)}` })
+  return { store, alive, unknown, claim }
 }
 
 test('the key is per (cwd_hash, resolved name)', () => {
@@ -73,12 +74,32 @@ test('a holder whose process is gone is taken over (crash left its socket behind
 
 test('a socket whose liveness cannot be told (no procfs) is taken only after a day of silence', async () => {
   const w = world()
-  w.alive.add('sock:A') // the file stays and nothing says its process died
+  w.unknown.add('sock:A') // the file stays and nothing says whether its process died
   w.alive.add('sock:B')
   const a = await w.claim('sock:A', 0)
   assert.notEqual(await w.claim('sock:B', STALE_NO_PID_MS - 1), a)
   w.store.m.set('instance.hash-a.api', [{ instance_id: a, owner: 'sock:A', renewed_at: 0 }])
   assert.equal(await w.claim('sock:B', STALE_NO_PID_MS + 1), a)
+})
+
+test('a socket owner proven alive keeps its id however long it stays silent (suspend, /link off)', async () => {
+  const w = world()
+  w.alive.add('sock:A')
+  w.alive.add('sock:B')
+  const a = await w.claim('sock:A', 0)
+  assert.notEqual(await w.claim('sock:B', STALE_NO_PID_MS * 3), a)
+})
+
+test('a sess: owner whose pid cannot be checked (no procfs) is taken only after a day of silence', async () => {
+  const w = world()
+  const claim = (me, now, pid) => claimInstanceId({
+    store: w.store, key: instanceKey('hash-a', 'api'), me, now, ownerAlive: async () => true,
+    newId: () => `sess-${me}`, pid, pidAlive: async () => undefined,
+  })
+  const first = await claim('sess:S1', 0, 100)
+  assert.notEqual(await claim('sess:T1', STALE_NO_PID_MS - 1, 200), first)
+  w.store.m.set('instance.hash-a.api', [{ instance_id: first, owner: 'sess:S1', renewed_at: 0, pid: 100 }])
+  assert.equal(await claim('sess:U1', STALE_NO_PID_MS + 1, 300), first)
 })
 
 test('without a socket, a /clear in the same process keeps the id; another live process does not take it', async () => {
@@ -119,9 +140,9 @@ test('a socket owner is alive only while its file and the PID in its name are: a
   assert.equal(await socketOwnerAlive('/run/user/1/cc-socks/111.sock', exists), true, 'live process, socket in place')
   assert.equal(await socketOwnerAlive('/run/user/1/cc-socks/222.sock', exists), false, 'socket left behind by a dead PID')
   assert.equal(await socketOwnerAlive('/run/user/1/cc-socks/333.sock', exists), false, 'socket gone')
-  assert.equal(await socketOwnerAlive('/tmp/other-name.sock', async p => p === '/tmp/other-name.sock' || p === '/proc/self'), true, 'no PID in the name: the file is all there is')
-  assert.equal(await socketOwnerAlive('/var/x/444.sock', async p => p === '/var/x/444.sock'), true, 'no procfs (macOS): the file is all there is')
-  assert.equal(await socketOwnerAlive('/var/x/555.sock', async p => { if (p.startsWith('/proc')) throw new Error('denied'); return true }), true, 'procfs unreadable: fall back to the file')
+  assert.equal(await socketOwnerAlive('/tmp/other-name.sock', async p => p === '/tmp/other-name.sock' || p === '/proc/self'), undefined, 'no PID in the name: cannot be told')
+  assert.equal(await socketOwnerAlive('/var/x/444.sock', async p => p === '/var/x/444.sock'), undefined, 'no procfs (macOS): cannot be told')
+  assert.equal(await socketOwnerAlive('/var/x/555.sock', async p => { if (p.startsWith('/proc')) throw new Error('denied'); return true }), undefined, 'procfs unreadable: cannot be told')
 })
 
 test('restart within the lease while the old socket file lingers: same instance_id, no name-2', async () => {

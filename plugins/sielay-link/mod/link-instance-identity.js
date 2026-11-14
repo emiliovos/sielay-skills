@@ -9,8 +9,7 @@
 // `$.store` (machine-wide) keeps, per (cwd_hash, resolved name), a short list
 // of { instance_id, owner, renewed_at }. `owner` names the live Claude Code
 // process: its messaging socket path when it has one (the same across reloads
-// and /clear, different per terminal, gone when the process exits), else the
-// session id. A record is this session's when the owner is us; another owner's
+// and /clear, different per terminal), else the session id. A record is this session's when the owner is us; another owner's
 // record is taken (its id claimed, its mailboxes adopted) only on positive
 // proof that the owner is dead (ownerDead). A lapsed lease alone is no proof:
 // it also happens to a live terminal (`/link off` stops renewing, a suspend
@@ -22,10 +21,12 @@
 // A `sock:` owner is dead when its process is gone (socketOwnerAlive: the
 // socket file outlives its process, so the PID in its name is what tells). A
 // `sess:` owner is dead when the `pid` stored in the record no longer runs, or
-// is our own pid (a /clear inside the same process). Where liveness cannot be
-// told (a record written before `pid` existed, or a socket on a machine
-// without procfs) the record is taken only after STALE_NO_PID_MS without
-// renewal (a day: any live terminal that merely paused is long back).
+// is our own pid (a /clear inside the same process). An owner proven alive
+// keeps its record however long it goes without renewing. Where liveness
+// cannot be told (a record written before `pid` existed, a socket without a
+// PID in its name, or a machine without procfs) the record is taken only after
+// STALE_NO_PID_MS without renewal (a day: any live terminal that merely paused
+// is long back).
 
 import { pidFromSocket } from './link-launch-mode.js'
 
@@ -65,10 +66,10 @@ function readRecords(v) {
  *   key: string,
  *   me: string,
  *   now: number,
- *   ownerAlive: (owner: string) => Promise<boolean>,
+ *   ownerAlive: (owner: string) => Promise<boolean|undefined>,
  *   newId: () => string,
  *   pid?: number,
- *   pidAlive?: (pid: number) => Promise<boolean>,
+ *   pidAlive?: (pid: number) => Promise<boolean|undefined>,
  * }} input
  * @returns {Promise<string>}
  */
@@ -103,45 +104,50 @@ export async function claimInstanceId({ store, key, me, now, ownerAlive, newId, 
 }
 
 /**
- * Whether the Claude Code process behind a messaging socket still runs. The
- * socket is named `<PID>.sock` and its file stays on disk after the process
- * exits, so on a machine with procfs the PID decides; without procfs, or with
- * a socket named otherwise, the file is all there is to go by.
+ * Whether the Claude Code process behind a messaging socket still runs: true,
+ * false, or undefined when it cannot be told. The socket is named `<PID>.sock`
+ * and its file stays on disk after the process exits, so on a machine with
+ * procfs the PID decides. Without procfs, or with a socket named otherwise, a
+ * file in place proves nothing either way.
  * @param {string} path the socket path
  * @param {(path: string) => Promise<boolean>} exists
- * @returns {Promise<boolean>}
+ * @returns {Promise<boolean|undefined>}
  */
 export async function socketOwnerAlive(path, exists) {
   if (!(await exists(path))) return false
   const pid = /(?:^|[\\/])([1-9][0-9]{0,9})\.sock$/.exec(path)?.[1]
-  if (!pid) return true
+  if (!pid) return undefined
   try {
-    if (!(await exists('/proc/self'))) return true
+    if (!(await exists('/proc/self'))) return undefined
     return await exists(`/proc/${pid}`)
   } catch {
-    // procfs not readable here: keep the file's answer
-    return true
+    // procfs not readable here
+    return undefined
   }
 }
 
 /**
  * Positive proof that the record's owner is gone (see the header).
  * @param {InstanceRecord} r @param {number} now
- * @param {(owner: string) => Promise<boolean>} ownerAlive
- * @param {number|undefined} myPid @param {(pid: number) => Promise<boolean>} pidAlive
+ * @param {(owner: string) => Promise<boolean|undefined>} ownerAlive
+ * @param {number|undefined} myPid @param {(pid: number) => Promise<boolean|undefined>} pidAlive
  */
 async function ownerDead(r, now, ownerAlive, myPid, pidAlive) {
-  // without procfs a socket file left by a crash reads as alive: the day-long silence settles it
-  if (r.owner.startsWith('sock:')) return !(await ownerAlive(r.owner)) || now - r.renewed_at > STALE_NO_PID_MS
-  if (typeof r.pid === 'number') return r.pid === myPid || !(await pidAlive(r.pid))
+  /** @type {boolean|undefined} */
+  let alive
+  if (r.owner.startsWith('sock:')) alive = await ownerAlive(r.owner)
+  else if (typeof r.pid === 'number') alive = r.pid === myPid ? false : await pidAlive(r.pid)
+  if (alive === false) return true
+  // proven alive keeps its record however long it stays silent; unknown waits out the day
+  if (alive === true) return false
   return now - r.renewed_at > STALE_NO_PID_MS
 }
 
 /**
  * What a dead instance left in `held.<id>` and `inbox.<id>` goes to the live one.
- * Without a messaging socket a /clear changes the owner (the session id) while
- * the old record is still within its lease, so a new id is minted and the old
- * one's mailboxes would be unreachable. Once an OTHER record of the same key is
+ * A restart, or a crash followed by a new terminal, leaves a record whose owner
+ * is gone; when the claim mints a new id instead of taking it, the old one's
+ * mailboxes would be unreachable. Once an OTHER record of the same key is
  * provably dead (ownerDead), `adopt(from, to)` moves its mailboxes and the
  * record leaves the list. A record whose move fails stays for the next poll and
  * the error is thrown after the others were tried. Never touches another key,
@@ -154,10 +160,10 @@ async function ownerDead(r, now, ownerAlive, myPid, pidAlive) {
  * @param {{
  *   store: { get: (key: string) => Promise<unknown>, set: (key: string, value: unknown) => Promise<void> },
  *   key: string, mine: string, now: number,
- *   ownerAlive: (owner: string) => Promise<boolean>,
+ *   ownerAlive: (owner: string) => Promise<boolean|undefined>,
  *   adopt: (fromId: string, toId: string) => Promise<void>,
  *   pid?: number,
- *   pidAlive?: (pid: number) => Promise<boolean>,
+ *   pidAlive?: (pid: number) => Promise<boolean|undefined>,
  *   settle?: () => Promise<void>,
  * }} input
  * @returns {Promise<string[]>} the instance ids adopted

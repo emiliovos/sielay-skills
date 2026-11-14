@@ -193,6 +193,23 @@ test('(c) a live sock: owner with a lapsed lease keeps its mailboxes; a dead one
   assert.deepEqual((await p.inbox.take('Y')).map(d => d.id), ['m1'])
 })
 
+test('(c) a sock: owner proven alive keeps its mailboxes after days of silence; one that cannot be told goes after a day', async () => {
+  const w = machine()
+  const p = w.proc(102)
+  const key = instanceKey('h', 'api')
+  const [live, unknown] = ['sock:/tmp/101.sock', 'sock:/tmp/x.sock']
+  await w.store.set(key, [{ instance_id: 'X', owner: live, renewed_at: w.clock }, { instance_id: 'Z', owner: unknown, renewed_at: w.clock }, { instance_id: 'Y', owner: 'sock:/tmp/102.sock', renewed_at: w.clock }])
+  await p.inbox.add('X', msg('m1'))
+  await p.inbox.add('Z', msg('m2'))
+  const run = () => adoptOrphans({ ...p.common(), now: w.clock, mine: 'Y', ownerAlive: async o => (o === unknown ? undefined : true), adopt: (from, to) => p.inbox.adopt(from, to).then(() => {}) })
+  w.clock += STALE_NO_PID_MS - 1_000
+  assert.deepEqual(await run(), [], 'under a day: nothing')
+  w.clock += STALE_NO_PID_MS * 2
+  assert.deepEqual(await run(), ['Z'], 'only the one that cannot be told')
+  assert.equal((await w.store.get('inbox.X')).length, 1)
+  assert.deepEqual((await w.store.get(key)).map(r => r.instance_id).sort(), ['X', 'Y'])
+})
+
 test('(c) a sess: owner whose pid died is adopted, even inside the lease', async () => {
   const w = machine()
   const { procs, ids } = await deadTerminals(w, 2)
