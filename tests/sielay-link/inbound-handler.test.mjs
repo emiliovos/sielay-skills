@@ -213,3 +213,21 @@ test('a message the dead instance injected but never acked is not injected again
   assert.equal(injected.length, 1, 'not injected twice')
   assert.deepEqual(store.m.get('seen.old'), [])
 })
+
+test('a message the dead instance accepted but never delivered is delivered by the one that adopts it', async () => {
+  const store = memStore()
+  let fail = true
+  const injected = []
+  const inject = async text => { if (fail) throw new Error('socket down'); injected.push(text) }
+  const dead = handler(store, inject)
+  await dead.h.handlePoll('old', { messages: [], strip: [stripped] })
+  const r = await dead.h.accept('m7', { instanceId: 'old', decide: async () => {}, ack: async () => {} })
+  assert.equal(r.ok, false, 'accepted, delivery failed; then the process dies')
+  fail = false
+  const live = handler(store, inject)
+  await live.h.adoptPending('old', 'new')
+  assert.deepEqual(await live.h.handlePoll('new', { messages: [], strip: [] }), [{ id: 'm7', outcome: 'injected' }])
+  assert.equal(injected.length, 1)
+  assert.deepEqual(store.m.get('accepted.old'), {})
+  assert.deepEqual(store.m.get('accepted.new'), {})
+})

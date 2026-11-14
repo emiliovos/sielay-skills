@@ -53,6 +53,19 @@ export function createInboundStore(store) {
     return v && typeof v === 'object' && !Array.isArray(v) ? /** @type {Record<string, Delivery>} */ (v) : {}
   }
 
+  /**
+   * A dead instance's accepted-but-undelivered messages join the live one's,
+   * which retries them on its next poll; the live entry wins on a shared id and
+   * the old key empties.
+   * @param {string} fromId @param {string} toId
+   */
+  async function adoptPending(fromId, toId) {
+    if (fromId === toId) return
+    const moved = await readPending(fromId)
+    if (Object.keys(moved).length > 0) await store.set(`accepted.${toId}`, { ...moved, ...(await readPending(toId)) })
+    await store.set(`accepted.${fromId}`, {})
+  }
+
   /** @param {string} instanceId @param {(p: Record<string, Delivery>) => void} change */
   async function updatePending(instanceId, change) {
     const pending = await readPending(instanceId)
@@ -71,5 +84,5 @@ export function createInboundStore(store) {
     await store.set(`held.${instanceId}`, held)
   }
 
-  return { readSeen, remember, adoptSeen, readPending, updatePending, readHeld, writeHeld }
+  return { readSeen, remember, adoptSeen, adoptPending, readPending, updatePending, readHeld, writeHeld }
 }

@@ -227,6 +227,7 @@ export async function startLink($, rt) {
     if (!inbox || !handler) throw new Error('inbox not ready')
     // the dedupe first: a redelivery between two of these steps must not run twice
     await handler.adoptSeen(fromId, toId)
+    await handler.adoptPending(fromId, toId)
     if ((await inbox.adopt(fromId, toId)) > 0) rt.unreadNoticeDue = true
     await handler.adoptHeld(fromId, toId)
   }
