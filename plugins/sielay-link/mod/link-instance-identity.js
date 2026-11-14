@@ -9,23 +9,24 @@
 // `$.store` (machine-wide) keeps, per (cwd_hash, resolved name), a short list
 // of { instance_id, owner, renewed_at }. `owner` names the live Claude Code
 // process: its messaging socket path when it has one (the same across reloads
-// and /clear, different per terminal, gone when the process exits), else the
-// session id. A record is this session's when the owner is us; it is free when
-// its owner is no longer alive (socketOwnerAlive: the socket file outlives its
-// process, so the PID in its name is what tells) or stopped renewing for
-// INSTANCE_LEASE_MS. A new
-// id is minted only while every record is held by another live process.
+// and /clear, different per terminal), else the session id. A record is this session's when the owner is us; another owner's
+// record is taken (its id claimed, its mailboxes adopted) only on positive
+// proof that the owner is dead (ownerDead). A lapsed lease alone is no proof:
+// it also happens to a live terminal (`/link off` stops renewing, a suspend
+// lasts longer than the lease), and taking its id would hand this session the
+// hub row, the unread and the held messages of a terminal that still runs.
+// A new id is minted while no record is ours or provably dead.
 // Two processes claiming at the same instant may race; the next poll settles it.
 //
-// Adopting a record's mailboxes is stricter than claiming its id: it needs
-// positive proof that the owner is dead, because a lapsed lease alone also
-// happens to a live terminal (`/link off` stops renewing, a suspend lasts
-// longer than the lease) and its unread and held messages must stay put.
-// A `sock:` owner is dead when its process is gone (the lease is ignored). A
+// A `sock:` owner is dead when its process is gone (socketOwnerAlive: the
+// socket file outlives its process, so the PID in its name is what tells). A
 // `sess:` owner is dead when the `pid` stored in the record no longer runs, or
-// is our own pid (a /clear inside the same process). A record written before
-// `pid` existed has no proof, so it is adopted only after STALE_NO_PID_MS
-// without renewal (a day: any live terminal that merely paused is long back).
+// is our own pid (a /clear inside the same process). An owner proven alive
+// keeps its record however long it goes without renewing. Where liveness
+// cannot be told (a record written before `pid` existed, a socket without a
+// PID in its name, or a machine without procfs) the record is taken only after
+// STALE_NO_PID_MS without renewal (a day: any live terminal that merely paused
+// is long back).
 
 import { pidFromSocket } from './link-launch-mode.js'
 
@@ -60,34 +61,26 @@ function readRecords(v) {
 }
 
 /**
- * A record is free when its lease lapsed or its owner is gone.
- * @param {InstanceRecord} r @param {number} now @param {(owner: string) => Promise<boolean>} ownerAlive @param {number} leaseMs
- */
-async function isFree(r, now, ownerAlive, leaseMs) {
-  return now - r.renewed_at > leaseMs || !(await ownerAlive(r.owner))
-}
-
-/**
  * @param {{
  *   store: { get: (key: string) => Promise<unknown>, set: (key: string, value: unknown) => Promise<void> },
  *   key: string,
  *   me: string,
  *   now: number,
- *   ownerAlive: (owner: string) => Promise<boolean>,
+ *   ownerAlive: (owner: string) => Promise<boolean|undefined>,
  *   newId: () => string,
- *   leaseMs?: number,
  *   pid?: number,
+ *   pidAlive?: (pid: number) => Promise<boolean|undefined>,
  * }} input
  * @returns {Promise<string>}
  */
-export async function claimInstanceId({ store, key, me, now, ownerAlive, newId, leaseMs = INSTANCE_LEASE_MS, pid }) {
+export async function claimInstanceId({ store, key, me, now, ownerAlive, newId, pid, pidAlive = async () => undefined }) {
   const records = readRecords(await store.get(key))
 
   /** @type {InstanceRecord|undefined} */
   let mine = records.find(r => r.owner === me)
   if (!mine) {
     for (const r of [...records].sort((a, b) => b.renewed_at - a.renewed_at)) {
-      if (await isFree(r, now, ownerAlive, leaseMs)) {
+      if (await ownerDead(r, now, ownerAlive, pid, pidAlive)) {
         mine = r
         break
       }
@@ -111,44 +104,70 @@ export async function claimInstanceId({ store, key, me, now, ownerAlive, newId, 
 }
 
 /**
- * Whether the Claude Code process behind a messaging socket still runs. The
- * socket is named `<PID>.sock` and its file stays on disk after the process
- * exits, so on a machine with procfs the PID decides; without procfs, or with
- * a socket named otherwise, the file is all there is to go by.
+ * Whether the Claude Code process behind a messaging socket still runs: true,
+ * false, or undefined when it cannot be told. The socket is named `<PID>.sock`
+ * and its file stays on disk after the process exits, so on a machine with
+ * procfs the PID decides. Without procfs `psAlive` asks `ps` about it. With a
+ * socket named otherwise, or neither source answering, a file in place proves
+ * nothing either way.
  * @param {string} path the socket path
  * @param {(path: string) => Promise<boolean>} exists
- * @returns {Promise<boolean>}
+ * @param {(pid: string) => Promise<boolean|undefined>} [psAlive]
+ * @returns {Promise<boolean|undefined>}
  */
-export async function socketOwnerAlive(path, exists) {
+export async function socketOwnerAlive(path, exists, psAlive) {
   if (!(await exists(path))) return false
   const pid = /(?:^|[\\/])([1-9][0-9]{0,9})\.sock$/.exec(path)?.[1]
-  if (!pid) return true
+  if (!pid) return undefined
+  return pidAliveOnHost(pid, exists, psAlive)
+}
+
+/**
+ * Whether process `pid` runs: its /proc entry where procfs exists, else what
+ * `psAlive` says, else undefined (cannot be told).
+ * @param {string} pid @param {(path: string) => Promise<boolean>} exists
+ * @param {(pid: string) => Promise<boolean|undefined>} [psAlive]
+ * @returns {Promise<boolean|undefined>}
+ */
+export async function pidAliveOnHost(pid, exists, psAlive) {
+  let procfs = false
   try {
-    if (!(await exists('/proc/self'))) return true
-    return await exists(`/proc/${pid}`)
+    procfs = await exists('/proc/self')
+    if (procfs) return await exists(`/proc/${pid}`)
   } catch {
-    // procfs not readable here: keep the file's answer
-    return true
+    // procfs not readable here
+  }
+  if (!psAlive) return undefined
+  try {
+    return await psAlive(pid)
+  } catch {
+    return undefined
   }
 }
 
 /**
  * Positive proof that the record's owner is gone (see the header).
  * @param {InstanceRecord} r @param {number} now
- * @param {(owner: string) => Promise<boolean>} ownerAlive
- * @param {number|undefined} myPid @param {(pid: number) => Promise<boolean>} pidAlive
+ * @param {(owner: string) => Promise<boolean|undefined>} ownerAlive
+ * @param {number|undefined} myPid @param {(pid: number) => Promise<boolean|undefined>} pidAlive
  */
+/** @returns {Promise<boolean>} */
 async function ownerDead(r, now, ownerAlive, myPid, pidAlive) {
-  if (r.owner.startsWith('sock:')) return !(await ownerAlive(r.owner))
-  if (typeof r.pid === 'number') return r.pid === myPid || !(await pidAlive(r.pid))
+  /** @type {boolean|undefined} */
+  let alive
+  if (r.owner.startsWith('sock:')) alive = await ownerAlive(r.owner)
+  else if (typeof r.pid === 'number') alive = r.pid === myPid ? false : await pidAlive(r.pid)
+  if (alive === false) return true
+  // proven alive keeps its record however long it stays silent; unknown waits out the day
+  if (alive === true) return false
   return now - r.renewed_at > STALE_NO_PID_MS
 }
 
 /**
  * What a dead instance left in `held.<id>` and `inbox.<id>` goes to the live one.
- * Without a messaging socket a /clear changes the owner (the session id) while
- * the old record is still within its lease, so a new id is minted and the old
- * one's mailboxes would be unreachable. Once an OTHER record of the same key is
+ * A restart, or a crash followed by a new terminal, leaves a record whose owner
+ * is gone; when the claim mints a new id instead of taking it, the old one's
+ * mailboxes would be unreachable. Once an OTHER record of the same key is
  * provably dead (ownerDead), `adopt(from, to)` moves its mailboxes and the
  * record leaves the list. A record whose move fails stays for the next poll and
  * the error is thrown after the others were tried. Never touches another key,
@@ -161,15 +180,15 @@ async function ownerDead(r, now, ownerAlive, myPid, pidAlive) {
  * @param {{
  *   store: { get: (key: string) => Promise<unknown>, set: (key: string, value: unknown) => Promise<void> },
  *   key: string, mine: string, now: number,
- *   ownerAlive: (owner: string) => Promise<boolean>,
+ *   ownerAlive: (owner: string) => Promise<boolean|undefined>,
  *   adopt: (fromId: string, toId: string) => Promise<void>,
  *   pid?: number,
- *   pidAlive?: (pid: number) => Promise<boolean>,
+ *   pidAlive?: (pid: number) => Promise<boolean|undefined>,
  *   settle?: () => Promise<void>,
  * }} input
  * @returns {Promise<string[]>} the instance ids adopted
  */
-export async function adoptOrphans({ store, key, mine, now, ownerAlive, adopt, pid, pidAlive = async () => true, settle = async () => {} }) {
+export async function adoptOrphans({ store, key, mine, now, ownerAlive, adopt, pid, pidAlive = async () => undefined, settle = async () => {} }) {
   const adopted = []
   /** @type {unknown} */
   let failure

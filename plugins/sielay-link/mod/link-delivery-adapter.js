@@ -136,6 +136,27 @@ export function createDeliveryAdapter($, { helperPath }) {
     },
 
     /**
+     * Whether process `pid` still runs, by `ps` (for hosts without procfs):
+     * true when its command line names claude, false only when `ps` reports no
+     * such process (exit 1, nothing on stdout or stderr), undefined otherwise.
+     * Another program's command line is undefined too: `ps` may show only a
+     * short process name, which says nothing about who owns the pid.
+     * @param {string} pid a positive integer in digits
+     * @returns {Promise<boolean|undefined>}
+     */
+    async processLiveness(pid) {
+      if (!/^[1-9]\d{0,9}$/.test(pid)) return undefined
+      try {
+        const r = await $.process.run(['ps', '-o', 'args=', '-p', pid], { timeoutMs: 3_000 })
+        const out = r.stdout.trim()
+        if (r.exitCode === 0) return out && /claude/i.test(out) ? true : undefined
+        return r.exitCode === 1 && out === '' && String(r.stderr ?? '').trim() === '' ? false : undefined
+      } catch {
+        return undefined
+      }
+    },
+
+    /**
      * The pid of this Claude Code: the `$PPID` of the shell the engine starts.
      * @returns {Promise<number|undefined>} a positive integer, else undefined
      */
