@@ -70,7 +70,7 @@ Si otra carpeta ya usa ese nombre y está en línea, el hub te asigna `nombre-2`
 **La misma sesión sigue siendo la misma.** El plugin guarda en `$.store` la identidad de la instancia, por carpeta y nombre.
 
 - Si recargas el plugin, haces `/clear`, usas `--resume` o reinicias en la misma carpeta, el hub te ve como la misma instancia y no pasas a `nombre-2`.
-- Un reinicio rápido también (desde la 1.4.0): el archivo del socket de Claude Code sobrevive al proceso, así que el plugin revisa que el PID de su nombre siga vivo (`/proc/<pid>`) antes de dar por ocupada la identidad. Sin `/proc` (macOS) se lo pregunta a `ps`: si el PID ya no existe o lo tomó un programa que no es Claude Code, el reinicio recupera la identidad al momento. Una terminal viva conserva la suya aunque deje de renovar (`/link off`, suspensión). Si no se puede saber (ni `/proc` ni `ps` contestan), la identidad se libera tras 24 h sin renovar.
+- Un reinicio rápido también (desde la 1.4.0): el archivo del socket de Claude Code sobrevive al proceso, así que el plugin revisa que el PID de su nombre siga vivo (`/proc/<pid>`) antes de dar por ocupada la identidad. Sin `/proc` (macOS) se lo pregunta a `ps`: si el PID ya no existe, el reinicio recupera la identidad al momento. Una terminal viva conserva la suya aunque deje de renovar (`/link off`, suspensión). Si no se puede saber (ni `/proc` ni `ps` contestan), la identidad se libera tras 24 h sin renovar.
 - Dos terminales abiertas a la vez en la misma carpeta y con el mismo nombre sí son instancias distintas. La segunda recibe `nombre-2`.
 
 ## Comandos y herramientas

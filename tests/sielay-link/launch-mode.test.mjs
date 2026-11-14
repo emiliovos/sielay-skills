@@ -107,7 +107,7 @@ test('the adapter reads the command line with ps, PID as its own argv entry, dig
   assert.equal(await adapter.processArgs('4242'), undefined)
 })
 
-test('process liveness by ps: a claude runs, a missing or reused pid is dead, a ps that cannot run tells nothing', async () => {
+test('process liveness by ps: a claude runs, only a clean "no such process" is dead, anything else tells nothing', async () => {
   const runs = []
   let reply = { exitCode: 0, stdout: 'claude --resume\n', stderr: '' }
   const $ = { process: { run: async argv => { runs.push(argv); if (reply instanceof Error) throw reply; return reply } } }
@@ -115,13 +115,16 @@ test('process liveness by ps: a claude runs, a missing or reused pid is dead, a 
   assert.equal(await adapter.processLiveness('4242'), true)
   assert.deepEqual(runs[0], ['ps', '-o', 'args=', '-p', '4242'])
   reply = { exitCode: 0, stdout: '/usr/sbin/cupsd\n', stderr: '' }
-  assert.equal(await adapter.processLiveness('4242'), false, 'another program took the pid')
+  assert.equal(await adapter.processLiveness('4242'), undefined, 'another program, or only a short name: cannot tell')
   reply = { exitCode: 1, stdout: '', stderr: '' }
   assert.equal(await adapter.processLiveness('4242'), false, 'no such process')
+  reply = { exitCode: 1, stdout: '', stderr: 'process ID out of range' }
+  assert.equal(await adapter.processLiveness('4242'), undefined, 'an error, not an absent process')
   reply = { exitCode: 2, stdout: '', stderr: 'bad option' }
   assert.equal(await adapter.processLiveness('4242'), undefined)
   reply = new Error('ENOENT')
   assert.equal(await adapter.processLiveness('4242'), undefined)
   assert.equal(await adapter.processLiveness('1; rm -rf /'), undefined)
-  assert.equal(runs.length, 5)
+  assert.equal(await adapter.processLiveness('0'), undefined)
+  assert.equal(runs.length, 6)
 })

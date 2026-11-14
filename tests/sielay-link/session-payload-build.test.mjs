@@ -158,3 +158,32 @@ test('a quick restart whose old socket file lingers reuses its instance_id: the 
   twin.w.now = next.w.now + 1_000
   assert.notEqual((await buildSessionPayload(twin.$, twin.rt)).session.instance_id, before)
 })
+
+test('without procfs the payload asks the adapter (ps): a restart reuses the id of a claude that is gone, a live one keeps its own', async () => {
+  const running = new Set(['100'])
+  const withPs = h => { h.rt.adapter.processLiveness = async pid => running.has(pid) }
+  const h = movable()
+  withPs(h)
+  h.w.env.CLAUDE_CODE_MESSAGING_SOCKET = '/var/x/100.sock'
+  h.w.files.add('/var/x/100.sock')
+  const before = (await buildSessionPayload(h.$, h.rt)).session.instance_id
+
+  const twin = movable() // the first terminal still runs: a second one gets its own id
+  withPs(twin)
+  twin.w.store = h.w.store
+  twin.w.files = new Set(['/var/x/100.sock', '/var/x/300.sock'])
+  twin.w.env.CLAUDE_CODE_MESSAGING_SOCKET = '/var/x/300.sock'
+  twin.w.now = h.w.now + 60_000
+  running.add('300')
+  assert.notEqual((await buildSessionPayload(twin.$, twin.rt)).session.instance_id, before)
+
+  running.delete('100') // the first terminal closes; its socket file stays
+  const next = movable()
+  withPs(next)
+  next.w.store = twin.w.store
+  next.w.files = new Set([...twin.w.files, '/var/x/200.sock'])
+  next.w.env.CLAUDE_CODE_MESSAGING_SOCKET = '/var/x/200.sock'
+  next.w.now = twin.w.now + 5_000
+  running.add('200')
+  assert.equal((await buildSessionPayload(next.$, next.rt)).session.instance_id, before)
+})
