@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { claimInstanceId, instanceKey, socketOwnerAlive, INSTANCE_LEASE_MS, MAX_RECORDS, STALE_NO_PID_MS } from '../../plugins/sielay-link/mod/link-instance-identity.js'
+import { claimInstanceId, instanceKey, pidAliveOnHost, socketOwnerAlive, INSTANCE_LEASE_MS, MAX_RECORDS, STALE_NO_PID_MS } from '../../plugins/sielay-link/mod/link-instance-identity.js'
 
 function memStore() {
   const m = new Map()
@@ -143,6 +143,31 @@ test('a socket owner is alive only while its file and the PID in its name are: a
   assert.equal(await socketOwnerAlive('/tmp/other-name.sock', async p => p === '/tmp/other-name.sock' || p === '/proc/self'), undefined, 'no PID in the name: cannot be told')
   assert.equal(await socketOwnerAlive('/var/x/444.sock', async p => p === '/var/x/444.sock'), undefined, 'no procfs (macOS): cannot be told')
   assert.equal(await socketOwnerAlive('/var/x/555.sock', async p => { if (p.startsWith('/proc')) throw new Error('denied'); return true }), undefined, 'procfs unreadable: cannot be told')
+})
+
+test('without procfs, ps decides: a dead or reused pid frees the socket, a live claude keeps it, a failing ps tells nothing', async () => {
+  const exists = async p => p === '/var/x/444.sock'
+  assert.equal(await socketOwnerAlive('/var/x/444.sock', exists, async () => true), true)
+  assert.equal(await socketOwnerAlive('/var/x/444.sock', exists, async () => false), false)
+  assert.equal(await socketOwnerAlive('/var/x/444.sock', exists, async () => undefined), undefined)
+  assert.equal(await socketOwnerAlive('/var/x/444.sock', exists, async () => { throw new Error('x') }), undefined)
+  assert.equal(await pidAliveOnHost('7', async p => p === '/proc/self', async () => true), false, 'procfs answers first')
+  assert.equal(await pidAliveOnHost('7', async () => false, async () => false), false)
+  assert.equal(await pidAliveOnHost('7', async () => false), undefined)
+})
+
+test('a restart on a host without procfs reuses the id at once when ps says the old claude is gone, so its unread stay', async () => {
+  const store = memStore()
+  const files = new Set(['/s/100.sock'])
+  const running = new Set(['100'])
+  const ownerAlive = async o => socketOwnerAlive(o.slice(5), async p => files.has(p), async pid => running.has(pid))
+  let n = 0
+  const claim = (me, now) => claimInstanceId({ store, key: instanceKey('h', 'api'), me, now, ownerAlive, newId: () => `inst-${(n += 1)}` })
+  assert.equal(await claim('sock:/s/100.sock', 1_000), 'inst-1')
+  running.delete('100') // the terminal closes; its socket file stays
+  files.add('/s/200.sock')
+  running.add('200')
+  assert.equal(await claim('sock:/s/200.sock', 300_000), 'inst-1')
 })
 
 test('restart within the lease while the old socket file lingers: same instance_id, no name-2', async () => {

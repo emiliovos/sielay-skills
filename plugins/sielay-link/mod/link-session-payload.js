@@ -5,7 +5,7 @@
 
 import { modeState } from './link-mode-freshness.js'
 import { resolveSessionName, cwdHash } from './link-session-name-resolution.js'
-import { adoptOrphans, claimInstanceId, instanceKey, socketOwnerAlive, verifiedOwnPid } from './link-instance-identity.js'
+import { adoptOrphans, claimInstanceId, instanceKey, pidAliveOnHost, socketOwnerAlive, verifiedOwnPid } from './link-instance-identity.js'
 import { pollBuildFields } from './link-build-hooks.js'
 import { sessionRepo } from './link-session-repo.js'
 import { restoreModeCarry } from './link-mode-carry.js'
@@ -122,19 +122,24 @@ async function readProjectFile($, cwd) {
 const ADOPT_SETTLE_MS = 50
 
 /**
+ * What tells, on a host without procfs, whether a pid is still a Claude Code:
+ * the adapter's `ps` (undefined until the adapter is ready).
+ * @param {PayloadRuntime} rt
+ */
+function psAliveOf(rt) {
+  const adapter = rt.adapter
+  return adapter?.processLiveness ? (/** @type {string} */ p) => adapter.processLiveness?.(p) ?? Promise.resolve(undefined) : undefined
+}
+
+/**
  * Whether a process still runs, by the same means as a `sock:` owner
- * (socketOwnerAlive): its /proc entry. Without procfs nothing can tell
- * (undefined), and ownerDead waits out the day of silence instead of guessing.
- * @param {Engine} $ @param {number} pid
+ * (socketOwnerAlive): its /proc entry, else `ps`. When neither can tell
+ * (undefined), ownerDead waits out the day of silence instead of guessing.
+ * @param {Engine} $ @param {PayloadRuntime} rt @param {number} pid
  * @returns {Promise<boolean|undefined>}
  */
-async function pidRuns($, pid) {
-  try {
-    if (!(await $.fs.exists('/proc/self'))) return undefined
-    return await $.fs.exists(`/proc/${pid}`)
-  } catch {
-    return undefined
-  }
+function pidRuns($, rt, pid) {
+  return pidAliveOnHost(String(pid), path => $.fs.exists(path), psAliveOf(rt))
 }
 
 /**
@@ -168,15 +173,15 @@ async function instanceIdFor($, rt, hash, name, sessionId, now) {
     key: instanceKey(hash, name),
     me: socket ? `sock:${socket}` : `sess:${sessionId}`,
     now,
-    ownerAlive: async (/** @type {string} */ owner) => (owner.startsWith('sock:') ? socketOwnerAlive(owner.slice(5), path => $.fs.exists(path)) : true),
+    ownerAlive: async (/** @type {string} */ owner) => (owner.startsWith('sock:') ? socketOwnerAlive(owner.slice(5), path => $.fs.exists(path), psAliveOf(rt)) : true),
   }
   const pid = await ownPid($, rt)
-  const id = await claimInstanceId({ ...common, pid, pidAlive: p => pidRuns($, p), newId: () => crypto.randomUUID() })
+  const id = await claimInstanceId({ ...common, pid, pidAlive: p => pidRuns($, rt, p), newId: () => crypto.randomUUID() })
   // what an earlier id of this same (folder, name) left behind comes to this one; a failure retries at the next poll
   const adopt = rt.adopt
   if (adopt) {
     try {
-      await adoptOrphans({ store: common.store, key: common.key, mine: id, now, ownerAlive: common.ownerAlive, adopt: (from, to) => adopt(from, to), pid, pidAlive: p => pidRuns($, p), settle: () => new Promise(res => void $.clock.after(ADOPT_SETTLE_MS, () => res())) })
+      await adoptOrphans({ store: common.store, key: common.key, mine: id, now, ownerAlive: common.ownerAlive, adopt: (from, to) => adopt(from, to), pid, pidAlive: p => pidRuns($, rt, p), settle: () => new Promise(res => void $.clock.after(ADOPT_SETTLE_MS, () => res())) })
     } catch (err) {
       $.ui.log(`sielay-link: no se pudo recoger lo pendiente de una sesión anterior (${err instanceof Error ? err.name : typeof err})`)
     }
@@ -200,7 +205,7 @@ async function safePollBuild($, rt) {
 
 /**
  * @typedef {{ name: string, source: import('./link-session-name-resolution.js').NameSource, hash: string }} NamePin
- * @typedef {{ adapter: { tmuxSessionName: (env: string|undefined) => Promise<string|undefined>, ownPid?: () => Promise<number|undefined>, processArgs?: (pid: string) => Promise<string|undefined> } | null, ownPid?: number|null, tmux: { name?: string, at: number }, namePin?: NamePin|null,
+ * @typedef {{ adapter: { tmuxSessionName: (env: string|undefined) => Promise<string|undefined>, ownPid?: () => Promise<number|undefined>, processArgs?: (pid: string) => Promise<string|undefined>, processLiveness?: (pid: string) => Promise<boolean|undefined> } | null, ownPid?: number|null, tmux: { name?: string, at: number }, namePin?: NamePin|null,
  *   adopt?: ((fromId: string, toId: string) => Promise<void>) | null }
  *   & import('./link-build-hooks.js').BuildRuntime} PayloadRuntime
  */

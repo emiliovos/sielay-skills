@@ -73,7 +73,7 @@ function readRecords(v) {
  * }} input
  * @returns {Promise<string>}
  */
-export async function claimInstanceId({ store, key, me, now, ownerAlive, newId, pid, pidAlive = async () => true }) {
+export async function claimInstanceId({ store, key, me, now, ownerAlive, newId, pid, pidAlive = async () => undefined }) {
   const records = readRecords(await store.get(key))
 
   /** @type {InstanceRecord|undefined} */
@@ -107,21 +107,40 @@ export async function claimInstanceId({ store, key, me, now, ownerAlive, newId, 
  * Whether the Claude Code process behind a messaging socket still runs: true,
  * false, or undefined when it cannot be told. The socket is named `<PID>.sock`
  * and its file stays on disk after the process exits, so on a machine with
- * procfs the PID decides. Without procfs, or with a socket named otherwise, a
- * file in place proves nothing either way.
+ * procfs the PID decides. Without procfs `psAlive` asks `ps` about it. With a
+ * socket named otherwise, or neither source answering, a file in place proves
+ * nothing either way.
  * @param {string} path the socket path
  * @param {(path: string) => Promise<boolean>} exists
+ * @param {(pid: string) => Promise<boolean|undefined>} [psAlive]
  * @returns {Promise<boolean|undefined>}
  */
-export async function socketOwnerAlive(path, exists) {
+export async function socketOwnerAlive(path, exists, psAlive) {
   if (!(await exists(path))) return false
   const pid = /(?:^|[\\/])([1-9][0-9]{0,9})\.sock$/.exec(path)?.[1]
   if (!pid) return undefined
+  return pidAliveOnHost(pid, exists, psAlive)
+}
+
+/**
+ * Whether process `pid` runs: its /proc entry where procfs exists, else what
+ * `psAlive` says, else undefined (cannot be told).
+ * @param {string} pid @param {(path: string) => Promise<boolean>} exists
+ * @param {(pid: string) => Promise<boolean|undefined>} [psAlive]
+ * @returns {Promise<boolean|undefined>}
+ */
+export async function pidAliveOnHost(pid, exists, psAlive) {
+  let procfs = false
   try {
-    if (!(await exists('/proc/self'))) return undefined
-    return await exists(`/proc/${pid}`)
+    procfs = await exists('/proc/self')
+    if (procfs) return await exists(`/proc/${pid}`)
   } catch {
     // procfs not readable here
+  }
+  if (!psAlive) return undefined
+  try {
+    return await psAlive(pid)
+  } catch {
     return undefined
   }
 }
@@ -132,6 +151,7 @@ export async function socketOwnerAlive(path, exists) {
  * @param {(owner: string) => Promise<boolean|undefined>} ownerAlive
  * @param {number|undefined} myPid @param {(pid: number) => Promise<boolean|undefined>} pidAlive
  */
+/** @returns {Promise<boolean>} */
 async function ownerDead(r, now, ownerAlive, myPid, pidAlive) {
   /** @type {boolean|undefined} */
   let alive
@@ -168,7 +188,7 @@ async function ownerDead(r, now, ownerAlive, myPid, pidAlive) {
  * }} input
  * @returns {Promise<string[]>} the instance ids adopted
  */
-export async function adoptOrphans({ store, key, mine, now, ownerAlive, adopt, pid, pidAlive = async () => true, settle = async () => {} }) {
+export async function adoptOrphans({ store, key, mine, now, ownerAlive, adopt, pid, pidAlive = async () => undefined, settle = async () => {} }) {
   const adopted = []
   /** @type {unknown} */
   let failure
