@@ -278,11 +278,20 @@ others = lambda r: [n for c in r.get("contents", []) for n in c.get("notes", [])
 if others(report) != others(original):
     print("the scratch copy reads differently from the plugin: cannot trust its call list"); sys.exit()
 notes = [n for c in report.get("contents", []) for n in c.get("notes", []) if " calls: " in n]
-if len(notes) != 1:
-    print("expected exactly one calls: note from the engine"); sys.exit()
-text = notes[0].split(" calls: ", 1)[1]
-if "…" in text:
+# Since Claude Code 2.1.325 the engine splits a long call list into several
+# notes for the same module, in order. They are read as one list only if all
+# name the same module, none is cut, and each parses whole into entries, so a
+# piece lost between notes still fails the gate.
+heads = {n.split(" calls: ", 1)[0] for n in notes}
+if not notes or len(heads) != 1:
+    print("expected the calls: notes of exactly one module from the engine"); sys.exit()
+parts = [n.split(" calls: ", 1)[1] for n in notes]
+if any("…" in p for p in parts):
     print("the engine call list is cut even with short names: cannot check it whole"); sys.exit()
+entry = r"\$\.[a-z]+\.[a-z]+(?: \(via [^)]*\))?"
+if not all(re.fullmatch(rf"{entry}(?:, {entry})*", p.strip()) for p in parts):
+    print("a calls: note does not parse whole into $ entries: cannot check it whole"); sys.exit()
+text = ", ".join(p.strip() for p in parts)
 allowed = {
     "$.clock.after", "$.clock.now", "$.command.register", "$.env.get", "$.fs.exists", "$.fs.read",
     "$.session.cwd", "$.session.id", "$.session.root", "$.settings.read", "$.state.get", "$.state.set", "$.store.get", "$.store.set",
