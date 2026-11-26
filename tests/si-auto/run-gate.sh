@@ -136,6 +136,18 @@ import json, sys; p = sys.argv[1]; d = json.load(open(p))
 d["plugins"].append({"name": "otro", "source": "./plugins/otro"}); json.dump(d, open(p, "w"))
 PY
 espera "check-plugin rechaza un tercer plugin" 1 bash tools/check-plugin.sh plugins/si "$TMP/repo"
+link_src() { # clave valor-json: cambia una clave del source de sielay-link en el marketplace
+  copia; python3 - "$TMP/repo/.claude-plugin/marketplace.json" "$1" "$2" <<'PY'
+import json, sys; p, k, v = sys.argv[1:4]; d = json.load(open(p))
+next(x for x in d["plugins"] if x["name"] == "sielay-link")["source"][k] = json.loads(v); json.dump(d, open(p, "w"))
+PY
+}
+link_src sha '"698c1ee"'
+espera "check-plugin rechaza un sha de sielay-link que no es de 40 hex" 1 bash tools/check-plugin.sh plugins/si "$TMP/repo"
+link_src sha '"698C1EE5909E6BA44DBC5FBDA4939930CA0F9455"'
+espera "check-plugin rechaza un sha de sielay-link en mayúsculas" 1 bash tools/check-plugin.sh plugins/si "$TMP/repo"
+link_src commit '"698c1ee5909e6ba44dbc5fbda4939930ca0f9455"'
+espera "check-plugin rechaza otra clave en el source de sielay-link" 1 bash tools/check-plugin.sh plugins/si "$TMP/repo"
 copia; mkdir -p "$TMP/repo/plugins/si/hooks"; echo '{}' > "$TMP/repo/plugins/si/hooks/hooks.json"
 espera "check-plugin sigue rechazando ganchos en si" 1 bash tools/check-plugin.sh plugins/si "$TMP/repo"
 
