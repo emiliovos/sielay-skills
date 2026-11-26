@@ -78,9 +78,10 @@ market_jq='if type != "object" then "marketplace.json is not a JSON object" else
      ((keys - ["name","source","description"])[] | "marketplace.json: plugin key not allowed: \(.)"),
      (if .name != $want[0] then "marketplace.json: plugin \($i + 1) name must be \"\($want[0])\"" else empty end),
      (if $want[1] != null then (if .source != $want[1] then "marketplace.json: plugin \($i + 1) source must be \"\($want[1])\"" else empty end)
-      elif ((.source | type) != "object" or ((.source | del(.ref)) != {"source":"git-subdir","url":"https://github.com/emiliovos/sielay-skills.git","path":"plugins/sielay-link"})
-            or ((.source.ref // "") | test("^sielay-link-v[0-9]+[.][0-9]+[.][0-9]+$") | not))
-      then "marketplace.json: sielay-link must be a git-subdir of https://github.com/emiliovos/sielay-skills.git pinned to a sielay-link-vX.Y.Z tag" else empty end)
+      elif ((.source | type) != "object" or ((.source | del(.ref) | del(.sha)) != {"source":"git-subdir","url":"https://github.com/emiliovos/sielay-skills.git","path":"plugins/sielay-link"})
+            or ((.source.ref // "") | test("^sielay-link-v[0-9]+[.][0-9]+[.][0-9]+$") | not)
+            or ((.source | has("sha")) and ((.source.sha | type) != "string" or (.source.sha | test("^[0-9a-f]{40}$") | not))))
+      then "marketplace.json: sielay-link must be a git-subdir of https://github.com/emiliovos/sielay-skills.git pinned to a sielay-link-vX.Y.Z tag (and, if present, a 40-hex sha)" else empty end)
    end end) end'
 read -r -d '' check_py <<'PY' || true
 import json, sys
@@ -123,10 +124,11 @@ else:
                     if src != source: out.append(f'marketplace.json: plugin {i} source must be "{source}"')
                 else:
                     import re
-                    pinned = isinstance(src, dict) and {k: v for k, v in src.items() if k != "ref"} == {
+                    pinned = isinstance(src, dict) and {k: v for k, v in src.items() if k not in ("ref", "sha")} == {
                         "source": "git-subdir", "url": "https://github.com/emiliovos/sielay-skills.git", "path": "plugins/sielay-link"}
-                    if not (pinned and re.fullmatch(r"sielay-link-v\d+\.\d+\.\d+", str(src.get("ref", "")))):
-                        out.append("marketplace.json: sielay-link must be a git-subdir of https://github.com/emiliovos/sielay-skills.git pinned to a sielay-link-vX.Y.Z tag")
+                    sha_ok = isinstance(src, dict) and ("sha" not in src or (isinstance(src["sha"], str) and re.fullmatch(r"[0-9a-f]{40}", src["sha"])))
+                    if not (pinned and sha_ok and re.fullmatch(r"sielay-link-v\d+\.\d+\.\d+", str(src.get("ref", "")))):
+                        out.append("marketplace.json: sielay-link must be a git-subdir of https://github.com/emiliovos/sielay-skills.git pinned to a sielay-link-vX.Y.Z tag (and, if present, a 40-hex sha)")
 print("\n".join(out))
 PY
 check_json() { # kind file jq-program
