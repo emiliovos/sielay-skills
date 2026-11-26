@@ -54,6 +54,8 @@ export function createRuntime(options) {
     namePin: /** @type {import('./link-session-payload.js').NamePin|null} */ (null),
     /** The poll loop's last code (link_build_stage's `reason`); null until the first poll. Memory only. */
     loopCode: /** @type {import('./link-poll-loop.js').LoopCode|null} */ (null),
+    /** What the poll tells the hub about this client (the loaded plugin version), read once; undefined until then. */
+    clientInfo: /** @type {{ plugin_version: string }|null|undefined} */ (undefined),
     /** The session object of the last poll sent, without its build: the goodbye reuses it. */
     lastSession: /** @type {Record<string, unknown>|null} */ (null),
     /** The last mode sample held across a /clear (link-mode-carry.js). */
@@ -125,6 +127,22 @@ export function threadsOf($, rt) {
 /** @param {Engine} $ @param {Runtime} rt */
 export async function sessionPayload($, rt) {
   return (await buildSessionPayload($, rt)).session
+}
+
+/**
+ * The version of the plugin this session loaded, from its own plugin.json, so the hub can tell which sessions
+ * still run an old one. Read once per runtime: a plugin update only takes effect after a restart anyway.
+ * @param {Engine} $ @param {Runtime} rt
+ */
+async function readClientInfo($, rt) {
+  if (rt.clientInfo !== undefined) return rt.clientInfo
+  try {
+    const version = JSON.parse(String(await $.fs.read(`${$.plugin.root}/.claude-plugin/plugin.json`))).version
+    rt.clientInfo = typeof version === 'string' && /^\d+\.\d+\.\d+$/.test(version) ? { plugin_version: version } : null
+  } catch {
+    rt.clientInfo = null   // unreadable: the hub shows the session as having no data
+  }
+  return rt.clientInfo
 }
 
 /**
@@ -250,6 +268,7 @@ export async function startLink($, rt) {
       return patchStatus($, { loop, detail })
     },
     onSession: s => patchStatus($, { address: s.address, name: s.name_assigned }),
+    clientInfo: () => readClientInfo($, rt),
   })
   rt.pairing = createPairingFlow({
     makeClient: () => createHubClient($, { hubUrl: rt.hubUrl, token: '' }),
