@@ -15,7 +15,7 @@ function memStore() {
 }
 
 /** Builds a loop whose timer queue the test drives one round at a time. */
-function harness({ answers, mode = { mode: 'bypassPermissions', fresh: true }, off = false, instanceIds, onUnauthorized } = {}) {
+function harness({ answers, mode = { mode: 'bypassPermissions', fresh: true }, off = false, instanceIds, onUnauthorized, clientInfo } = {}) {
   const timers = []
   const polls = []
   const injected = []
@@ -45,6 +45,7 @@ function harness({ answers, mode = { mode: 'bypassPermissions', fresh: true }, o
     handler,
     isOff: async () => state.off,
     onUnauthorized,
+    clientInfo,
     onStatus: (s, _detail, code) => {
       statuses.push(s)
       codes.push(code)
@@ -365,4 +366,19 @@ test('a poll still in flight from before a restart reports nothing: no status, n
   assert.equal(loop2.isStopped, false, 'the old token\'s 401 does not stop the loop of the new one')
   assert.deepEqual(codes, [])
   loop2.stop()
+})
+
+test('the poll carries the client info (loaded plugin version) when there is one, and no client key otherwise', async () => {
+  const withInfo = harness({ answers: [ok()], clientInfo: async () => ({ plugin_version: '1.22.0' }) })
+  withInfo.loop.start()
+  await withInfo.step()
+  assert.deepEqual(withInfo.polls[0].client, { plugin_version: '1.22.0' })
+  const without = harness({ answers: [ok()], clientInfo: async () => null })
+  without.loop.start()
+  await without.step()
+  assert.equal('client' in without.polls[0], false)
+  const legacy = harness({ answers: [ok()] })
+  legacy.loop.start()
+  await legacy.step()
+  assert.equal('client' in legacy.polls[0], false)
 })

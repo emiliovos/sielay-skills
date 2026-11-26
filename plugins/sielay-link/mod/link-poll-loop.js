@@ -47,9 +47,10 @@ export const BUSY_RETRY_MS = 250
  *   onSession?: (session: { id?: string, address?: string, name_assigned?: string }) => Promise<void> | void,
  *   onPolled?: (sent: { instance_id: string } & Record<string, unknown>) => Promise<void> | void,
  *   now?: () => number | Promise<number>,
+ *   clientInfo?: () => Promise<Record<string, unknown>|null>,
  * }} deps
  */
-export function createPollLoop({ schedule, getClient, buildSession, handler, isOff, onUnauthorized = async () => false, onStatus = () => {}, onSession = () => {}, onPolled = () => {}, now = () => Date.now() }) {
+export function createPollLoop({ schedule, getClient, buildSession, handler, isOff, onUnauthorized = async () => false, onStatus = () => {}, onSession = () => {}, onPolled = () => {}, now = () => Date.now(), clientInfo = async () => null }) {
   /** @type {Ack[]} */
   let pendingAcks = []
   let failures = 0
@@ -88,6 +89,7 @@ export function createPollLoop({ schedule, getClient, buildSession, handler, isO
         return
       }
       const session = await buildSession()
+      const info = await clientInfo()
       const ack = pendingAcks
       pendingAcks = []
       /** @type {any} */
@@ -95,7 +97,7 @@ export function createPollLoop({ schedule, getClient, buildSession, handler, isO
       const startedAt = await now()
       inFlightSince = startedAt
       try {
-        data = await client.poll({ session, ...(ack.length ? { ack } : {}), wait_s: WAIT_S })
+        data = await client.poll({ session, ...(ack.length ? { ack } : {}), ...(info ? { client: info } : {}), wait_s: WAIT_S })
       } catch (err) {
         pendingAcks = [...ack, ...pendingAcks]
         throw err

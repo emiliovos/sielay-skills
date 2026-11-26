@@ -102,6 +102,11 @@ Para que el modelo las use sin preguntarte cada vez, agrégalas a `permissions.a
 { "permissions": { "allow": ["mcp__sielay-link__link_send", "mcp__sielay-link__link_reply", "mcp__sielay-link__link_peers", "mcp__sielay-link__link_read", "mcp__sielay-link__link_build_stage", "mcp__sielay-link__link_watch"] } }
 ```
 
+## Novedades de la 1.22.0
+
+- **El hub sabe qué versión cargó cada sesión:** cada poll manda `client: { plugin_version }`, leído del `plugin.json` del plugin cargado. El panel de actualizaciones de sielay marca las sesiones que siguen en una versión vieja; una sesión sin este campo aparece como «sin dato».
+- **Para tomarla:** `claude plugin update sielay-link@sielay` y `/reload-plugins` en cada sesión abierta (o reiniciarla).
+
 ## Novedades de la 1.21.0
 
 - **`link_watch` también avisa del merge:** cuando se mergea el PR de la rama vigilada, el hub manda `repo_merged`. Sin `wake` va al log, sin gastar turno; con `wake: true` abre turno y dice que sigas con lo que esperabas de ese merge. Necesita un hub que ya revise los PRs de las ramas vigiladas; con uno anterior, el merge no llega.
